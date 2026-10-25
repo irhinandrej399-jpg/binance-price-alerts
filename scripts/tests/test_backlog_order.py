@@ -84,6 +84,15 @@ class BacklogOrderTests(unittest.TestCase):
         self.assertIn('ZED-001 [planned]', text)
         self.assertNotIn('ALPHA-001 [planned]', text)
 
+    def test_next_shows_model_and_effort_from_the_card(self):
+        self.fixture()
+        card = self.base / 'tickets/ZED-001.md'
+        with card.open('a', encoding='utf-8') as stream:
+            stream.write('\n## Модель для сессии\n\n- Модель: `gpt-6.1-sol` (GPT-6.1 Sol).\n- Уровень размышления: `medium` (Medium).\n')
+        text = self.next()
+        self.assertIn('gpt-6.1-sol', text)
+        self.assertIn('medium', text)
+
     def test_done_is_skipped(self):
         self.fixture(statuses={'ZED-001': 'done'})
         text = self.next()

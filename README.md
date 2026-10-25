@@ -9,6 +9,7 @@
 - [Согласованные требования и открытые решения](docs/requirements.md)
 - [Бэклог с порядком работ и отдельными тикетами](docs/backlog/README.md)
 - [Единая очередь выполнения всех тикетов](docs/backlog/ORDER.md)
+- [Модели и уровни размышления для задач](docs/backlog/MODELS.md)
 - [Правила размера тикета и TDD](docs/backlog/workflow.md)
 - [Проверенные ограничения Binance и Telegram](docs/integration-facts.md)
 - [Как вести сессии с агентом и передавать состояние](docs/WORKING.md)

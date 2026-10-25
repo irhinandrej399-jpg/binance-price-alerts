@@ -22,6 +22,8 @@ class Ticket:
     status: str
     deps: tuple
     path: Path
+    model: str = ''
+    reasoning_effort: str = ''
 
 
 def read_tickets():
@@ -38,7 +40,10 @@ def read_tickets():
         if status[1] != 'split' and not line:
             raise ValueError(f'{path.name}: отсутствует строка зависимостей')
         deps = tuple(re.findall(rf'\[({ID})\]', line[1])) if line else ()
-        tickets[path.stem] = Ticket(path.stem, header[2], status[1], deps, path)
+        model = re.search(r'^- Модель: `([^`]+)`', text, re.M)
+        effort = re.search(r'^- Уровень размышления: `([^`]+)`', text, re.M)
+        tickets[path.stem] = Ticket(path.stem, header[2], status[1], deps, path,
+                                   model[1] if model else '', effort[1] if effort else '')
     if not tickets:
         raise ValueError('Карточки не найдены')
     return tickets
@@ -127,6 +132,8 @@ def validate(tickets):
 def print_ticket(ticket):
     print(f'{ticket.id} [{ticket.status}] {ticket.title}')
     print(f'  {ticket.path.relative_to(ROOT)}')
+    if ticket.model and ticket.reasoning_effort:
+        print(f'  Рекомендация: {ticket.model}; reasoning: {ticket.reasoning_effort}')
 
 
 def main():
