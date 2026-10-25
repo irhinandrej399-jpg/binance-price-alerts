@@ -1,0 +1,5 @@
+interface:
+  display_name: "Binance: сессия по тикету"
+  short_description: "Один тикет: контекст, модель, TDD и передача состояния"
+policy:
+  allow_implicit_invocation: true
