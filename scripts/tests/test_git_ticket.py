@@ -27,6 +27,7 @@ class TicketCommitTests(unittest.TestCase):
         self.adr = 'docs/decisions/DEC-001.md'
         self.write(self.card, '# DEC-001 — Test decision\n\nСтатус: `decision`.\n\nЗависимости: Нет.\n')
         self.write(self.index, '| [DEC-001](tickets/DEC-001.md) | Test decision | — | decision |\n')
+        self.write('docs/backlog/ORDER.md', '1. [DEC-001](tickets/DEC-001.md) — Test decision.\n')
         self.write(self.state, 'Before\n')
         self.write('feature.txt', 'before\n')
         self.write('unrelated.txt', 'before\n')

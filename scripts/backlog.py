@@ -44,6 +44,21 @@ def read_tickets():
     return tickets
 
 
+def read_order():
+    order = []
+    rows = (BASE / 'ORDER.md').read_text(encoding='utf-8').splitlines()
+    for line in rows:
+        if not re.match(r'^\d+\.', line):
+            continue
+        match = re.fullmatch(rf'(\d+)\. \[({ID})\]\(tickets/({ID})\.md\) — .+', line)
+        if not match or int(match[1]) != len(order) + 1 or match[2] != match[3]:
+            raise ValueError(f'ORDER.md: неверная строка или номер очереди: {line}')
+        order.append(match[2])
+    if not order:
+        raise ValueError('ORDER.md: очередь отсутствует')
+    return tuple(order)
+
+
 def validate(tickets):
     errors = []
     graph = {t.id: t.deps for t in tickets.values() if t.status != 'split'}
@@ -89,6 +104,23 @@ def validate(tickets):
                 errors.append(f'{tid}: зависимости карточки и индекса расходятся')
     for tid in indexed.keys() - tickets.keys():
         errors.append(f'{tid}: в индексе есть ID без карточки')
+    try:
+        order = read_order()
+    except (OSError, ValueError) as exc:
+        errors.append(f'Ошибка очереди: {exc}')
+        return errors
+    if len(order) != len(set(order)):
+        errors.append('ORDER.md: повторяющиеся ID')
+    active = set(graph)
+    for tid in sorted(active - set(order)):
+        errors.append(f'ORDER.md: отсутствует активный тикет {tid}')
+    for tid in sorted(set(order) - active):
+        errors.append(f'ORDER.md: неизвестный тикет или контейнер split {tid}')
+    positions = {tid: pos for pos, tid in enumerate(order)}
+    for tid, deps in graph.items():
+        for dep in deps:
+            if tid in positions and dep in positions and positions[dep] >= positions[tid]:
+                errors.append(f'ORDER.md: зависимость {dep} должна стоять раньше {tid}')
     return errors
 
 
@@ -100,8 +132,8 @@ def print_ticket(ticket):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
-    nxt = sub.add_parser('next', help='Показать доступные карточки, не меняя статусы')
-    nxt.add_argument('--limit', type=int, default=5)
+    nxt = sub.add_parser('next', help='Следующая незавершённая карточка по ORDER.md')
+    nxt.add_argument('--limit', type=int, default=1, help='Число следующих пунктов для предварительного просмотра')
     show = sub.add_parser('show', help='Показать карточку и состояния зависимостей')
     show.add_argument('id')
     sub.add_parser('check', help='Проверить граф, статусы и индекс')
@@ -117,7 +149,7 @@ def main():
         return 1
     if args.command == 'check':
         counts = Counter(t.status for t in tickets.values())
-        print('OK: карточки, зависимости, отсутствие циклов и статусы индекса.')
+        print('OK: карточки, зависимости, отсутствие циклов, индекс и очередь ORDER.md.')
         print(', '.join(f'{s}: {counts[s]}' for s in sorted(counts)))
         return 0
     if args.command == 'show':
@@ -135,24 +167,28 @@ def main():
         return 0
     if args.limit <= 0:
         parser.error('--limit должен быть положительным')
-    active = [t for t in tickets.values() if t.status in {'in-progress', 'review'}]
+    order = read_order()
+    active = [tickets[tid] for tid in order if tickets[tid].status in {'in-progress', 'review'}]
     if active:
         print('Сначала продолжить или проверить уже начатую работу:')
         for ticket in active:
             print_ticket(ticket)
         return 0
-    candidates = [t for t in tickets.values()
-                  if t.status in {'decision', 'planned', 'ready'}
-                  and all(tickets[d].status == 'done' for d in t.deps)]
-    candidates.sort(key=lambda t: (t.status != 'decision', t.status != 'ready', t.id))
+    candidates = [tickets[tid] for tid in order if tickets[tid].status != 'done']
     if not candidates:
-        print('Доступных карточек нет. Проверьте незавершённые решения и зависимости.')
+        print('Все задачи очереди ORDER.md завершены.')
         return 0
-    print('Зависимости завершены; перед реализацией ещё нужна проверка готовности:')
+    if args.limit == 1:
+        print('Следующий тикет по ORDER.md; перед реализацией ещё нужна проверка готовности:')
+    else:
+        print('Очередь ORDER.md: первый пункт — следующий; остальные — предварительный просмотр:')
     for ticket in candidates[:args.limit]:
         print_ticket(ticket)
+        waiting = [d for d in ticket.deps if tickets[d].status != 'done']
+        if waiting:
+            print('  Ожидает зависимости: ' + ', '.join(waiting))
     if len(candidates) > args.limit:
-        print(f'Ещё доступно: {len(candidates) - args.limit}. Увеличьте --limit для просмотра.')
+        print(f'После показанных в очереди: {len(candidates) - args.limit}.')
     return 0
 
 
