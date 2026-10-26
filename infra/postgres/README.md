@@ -59,8 +59,9 @@ Runtime может подключаться только к своей БД, ч�
 использовать sequences; DDL, TEMP, административные атрибуты и членство в
 migration-ролях отсутствуют. У PUBLIC отозваны CONNECT/TEMP в БД и CREATE
 в `public`. Migration — владелец своей БД/схемы; права будущих таблиц и sequences
-в `app` выдаются runtime через `ALTER DEFAULT PRIVILEGES`. Миграции выполняются
-именно своей migration-ролью, без superuser, в схеме `app`. Функции по умолчанию
+в `app` выдаются runtime через `ALTER DEFAULT PRIVILEGES`.
+Runner и проверка миграций — в [migrations/README.md](../../migrations/README.md).
+Миграции выполняются именно своей migration-ролью, без superuser, в схеме `app`. Функции по умолчанию
 не имеют PUBLIC EXECUTE; нужные grants будущие миграции выдают явно.
 
 Административный event trigger в каждой БД запрещает создание unlogged-таблиц
