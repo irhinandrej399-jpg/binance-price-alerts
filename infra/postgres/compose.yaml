@@ -1,0 +1,27 @@
+name: binance-storage
+services:
+  postgres:
+    image: postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc
+    env_file: .env
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=trust
+    command: [postgres, -c, fsync=on, -c, synchronous_commit=on, -c, full_page_writes=on, -c, password_encryption=scram-sha-256]
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - data:/var/lib/postgresql
+      - ./init.sh:/docker-entrypoint-initdb.d/10-owners.sh:ro
+    cpus: 1
+    mem_limit: 1g
+    shm_size: 128m
+    stop_grace_period: 60s
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U postgres -d postgres && test -f /var/lib/postgresql/18/docker/owners-ready']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+volumes:
+  data:

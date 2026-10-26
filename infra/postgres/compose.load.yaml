@@ -1,0 +1,10 @@
+# External volume must be backed by its own 120 GiB filesystem (see README).
+services:
+  postgres:
+    cpus: 4
+    mem_limit: 10g
+    shm_size: 1g
+volumes:
+  data:
+    external: true
+    name: ${POSTGRES_LOAD_VOLUME:?Set POSTGRES_LOAD_VOLUME to a dedicated 120 GiB volume}
