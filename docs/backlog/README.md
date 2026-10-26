@@ -110,7 +110,7 @@
 | [MKT-001](tickets/MKT-001.md) | Получить каталог доступных spot-пар USDT | SET-001 | planned |
 | [MKT-002](tickets/MKT-002.md) | Декодировать одно событие сделки Binance | CON-003, DOM-001 | planned |
 | [MKT-005](tickets/MKT-005.md) | Публиковать только монотонные цены пары | MKT-002, CON-003 | planned |
-| [MKT-006](tickets/MKT-006.md) | Выдать последнюю свежую котировку | MKT-005, DOM-005, DEC-003 | planned |
+| [MKT-006](tickets/MKT-006.md) | Выдать последнюю известную котировку с возрастом | MKT-005, DOM-005, DEC-003 | planned |
 | [MKT-009](tickets/MKT-009.md) | Прочитать цены по одному WebSocket-соединению | MKT-002 | planned |
 | [MKT-010](tickets/MKT-010.md) | Ограничить управляющие команды WebSocket | MKT-009 | planned |
 | [MKT-011](tickets/MKT-011.md) | Переподключиться после обрыва WebSocket | MKT-009, MKT-010 | planned |
