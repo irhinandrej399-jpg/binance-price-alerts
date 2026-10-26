@@ -49,6 +49,10 @@ healthcheck и постоянным volume: [запуск, остановка и
 Миграции запускаются отдельно от runtime: `python3 scripts/migrate.py --owner api`.
 [Формат файлов, история, блокировка и интеграционные проверки](migrations/README.md).
 
+Локальная Kafka KRaft: [запуск, topics, durability и smoke-проверка](infra/kafka/README.md).
+Лимиты 2 vCPU/4 GiB, партиции 1/16/16; отдельный нагрузочный volume 40 GiB
+подключается override. Функциональный volume не ограничен отдельной квотой.
+
 ## Проверки CI
 
 [Go CI](.github/workflows/go.yml) запускается в GitHub Actions на push, pull request и вручную через workflow_dispatch. Один job на Ubuntu использует Go из `.go-version` и проверяет форматирование, `go vet ./...` и `go test -race ./...`. Любая ошибка завершает job неуспешно; форматирование проверяется без изменения файлов. Кэширование отключено, пока проект не использует внешние зависимости.

@@ -1,0 +1,5 @@
+# Must be backed by its own 40 GiB filesystem; see README.
+volumes:
+  data:
+    external: true
+    name: ${KAFKA_LOAD_VOLUME:?Set KAFKA_LOAD_VOLUME to a dedicated 40 GiB volume}

@@ -51,7 +51,7 @@
 | [SET-002](tickets/SET-002.md) | Добавить проверку Go в CI | SET-001 | done |
 | [SET-003](tickets/SET-003.md) | Поднять локальное хранилище | DEC-006, DEC-008 | done |
 | [SET-004](tickets/SET-004.md) | Добавить запуск миграций | SET-001, SET-003 | done |
-| [SET-005](tickets/SET-005.md) | Поднять локальный брокер | DEC-007, DEC-008 | planned |
+| [SET-005](tickets/SET-005.md) | Поднять локальный брокер | DEC-007, DEC-008 | done |
 
 ### Контракты
 
