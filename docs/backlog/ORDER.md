@@ -90,33 +90,34 @@
 78. [NTF-009](tickets/NTF-009.md) — Выдать worker задание с ограниченной арендой.
 79. [NTF-010](tickets/NTF-010.md) — Сохранить успешную доставку.
 80. [NTF-014](tickets/NTF-014.md) — Надёжно передать исход попытки владельцу подписки.
-81. [NTF-012](tickets/NTF-012.md) — Выполнить одну попытку обработки готового задания.
-82. [NTF-013](tickets/NTF-013.md) — Запустить ограниченный цикл notification worker.
-83. [OPS-001](tickets/OPS-001.md) — Добавить health и readiness API.
-84. [OPS-002](tickets/OPS-002.md) — Измерять задержку от цены до trigger.
-85. [OPS-003](tickets/OPS-003.md) — Измерять состояние очереди доставки.
-86. [OPS-004](tickets/OPS-004.md) — Корректно остановить API.
-87. [OPS-012](tickets/OPS-012.md) — Ограничить размер тела публичного запроса.
-88. [OPS-013](tickets/OPS-013.md) — Ограничить частоту входа и регистрации между репликами.
-89. [OPS-006](tickets/OPS-006.md) — Добавить health и readiness market-data.
-90. [OPS-007](tickets/OPS-007.md) — Добавить health и readiness matcher.
-91. [OPS-008](tickets/OPS-008.md) — Добавить health и readiness notifications.
-92. [OPS-009](tickets/OPS-009.md) — Корректно остановить market-data.
-93. [OPS-010](tickets/OPS-010.md) — Корректно остановить matcher.
-94. [OPS-011](tickets/OPS-011.md) — Корректно остановить notification worker.
-95. [E2E-003](tickets/E2E-003.md) — Поднять управляемый fake Binance для стенда.
-96. [E2E-004](tickets/E2E-004.md) — Поднять управляемый fake Telegram для стенда.
-97. [E2E-002](tickets/E2E-002.md) — Запустить четыре процесса в одном локальном стенде.
-98. [E2E-001](tickets/E2E-001.md) — Проверить один полный пользовательский сценарий.
-99. [LOAD-001](tickets/LOAD-001.md) — Сгенерировать воспроизводимые данные нагрузки.
-100. [LOAD-002](tickets/LOAD-002.md) — Создать источник цен для нагрузочного стенда.
-101. [LOAD-009](tickets/LOAD-009.md) — Собрать команду воспроизводимого нагрузочного прогона.
-102. [LOAD-003](tickets/LOAD-003.md) — Измерить p99 на миллионе подписок.
-103. [LOAD-004](tickets/LOAD-004.md) — Проверить burst 10000 срабатываний/с.
-104. [LOAD-010](tickets/LOAD-010.md) — Измерить обычный профиль на двух matcher.
-105. [LOAD-011](tickets/LOAD-011.md) — Измерить обычный профиль на четырёх matcher.
-106. [LOAD-012](tickets/LOAD-012.md) — Измерить горячую пару на четырёх matcher.
-107. [LOAD-013](tickets/LOAD-013.md) — Сравнить готовые отчёты масштабирования.
-108. [LOAD-006](tickets/LOAD-006.md) — Проверить восстановление брокера под нагрузкой.
-109. [LOAD-007](tickets/LOAD-007.md) — Проверить восстановление matcher под нагрузкой.
-110. [LOAD-008](tickets/LOAD-008.md) — Проверить восстановление notifications под нагрузкой.
+81. [NTF-015](tickets/NTF-015.md) — Возобновить задание после восстановления Telegram.
+82. [NTF-012](tickets/NTF-012.md) — Выполнить одну попытку обработки готового задания.
+83. [NTF-013](tickets/NTF-013.md) — Запустить ограниченный цикл notification worker.
+84. [OPS-001](tickets/OPS-001.md) — Добавить health и readiness API.
+85. [OPS-002](tickets/OPS-002.md) — Измерять задержку от цены до trigger.
+86. [OPS-003](tickets/OPS-003.md) — Измерять состояние очереди доставки.
+87. [OPS-004](tickets/OPS-004.md) — Корректно остановить API.
+88. [OPS-012](tickets/OPS-012.md) — Ограничить размер тела публичного запроса.
+89. [OPS-013](tickets/OPS-013.md) — Ограничить частоту входа и регистрации между репликами.
+90. [OPS-006](tickets/OPS-006.md) — Добавить health и readiness market-data.
+91. [OPS-007](tickets/OPS-007.md) — Добавить health и readiness matcher.
+92. [OPS-008](tickets/OPS-008.md) — Добавить health и readiness notifications.
+93. [OPS-009](tickets/OPS-009.md) — Корректно остановить market-data.
+94. [OPS-010](tickets/OPS-010.md) — Корректно остановить matcher.
+95. [OPS-011](tickets/OPS-011.md) — Корректно остановить notification worker.
+96. [E2E-003](tickets/E2E-003.md) — Поднять управляемый fake Binance для стенда.
+97. [E2E-004](tickets/E2E-004.md) — Поднять управляемый fake Telegram для стенда.
+98. [E2E-002](tickets/E2E-002.md) — Запустить четыре процесса в одном локальном стенде.
+99. [E2E-001](tickets/E2E-001.md) — Проверить один полный пользовательский сценарий.
+100. [LOAD-001](tickets/LOAD-001.md) — Сгенерировать воспроизводимые данные нагрузки.
+101. [LOAD-002](tickets/LOAD-002.md) — Создать источник цен для нагрузочного стенда.
+102. [LOAD-009](tickets/LOAD-009.md) — Собрать команду воспроизводимого нагрузочного прогона.
+103. [LOAD-003](tickets/LOAD-003.md) — Измерить p99 на миллионе подписок.
+104. [LOAD-004](tickets/LOAD-004.md) — Проверить burst 10000 срабатываний/с.
+105. [LOAD-010](tickets/LOAD-010.md) — Измерить обычный профиль на двух matcher.
+106. [LOAD-011](tickets/LOAD-011.md) — Измерить обычный профиль на четырёх matcher.
+107. [LOAD-012](tickets/LOAD-012.md) — Измерить горячую пару на четырёх matcher.
+108. [LOAD-013](tickets/LOAD-013.md) — Сравнить готовые отчёты масштабирования.
+109. [LOAD-006](tickets/LOAD-006.md) — Проверить восстановление брокера под нагрузкой.
+110. [LOAD-007](tickets/LOAD-007.md) — Проверить восстановление matcher под нагрузкой.
+111. [LOAD-008](tickets/LOAD-008.md) — Проверить восстановление notifications под нагрузкой.
