@@ -24,7 +24,7 @@
 
 ## Архитектурные ограничения плана
 
-Четыре процесса и владение данными утверждены в [DEC-003](../decisions/DEC-003.md): API владеет аккаунтами, подписками, лимитом, срабатываниями и outbox; market-data — котировками; matcher — проекцией; notifications — доставкой. Matcher вызывает операцию API, прямой доступ к чужим таблицам запрещён. Последняя цена, условная доставка и гонки определены DEC-004; очередь не освобождает слот, результаты доставки сохраняет API. Хранилище определено DEC-006: PostgreSQL с четырьмя изолированными БД; общий журнал API — SUB-021, атомарный приём рынка — MKT-017. Обсуждение снимка, версии, cursor и проекции нельзя пропустить ради скорости написания кода.
+Четыре процесса и владение данными утверждены в [DEC-003](../decisions/DEC-003.md): API владеет аккаунтами, подписками, лимитом, срабатываниями и outbox; market-data — котировками; matcher — проекцией; notifications — доставкой. Matcher вызывает операцию API, прямой доступ к чужим таблицам запрещён. Последняя цена, условная доставка и гонки определены DEC-004; очередь не освобождает слот, результаты доставки сохраняет API. Хранилище определено DEC-006: PostgreSQL с четырьмя изолированными БД; общий журнал API — SUB-021, атомарный приём рынка — MKT-017. Брокер выбран DEC-007: Kafka/KRaft; SQL-replay — SUB-022, безопасная очистка Kafka — OPS-014. Обсуждение снимка, версии, cursor и проекции нельзя пропустить ради скорости написания кода.
 
 Миллион подписок — набор данных, 100000 пользователей — число аккаунтов, 10000 событий/с — burst генерации. Ни одно из этих чисел не означает 100000 одновременных HTTP-соединений или 10000 фактических отправок Telegram/с.
 
@@ -40,7 +40,7 @@
 | [DEC-004](tickets/DEC-004.md) | Определить границу активации подписки | DEC-001, DEC-002, DEC-003 | done |
 | [DEC-005](tickets/DEC-005.md) | Определить поведение без привязанного Telegram | — | done |
 | [DEC-006](tickets/DEC-006.md) | Выбрать постоянное хранилище | DEC-003, DEC-004 | done |
-| [DEC-007](tickets/DEC-007.md) | Выбрать брокер событий | DEC-003, DEC-004, DEC-006 | decision |
+| [DEC-007](tickets/DEC-007.md) | Выбрать брокер событий | DEC-003, DEC-004, DEC-006 | done |
 | [DEC-008](tickets/DEC-008.md) | Зафиксировать воспроизводимый профиль нагрузки | — | decision |
 
 ### Каркас и локальный стенд
@@ -95,8 +95,9 @@
 | [SUB-004](tickets/SUB-004.md) | Вернуть активные подписки владельца | SUB-001, IAM-005 | planned |
 | [SUB-005](tickets/SUB-005.md) | Отключить свою активную подписку | SUB-001, IAM-005, DOM-004 | planned |
 | [SUB-007](tickets/SUB-007.md) | Опубликовать subscription outbox | SUB-011, SUB-012, SET-005 | planned |
-| [SUB-009](tickets/SUB-009.md) | Опубликовать outbox срабатываний | SUB-013, SUB-014, SET-005 | planned |
+| [SUB-009](tickets/SUB-009.md) | Опубликовать outbox срабатываний | SUB-013, SUB-014, SET-005, SUB-007 | planned |
 | [SUB-021](tickets/SUB-021.md) | Добавить транзакционный журнал изменений API | SET-004, CON-002, DEC-006 | planned |
+| [SUB-022](tickets/SUB-022.md) | Открыть защищённый SQL-replay подписок | SUB-021, SUB-015, SUB-016, DEC-007 | planned |
 | [SUB-011](tickets/SUB-011.md) | Сохранить outbox при создании подписки | SUB-002, CON-002, SUB-021 | planned |
 | [SUB-012](tickets/SUB-012.md) | Сохранить outbox при отмене подписки | SUB-005, CON-002, SUB-021 | planned |
 | [SUB-013](tickets/SUB-013.md) | Сохранить атомарный запрос работы доставки | SUB-001, DOM-003, DOM-004, CON-004, DEC-004, SUB-021 | planned |
@@ -135,7 +136,7 @@
 | [MAT-004](tickets/MAT-004.md) | Обработать цену и запросить фиксацию кандидатов | MAT-002, MAT-007, MAT-008, MAT-009, MKT-013, MKT-014, SUB-013, SUB-014, MAT-012 | planned |
 | [MAT-005](tickets/MAT-005.md) | Восстановить обработку цены после частичного сбоя | MAT-004 | planned |
 | [MAT-007](tickets/MAT-007.md) | Загрузить исходный снимок в проекцию matcher | MAT-001, SUB-016, DEC-004 | planned |
-| [MAT-008](tickets/MAT-008.md) | Догнать изменения и переключить matcher в live | MAT-007, DEC-004, DEC-007, MAT-012 | planned |
+| [MAT-008](tickets/MAT-008.md) | Догнать изменения и переключить matcher в live | MAT-007, DEC-004, DEC-007, MAT-012, SUB-022 | planned |
 | [MAT-009](tickets/MAT-009.md) | Возобновить проекцию с сохранённого cursor | MAT-008 | planned |
 | [MAT-012](tickets/MAT-012.md) | Подключить подписку к последней цене | MAT-001, MAT-002, MKT-006, MKT-013, MKT-014, DEC-004 | planned |
 | [MAT-010](tickets/MAT-010.md) | Назначить партиции двум работающим matcher | MAT-005, DEC-007 | planned |
@@ -164,11 +165,11 @@
 
 | ID | Один результат | Зависимости | Статус |
 | --- | --- | --- | --- |
-| [OPS-001](tickets/OPS-001.md) | Добавить health и readiness API | SET-001, DEC-003 | planned |
+| [OPS-001](tickets/OPS-001.md) | Добавить health и readiness API | SET-001, DEC-003, OPS-015 | planned |
 | [OPS-002](tickets/OPS-002.md) | Измерять задержку от цены до trigger | MAT-004, SUB-013, SUB-014 | planned |
 | [OPS-003](tickets/OPS-003.md) | Измерять состояние очереди доставки | NTF-012, NTF-013 | planned |
 | [OPS-004](tickets/OPS-004.md) | Корректно остановить API | SUB-007, SUB-009 | planned |
-| [OPS-006](tickets/OPS-006.md) | Добавить health и readiness market-data | MKT-006, MKT-015, MKT-016 | planned |
+| [OPS-006](tickets/OPS-006.md) | Добавить health и readiness market-data | MKT-006, MKT-015, MKT-016, OPS-016 | planned |
 | [OPS-007](tickets/OPS-007.md) | Добавить health и readiness matcher | MAT-007, MAT-008, MAT-009 | planned |
 | [OPS-008](tickets/OPS-008.md) | Добавить health и readiness notifications | NTF-012, NTF-013 | planned |
 | [OPS-009](tickets/OPS-009.md) | Корректно остановить market-data | MKT-013, MKT-014, MKT-015, MKT-016 | planned |
@@ -176,6 +177,9 @@
 | [OPS-011](tickets/OPS-011.md) | Корректно остановить notification worker | NTF-012, NTF-013 | planned |
 | [OPS-012](tickets/OPS-012.md) | Ограничить размер тела публичного запроса | IAM-003, IAM-004, SUB-003 | planned |
 | [OPS-013](tickets/OPS-013.md) | Ограничить частоту входа и регистрации между репликами | IAM-003, IAM-004, DEC-003, DEC-006 | planned |
+| [OPS-014](tickets/OPS-014.md) | Удалить безопасный префикс журнала Kafka | SET-005, SUB-022, MAT-011, NTF-001, DEC-007 | planned |
+| [OPS-015](tickets/OPS-015.md) | Остановить новый приём API при исчерпании бюджета | SUB-003, SUB-005, SUB-020, SUB-007, SUB-009, DEC-008 | planned |
+| [OPS-016](tickets/OPS-016.md) | Остановить приём рынка при исчерпании бюджета | MKT-017, MKT-014, DEC-008 | planned |
 
 ### Сквозная проверка
 
