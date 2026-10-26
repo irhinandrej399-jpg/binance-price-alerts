@@ -3,8 +3,66 @@ package price
 import (
 	"encoding/json"
 	"errors"
+	"math/big"
 	"testing"
 )
+
+func TestCmpMatchesRational(t *testing.T) {
+	values := []string{
+		"0", "0.000000000000000001", "0.1", "0.100000000000000001",
+		"0.99", "1", "1.01", "1.1", "9", "10", "123.45",
+		"999999999999999999", "999999999999999999.999999999999999999",
+	}
+	for _, a := range values {
+		for _, b := range values {
+			p, err := Parse(a)
+			if err != nil {
+				t.Fatal(err)
+			}
+			q, err := Parse(b)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ar, _ := new(big.Rat).SetString(a)
+			br, _ := new(big.Rat).SetString(b)
+			for range 3 {
+				if got, want := p.Cmp(q), ar.Cmp(br); got != want {
+					t.Fatalf("%s Cmp %s = %d, want %d", a, b, got, want)
+				}
+			}
+			if p.String() != a || q.String() != b {
+				t.Fatal("Cmp changed its operands")
+			}
+		}
+	}
+}
+
+func TestCopiesRemainIndependent(t *testing.T) {
+	original, err := Parse("999999999999999999.999999999999999999")
+	if err != nil {
+		t.Fatal(err)
+	}
+	copy := original
+	if err := copy.UnmarshalText([]byte("0.1")); err != nil {
+		t.Fatal(err)
+	}
+	if original.String() != "999999999999999999.999999999999999999" {
+		t.Fatal("unmarshal changed original")
+	}
+	for range 8 {
+		t.Run("concurrent reads", func(t *testing.T) {
+			t.Parallel()
+			for range 100 {
+				if original.Cmp(copy) != 1 || copy.Cmp(original) != -1 {
+					t.Fatal("incorrect comparison")
+				}
+				if copy.String() != "0.1" {
+					t.Fatal("comparison changed copy")
+				}
+			}
+		})
+	}
+}
 
 func TestSerialization(t *testing.T) {
 	for _, input := range []string{"0", "0.1", "00123.4500", "0.000000000000000001", "999999999999999999.999999999999999999"} {

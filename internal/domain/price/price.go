@@ -1,11 +1,12 @@
 // Package price provides exact, nonnegative decimal prices without rounding.
 // Values have at most 18 integer digits and 18 fractional digits. The zero
-// value is 0. Copies share no mutable state; unmarshaling replaces the receiver.
+// value is 0. Copies share only immutable data; unmarshaling replaces the receiver.
 package price
 
 import (
 	"encoding/json"
 	"errors"
+	"math/big"
 	"strings"
 )
 
@@ -16,8 +17,14 @@ var (
 	ErrRange = errors.New("price: exceeds 18 integer or 18 fractional digits")
 )
 
-// Price stores a canonical decimal; an empty internal string represents zero.
-type Price struct{ value string }
+// Price represents coefficient / 10^scale. A nil coefficient represents zero.
+// The coefficient is private and never modified after construction or exposed
+// to callers. Arithmetic must use a fresh big.Int receiver to keep copies safe.
+// Use Cmp to compare values, not Go's pointer-based struct equality.
+type Price struct {
+	coefficient *big.Int
+	scale       uint8
+}
 
 // Parse accepts [0-9]+(\.[0-9]+)?. Leading integer zeros are ignored when
 // checking the range. More than 18 input fractional digits are rejected,
@@ -35,13 +42,13 @@ func Parse(s string) (Price, error) {
 		integer = "0"
 	}
 	fraction = strings.TrimRight(fraction, "0")
-	if fraction != "" {
-		return Price{integer + "." + fraction}, nil
-	}
-	if integer == "0" {
+	if integer == "0" && fraction == "" {
 		return Price{}, nil
 	}
-	return Price{integer}, nil
+	// Both parts have already been validated as decimal digits, so SetString
+	// cannot fail. Trailing fractional zeros were removed to normalize the scale.
+	coefficient, _ := new(big.Int).SetString(integer+fraction, 10)
+	return Price{coefficient: coefficient, scale: uint8(len(fraction))}, nil
 }
 
 func digits(s string) bool {
@@ -58,42 +65,39 @@ func digits(s string) bool {
 
 // String returns the exact value without redundant leading or trailing zeros.
 func (p Price) String() string {
-	if p.value == "" {
+	if p.coefficient == nil {
 		return "0"
 	}
-	return p.value
+	digits := p.coefficient.String()
+	scale := int(p.scale)
+	if scale == 0 {
+		return digits
+	}
+	if len(digits) <= scale {
+		return "0." + strings.Repeat("0", scale-len(digits)) + digits
+	}
+	point := len(digits) - scale
+	return digits[:point] + "." + digits[point:]
 }
 
 // Cmp returns -1, 0 or 1 when p is less than, equal to or greater than other.
 func (p Price) Cmp(other Price) int {
-	a, af, _ := strings.Cut(p.String(), ".")
-	b, bf, _ := strings.Cut(other.String(), ".")
-	if len(a) < len(b) {
-		return -1
+	scale := max(p.scale, other.scale)
+	return p.coefficientAtScale(scale).Cmp(other.coefficientAtScale(scale))
+}
+
+// coefficientAtScale returns an independent integer at a scale >= p.scale.
+// Using big.Int avoids overflow even when alignment exceeds the price range.
+func (p Price) coefficientAtScale(scale uint8) *big.Int {
+	coefficient := new(big.Int)
+	if p.coefficient != nil {
+		coefficient.Set(p.coefficient)
 	}
-	if len(a) > len(b) {
-		return 1
+	if scale > p.scale {
+		factor := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(scale-p.scale)), nil)
+		coefficient.Mul(coefficient, factor)
 	}
-	if c := strings.Compare(a, b); c != 0 {
-		return c
-	}
-	// Missing decimal places have value zero, not an ordering by string length.
-	for i := 0; i < max(len(af), len(bf)); i++ {
-		ac, bc := byte('0'), byte('0')
-		if i < len(af) {
-			ac = af[i]
-		}
-		if i < len(bf) {
-			bc = bf[i]
-		}
-		if ac < bc {
-			return -1
-		}
-		if ac > bc {
-			return 1
-		}
-	}
-	return 0
+	return coefficient
 }
 
 // MarshalText serializes the canonical exact decimal value.
