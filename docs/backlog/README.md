@@ -47,7 +47,7 @@
 
 | ID | Один результат | Зависимости | Статус |
 | --- | --- | --- | --- |
-| [SET-001](tickets/SET-001.md) | Создать каркас Go-репозитория | — | planned |
+| [SET-001](tickets/SET-001.md) | Создать каркас Go-репозитория | — | done |
 | [SET-002](tickets/SET-002.md) | Добавить проверку Go в CI | SET-001 | planned |
 | [SET-003](tickets/SET-003.md) | Поднять локальное хранилище | DEC-006, DEC-008 | planned |
 | [SET-004](tickets/SET-004.md) | Добавить запуск миграций | SET-001, SET-003 | planned |
