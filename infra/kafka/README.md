@@ -123,3 +123,11 @@ RF=1 не даёт HA. `acks=all` не заменяет fsync; `flush.messages=1
 ради скорости. Проверка SIGKILL не моделирует потерю питания, отказ диска/VM,
 не доказывает поведение контроллера хранения при отключении питания или
 совместную атомарность с PostgreSQL. Go-клиенты проверяются в своих тикетах.
+
+## Go-клиент и управляемая потеря commit-ответа
+
+`bash infra/kafka/verify-go.sh` — транзакционные Go-проверки SET-009 в отдельном
+уникальном disposable-проекте с удалением его volume при выходе. Рабочий
+`binance-broker` и Java-проверка SET-005 не затрагиваются. Интерфейс producer,
+настройки, классификация ошибок, opt-in и пределы fault proxy описаны в
+[internal/platform/kafka/README.md](../../internal/platform/kafka/README.md).

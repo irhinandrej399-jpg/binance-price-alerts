@@ -5,8 +5,8 @@
 ## Активная работа
 
 - Активный продуктовый тикет: нет.
-- Незавершённая реализация: нет. MKT-006 завершён; следующий по ORDER — MKT-013, planned до собственной проверки.
-- Последний завершённый тикет: [MKT-006](backlog/tickets/MKT-006.md). Unary Latest с точной ценой, durable ревизией, исходными временами, возрастом и независимыми предупреждениями. mTLS-права API/matcher, бюджет 1 с, ошибки/отмена и реальный PostgreSQL через loopback проверены общим race-прогоном. Runtime и PKI ещё не подключены.
+- Незавершённая реализация: нет. Предпосылка SET-009 завершена; MKT-013 остаётся planned до собственной сессионной проверки.
+- Последний завершённый тикет: [SET-009](backlog/tickets/SET-009.md). Закреплён franz-go, подготовлен транзакционный producer и disposable Go/race-проверки Kafka, включая fencing и потерянный EndTxn ответ после commit. Проверен повтор исходной идентичности новым producer. Рабочие topics/volume не затрагивались; runtime ещё не подключён.
 - Последняя работа над процессом: добавлен проектный skill `binance-ticket-session` с автоматическим выбором и обязательным чтением через AGENTS.md. Он восстанавливает контекст одного тикета, сообщает модель из карточки и ведёт до проверки и передачи результата. Проверены формат skill, YAML, локальные ссылки и целостность бэклога; выбор skill в отдельном новом чате ещё не проверялся. Короткие запросы и проверка новой сессии — в WORKING.md. Продуктовые тикеты этим не закрывались.
 
 ## Что существует
@@ -32,9 +32,9 @@
 - Password adapter `internal/api/password`: Argon2id v19, 19 MiB / 2 прохода / 1 поток, соль 16 байт, ключ 32 байта; ошибки без credentials. Использует `golang.org/x/crypto` v0.57.0; проверены unit-тесты, race и fuzz. Runtime-лимиты остаются отдельными задачами.
 - Доменный пакет `internal/domain/price` и его unit-тесты — точная цена, процентный порог, предикат и свежесть котировки; контракты и границы описаны в DOM-001/002/003/005.
 - Доменный пакет `internal/domain/subscription` и unit-тесты — чистые переходы жизненного цикла; контракт эффектов и обязанности будущего хранилища описаны в DOM-004.
-- Локальный PostgreSQL: [запуск и проверка](../infra/postgres/README.md), compose и init в `infra/postgres/`; рабочий проект `binance-storage` на loopback:5432. Локальные пароли в игнорируемом `.env`; миграция аккаунтов API существует, в рабочую БД этой сессией не применялась. Runner — `python3 scripts/migrate.py --owner <owner>`, отдельно от runtime; [контракт](../migrations/README.md).
+- Локальный PostgreSQL: [запуск и проверка](../infra/postgres/README.md), compose и init в `infra/postgres/`; рабочий проект `binance-storage` настроен на loopback:5432; при проверке SET-009 контейнер остановлен. Локальные пароли в игнорируемом `.env`; миграция аккаунтов API существует, в рабочую БД этой сессией не применялась. Runner — `python3 scripts/migrate.py --owner <owner>`, отдельно от runtime; [контракт](../migrations/README.md).
 - Подключение Go к PostgreSQL: `internal/platform/postgres.Open`, драйвер pgx v5.11.0. `internal/testutil/postgrestest.Open(t)` и `scripts/check_postgres.py` проверяют реальные транзакции на disposable проекте binance-go-check; обычный go test пропускает opt-in тесты. Первый прикладной репозиторий — `internal/api/account`; схема аккаунтов применяется runner на тестовом стенде.
-- Локальная Kafka: [запуск и проверка](../infra/kafka/README.md), Compose/init и изолированный smoke-check в `infra/kafka/`. Рабочий проект `binance-broker` healthy на loopback:9092, префикс topics `local`. Обычный volume без отдельной квоты; нагрузочный override требует отдельную ФС 40 GiB. Прикладных producers/consumers пока нет.
+- Локальная Kafka: [запуск и проверка](../infra/kafka/README.md), Compose/init и изолированный smoke-check в `infra/kafka/`. Рабочий проект `binance-broker` настроен на loopback:9092, префикс topics `local`; при проверке SET-009 контейнер уже давно остановлен (Exited 143). Обычный volume без отдельной квоты; нагрузочный override требует отдельную ФС 40 GiB. Прикладных producers/consumers пока нет. Основа Go-producer — [internal/platform/kafka](../internal/platform/kafka/README.md): New(ctx, Config) и Publish(ctx, ...Record), stable transactional.id, классификация fencing/неизвестного commit. `bash infra/kafka/verify-go.sh` поднимает и удаляет уникальный disposable-стенд; fault proxy — `internal/testutil/kafkafault`.
 - Общий конверт `internal/contracts/event`: JSON-метаданные, версия 1, Validate и типизированные ошибки; SubscriptionChanged — `internal/contracts/subscriptionchanged`; PriceObserved — `internal/contracts/priceobserved`; AlertTriggered — `internal/contracts/alerttriggered`; все четыре схемы готовы, транспорт и runtime ещё не реализованы.
 - Go CI: `.github/workflows/go.yml`; команды воспроизведения — в README. Публикация коммита отдельно запустит первую проверку на GitHub.
 - Локальный Git-репозиторий: основная ветка `main`. SHA текущего снимка определяется через `git log -1`; его не нужно дублировать внутри самого коммита.
@@ -51,7 +51,7 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [MKT-013](backlog/tickets/MKT-013.md): публикация одной цены с подтверждением брокера. Перед реализацией нужна собственная сессионная проверка. MKT-006 завершён; MKT-013 в этой сессии не запускался.
+По очереди следующий — [MKT-013](backlog/tickets/MKT-013.md): опубликовать одну цену с подтверждением Kafka. Предпосылка SET-009 закрыта: Go-клиент, транзакционные проверки и потеря commit-ответа готовы. Перед реализацией повторить сессионную проверку MKT-013; прикладной producer в этой сессии не реализовывался.
 
 `python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Идти по этой очереди; разделы каталога и номера ID сами по себе порядок не задают.
 
