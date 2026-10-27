@@ -15,15 +15,21 @@ import (
 // configuration and connection failures fail the test. Never print the DSN.
 func Open(t testing.TB) *pgxpool.Pool {
 	t.Helper()
+	return OpenWithDSN(t, "DATABASE_URL")
+}
+
+// OpenWithDSN selects another owner on the same disposable test project.
+func OpenWithDSN(t testing.TB, variable string) *pgxpool.Pool {
+	t.Helper()
 	if os.Getenv("POSTGRES_TEST") == "" {
 		t.Skip("PostgreSQL integration test: run python3 scripts/check_postgres.py")
 	}
 	if os.Getenv("POSTGRES_TEST") != "1" {
 		t.Fatal("POSTGRES_TEST must be 1")
 	}
-	dsn := os.Getenv("DATABASE_URL")
+	dsn := os.Getenv(variable)
 	if dsn == "" {
-		t.Fatal("POSTGRES_TEST requires DATABASE_URL")
+		t.Fatal("POSTGRES_TEST requires owner DSN")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

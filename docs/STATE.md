@@ -5,11 +5,13 @@
 ## Активная работа
 
 - Активный продуктовый тикет: нет.
-- Незавершённая реализация: нет. MKT-012 завершён; следующий по ORDER — MKT-017, planned до собственной сессионной проверки.
-- Последний продуктовый тикет `done`: [MKT-012](backlog/tickets/MKT-012.md). `stream.Reconnect` ротирует соединение через 23 часа от handshake или по raw/combined serverShutdown через прежний backoff/replay. Совпавшие сигналы вызывают одну замену с прежними потоками; watcher/таймер очищаются. WS/fake-clock тесты проверяют сохранение границы `trade.CheckNext`; общий race/vet/build пройдены. Runtime/live Binance не запускались.
+- Незавершённая реализация: нет. MKT-017 завершён; следующий по ORDER — MKT-006, planned до собственной сессионной проверки.
+- Последний продуктовый тикет `done`: [MKT-017](backlog/tickets/MKT-017.md). PostgreSQL storage атомарно сохраняет цену/ревизию и PriceObserved/outbox, восстанавливает цену/статус и защищает claim/mark через lease/fencing. Общий PostgreSQL race-прогон, vet/build и проверки бэклога пройдены. Runtime, live Binance и публикация в брокер не запускались.
 - Последняя работа над процессом: добавлен проектный skill `binance-ticket-session` с автоматическим выбором и обязательным чтением через AGENTS.md. Он восстанавливает контекст одного тикета, сообщает модель из карточки и ведёт до проверки и передачи результата. Проверены формат skill, YAML, локальные ссылки и целостность бэклога; выбор skill в отдельном новом чате ещё не проверялся. Короткие запросы и проверка новой сессии — в WORKING.md. Продуктовые тикеты этим не закрывались.
 
 ## Что существует
+
+- Market-data storage: [контракт](../internal/marketdata/storage/README.md), миграция `migrations/market_data/001_quotes_outbox.sql`. BeginGeneration → SetStatus/Accept, Latest, Claim/MarkPublished; gap сохраняется исторически. Перед чтением после рестарта runtime обязан начать новое поколение. `check_postgres.py` проверяет раздельные БД API/market_data на disposable стенде; рабочая миграция этой сессией не применялась.
 
 - [Согласованные требования](requirements.md).
 - WebSocket transport: `internal/marketdata/stream.Read` и `ReadWithCommands(ctx, endpoint, config, commands, handle)`, gorilla/websocket v1.5.3. Общий бюджет команд/pong по умолчанию 5/с, ограниченная очередь pong, отмена и ожидание writer при выходе. `Reconnect` восстанавливает URL/начальные команды после сбоя, сообщает разрыв и ждёт bounded backoff с jitter. Синхронные callbacks должны учитывать context. Ротация через 23 часа/serverShutdown реализована в Reconnect; runtime wiring ещё отсутствует.
@@ -45,14 +47,14 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [MKT-017](backlog/tickets/MKT-017.md): сохранить котировку и работу публикации атомарно. Выполнять только по новому поручению после собственной сессионной проверки. Фильтр MKT-005 и ротация MKT-012 готовы; committed previous сохранять между соединениями.
+По очереди следующий — [MKT-006](backlog/tickets/MKT-006.md): выдать последнюю известную котировку с возрастом и предупреждениями через согласованный внутренний интерфейс. Выполнять только по новому поручению после сессионной проверки; durable Latest из MKT-017 готов.
 
 `python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Идти по этой очереди; разделы каталога и номера ID сами по себе порядок не задают.
 
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show MKT-017` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show MKT-006` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

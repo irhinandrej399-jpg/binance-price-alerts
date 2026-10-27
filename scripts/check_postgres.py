@@ -44,6 +44,15 @@ def main():
                         shutil.copyfile(sql, directory / sql.name)
                 run([sys.executable, str(ROOT / 'scripts/migrate.py'), '--owner', 'api',
                      '--project', PROJECT, '--directory', str(directory)])
+            run([sys.executable, str(ROOT / 'scripts/migrate.py'), '--owner', 'market_data',
+                 '--project', PROJECT])
+            market_password = run(compose + ['exec', '-T', 'postgres', 'sh', '-c',
+                                             'printf %s "$MARKET_DATA_RUNTIME_PASSWORD"'],
+                                  capture_output=True, text=True).stdout
+            if not market_password:
+                raise RuntimeError('test market-data password is missing')
+            env['MARKET_DATA_DATABASE_URL'] = (f'postgres://market_data_runtime:{quote(market_password, safe="")}@'
+                                               f'127.0.0.1:{port}/market_data?sslmode=disable&connect_timeout=5')
             # Capture only the runtime password. Never print it or put it in argv.
             result = run(compose + ['exec', '-T', 'postgres', 'sh', '-c',
                                     'printf %s "$API_RUNTIME_PASSWORD"'],

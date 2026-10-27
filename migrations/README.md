@@ -19,8 +19,9 @@ python3 scripts/migrate.py --owner notifications
 передаётся в аргументах процесса. `--project` выбирает существующий Compose-проект
 (по умолчанию `binance-storage`); команда не запускает контейнеры сама.
 `--directory /path/to/sql` заменяет каталог `migrations/<owner>` для проверки fixture.
-В `api/001_users.sql` находится схема аккаунтов IAM-001, в `api/002_sessions.sql` — сессии IAM-004, в `api/003_telegram_link_codes.sql` — хеши кодов привязки IAM-006; остальные каталоги
-пока пусты. Контракт хранилища — в [account/README](../internal/api/account/README.md).
+В `api/001_users.sql` находится схема аккаунтов IAM-001, в `api/002_sessions.sql` — сессии IAM-004, в `api/003_telegram_link_codes.sql` — хеши кодов привязки IAM-006; `market_data/001_quotes_outbox.sql` — котировка, состояние потока и outbox MKT-017;
+matcher/notifications пока пусты. Контракт market-data —
+[storage/README](../internal/marketdata/storage/README.md). Контракт хранилища — в [account/README](../internal/api/account/README.md).
 
 Файлы — UTF-8 `001_description.sql`, `002_next_step.sql` и далее: положительный
 уникальный bigint в начале, описание из строчных латинских букв, цифр и `_`,
