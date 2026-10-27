@@ -1,0 +1,47 @@
+syntax = "proto3";
+package marketdata.v1;
+option go_package = "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/marketdata/v1;marketdatav1";
+
+service Quotes {
+  rpc Latest(LatestRequest) returns (LatestResponse);
+}
+message LatestRequest { string pair = 1; }
+enum Freshness {
+  FRESHNESS_UNSPECIFIED = 0;
+  FRESHNESS_FRESH = 1;
+  FRESHNESS_STALE = 2;
+  FRESHNESS_MISSING = 3;
+  FRESHNESS_INVALID_TIME = 4;
+}
+enum Warning {
+  WARNING_UNSPECIFIED = 0;
+  WARNING_STALE = 1;
+  WARNING_STREAM_UNCONFIRMED = 2;
+  WARNING_GAP_DETECTED = 3;
+}
+message Revision {
+  string stream_id = 1;
+  uint64 generation = 2;
+  uint64 sequence = 3;
+}
+message Quote {
+  string pair = 1;
+  string price = 2; // Exact decimal; never a binary float.
+  string source_id = 3;
+  Revision revision = 4;
+  string trade_time = 5; // UTC RFC3339Nano, original source time.
+  string received_at = 6; // UTC RFC3339Nano, original reception time.
+  string stream_state = 7; // live or unconfirmed; independent of freshness.
+  bool gap_detected = 8; // Historical, never cleared by a read.
+}
+message Age {
+  int64 seconds = 1;
+  int32 nanos = 2; // 0..999999999; seconds + nanos/1e9, without rounding.
+}
+message LatestResponse {
+  Quote quote = 1; // Absent for missing/invalid_time; never usable in those states.
+  Freshness freshness = 2;
+  Age age = 3; // Present only when quote is usable.
+  repeated Warning warnings = 4;
+  string checked_at = 5; // UTC RFC3339Nano; age is evaluated on each read.
+}

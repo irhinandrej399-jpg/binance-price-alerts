@@ -46,8 +46,8 @@ deadline через `context.WithTimeout`; сервер использует п�
 для вложенной работы и отмены. Helper намеренно использует insecure transport
 только на loopback в тестах; это не конфигурация runtime.
 
-MKT-006 добавит отдельную прикладную схему последней котировки и adapter,
-используя эти генерацию и helper. Сервисные полномочия SET-008 готовы:
+Прикладная схема `marketdata/v1/latest.proto` и adapter последней котировки
+готовы в [MKT-006](../internal/marketdata/latest/README.md), используя эти генерацию и helper. Сервисные полномочия SET-008 готовы:
 [mTLS и права unary RPC](../internal/platform/serviceauth/README.md).
 Для защищённых проверок `grpctest.StartWithClientOptions(t, register,
 clientOptions, serverOptions...)` принимает явные клиентские credentials и options
