@@ -23,6 +23,8 @@ var (
 )
 
 type Config struct {
+	// SingleRecord bounds client buffers for a serial one-event outbox relay.
+	SingleRecord    bool
 	Brokers         []string
 	TransactionalID string
 	// Dialer permits TLS/authenticated transports or test fault injection. Nil uses TCP.
@@ -52,6 +54,9 @@ func clientOptions(cfg Config) []kgo.Opt {
 		kgo.RequestTimeoutOverhead(2 * time.Second), kgo.ProduceRequestTimeout(5 * time.Second),
 		kgo.RecordDeliveryTimeout(10 * time.Second), kgo.TransactionTimeout(30 * time.Second),
 		kgo.MaxBufferedRecords(1000), kgo.ProducerBatchCompression(kgo.NoCompression()),
+	}
+	if cfg.SingleRecord {
+		opts = append(opts, kgo.MaxBufferedRecords(1), kgo.MaxBufferedBytes(8<<10), kgo.ProducerBatchMaxBytes(16<<10), kgo.BrokerMaxWriteBytes(64<<10), kgo.BrokerMaxReadBytes(1<<20), kgo.FetchMaxBytes(1<<20))
 	}
 	if cfg.Dialer != nil {
 		opts = append(opts, kgo.Dialer(cfg.Dialer))

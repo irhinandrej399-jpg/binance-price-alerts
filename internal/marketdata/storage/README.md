@@ -45,4 +45,9 @@ DEC-006 для этого pool нельзя.
 Проверка: `python3 scripts/check_postgres.py` поднимает только disposable
 `binance-go-check`, применяет миграции API и market_data и запускает общий Go race
 прогон с раздельными DSN. Тест использует свежую БД; рабочий стенд не меняется.
-WebSocket wiring, relay, broker и ограничения буфера остаются последующим тикетам.
+WebSocket/runtime wiring остаётся последующим тикетам; bounded relay и Kafka producer готовы в MKT-014/MKT-013.
+
+MKT-014 ограничивает сериализованный PriceObserved до 4 KiB: `MaxEventBytes`,
+`ErrTooLarge`. Accept отклоняет превышение до commit цены/outbox. Claim не загружает
+oversized legacy payload целиком: ошибка сохраняет запись неопубликованной.
+Готовый serial relay описан в [relay](../relay/README.md); runtime ещё не подключён.

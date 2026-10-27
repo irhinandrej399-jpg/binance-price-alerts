@@ -6,6 +6,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/storage"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafka"
 )
 
@@ -76,5 +77,21 @@ func TestInvalidObservationNeverPublished(t *testing.T) {
 func TestEmptyTopic(t *testing.T) {
 	if _, err := New(context.Background(), kafka.Config{}, ""); !errors.Is(err, kafka.ErrConfig) {
 		t.Fatal(err)
+	}
+}
+
+func TestEventSizeBoundary(t *testing.T) {
+	c := &capture{}
+	p := &Producer{publisher: c, topic: "test-prices"}
+	payload := observation()
+	payload = append(payload, bytes.Repeat([]byte(" "), 4096-len(payload))...)
+	if err := p.Publish(context.Background(), payload); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Publish(context.Background(), append(payload, ' ')); !errors.Is(err, storage.ErrTooLarge) {
+		t.Fatalf("oversize: %v", err)
+	}
+	if len(c.records) != 1 {
+		t.Fatal("oversize reached broker")
 	}
 }

@@ -95,3 +95,9 @@ fencing активного старого epoch, потерянный EndTxn res
 Исходные контракты клиента: [версия v1.22.2](https://github.com/twmb/franz-go/tree/v1.22.2),
 [настройки](https://github.com/twmb/franz-go/blob/v1.22.2/pkg/kgo/config.go),
 [транзакции и EndTransaction](https://github.com/twmb/franz-go/blob/v1.22.2/pkg/kgo/txn.go).
+
+`Config.SingleRecord` — ограниченный профиль serial PriceObserved relay:
+одна buffered record, 8 KiB buffered key/value, batch ≤16 KiB, produce request
+≤64 KiB, broker response ≤1 MiB. Для совместимости валидации franz-go
+FetchMaxBytes тоже установлен в 1 MiB, хотя producer не читает события.
+Идемпотентность, транзакции и классификация ошибок сохраняются.

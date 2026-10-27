@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/priceobserved"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/storage"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafka"
 )
 
@@ -30,6 +31,7 @@ func New(ctx context.Context, cfg kafka.Config, topic string) (*Producer, error)
 	if strings.TrimSpace(topic) == "" {
 		return nil, kafka.ErrConfig
 	}
+	cfg.SingleRecord = true
 	p, err := kafka.New(ctx, cfg)
 	if err != nil {
 		return nil, err
@@ -44,6 +46,9 @@ func New(ctx context.Context, cfg kafka.Config, topic string) (*Producer, error)
 // After a transaction error, close and replace this producer with the same
 // transactional ID before retrying the original bytes. There is no retry loop.
 func (p *Producer) Publish(ctx context.Context, payload []byte) error {
+	if len(payload) > storage.MaxEventBytes {
+		return storage.ErrTooLarge
+	}
 	_, observed, err := priceobserved.Decode(payload)
 	if err != nil {
 		return err

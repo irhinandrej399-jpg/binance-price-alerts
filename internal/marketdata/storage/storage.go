@@ -18,7 +18,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+const MaxEventBytes = 4 << 10
+
 var (
+	ErrTooLarge = errors.New("market storage: event exceeds 4 KiB")
 	ErrNotFound = errors.New("market storage: not found")
 	ErrStale    = errors.New("market storage: stale generation or claim")
 	ErrInvalid  = errors.New("market storage: invalid input or exhausted revision")
@@ -137,6 +140,9 @@ func (r *Repository) Accept(ctx context.Context, gen uint64, q priceobserved.Obs
 	if err != nil {
 		return false, err
 	}
+	if len(data) > MaxEventBytes {
+		return false, ErrTooLarge
+	}
 	raw, err = json.Marshal(q)
 	if err != nil {
 		return false, err
@@ -172,12 +178,15 @@ func (r *Repository) Claim(ctx context.Context, lease time.Duration) (Work, erro
  AND NOT EXISTS(SELECT 1 FROM app.price_outbox p WHERE p.pair=o.pair AND NOT p.published AND p.position<o.position)
  ORDER BY o.position FOR UPDATE OF o SKIP LOCKED LIMIT 1)
  UPDATE app.price_outbox o SET claim_token=o.claim_token+1,lease_until=clock_timestamp()+($1::bigint*interval '1 microsecond')
- FROM candidate c WHERE o.position=c.position RETURNING o.event_id,o.data,o.claim_token`, lease.Microseconds()).Scan(&w.EventID, &w.Data, &w.Token)
+ FROM candidate c WHERE o.position=c.position RETURNING o.event_id,CASE WHEN octet_length(o.data)<=$2 THEN o.data ELSE NULL END,o.claim_token`, lease.Microseconds(), MaxEventBytes).Scan(&w.EventID, &w.Data, &w.Token)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Work{}, ErrNotFound
 	}
 	if err != nil {
 		return Work{}, fmt.Errorf("claim publication: %w", err)
+	}
+	if w.Data == nil {
+		return Work{}, ErrTooLarge
 	}
 	return w, nil
 }

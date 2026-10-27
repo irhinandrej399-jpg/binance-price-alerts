@@ -63,7 +63,12 @@ def main():
             env['DATABASE_URL'] = (f'postgres://api_runtime:{quote(password, safe="")}@'
                                    f'127.0.0.1:{port}/api?sslmode=disable&connect_timeout=5')
             env['POSTGRES_TEST'] = '1'
-            run(['go', 'test', '-race', '-count=1', '-v', './...'])
+            # Relay claims the entire fixed shard. Run its recovery scenario on
+            # the fresh outbox before other packages create unpublished work.
+            relay = 'github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/relay'
+            run(['go', 'test', '-race', '-count=1', '-v', relay])
+            packages = run(['go', 'list', './...'], capture_output=True, text=True).stdout.splitlines()
+            run(['go', 'test', '-race', '-count=1', '-v'] + [p for p in packages if p != relay])
         finally:
             # This project is explicitly disposable. Working binance-storage,
             # migration-check and role-check projects are never addressed.

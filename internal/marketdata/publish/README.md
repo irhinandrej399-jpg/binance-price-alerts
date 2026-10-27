@@ -45,3 +45,9 @@ ErrFenced требует остановить прежнего владельц�
   прикладного producer: commit/read_committed, fencing, отказ брокера и потеря
   EndTxn response с повтором исходных байтов новым producer. Две копии имеют
   исходные ID, ключ и партицию; стенд удаляется runner после проверки.
+
+MKT-014: событие >4 KiB отклоняется до Decode/отправки (`storage.ErrTooLarge`).
+New включает `kafka.Config.SingleRecord`, ограничивая также клиентские буферы.
+SQL-relay, backoff и правила единственного фиксированного шарда —
+[marketdata/relay](../relay/README.md). Профиль проверяется на реальном Kafka,
+включая sampled incremental Go heap при публикациях максимального размера.

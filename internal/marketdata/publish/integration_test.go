@@ -6,6 +6,8 @@ import (
 	"errors"
 	"net"
 	"os"
+	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -161,5 +163,52 @@ func TestIntegrationUnavailable(t *testing.T) {
 	l.Close()
 	if _, err := New(bounded(t, 500*time.Millisecond), cfg, topic); !errors.Is(err, kafka.ErrPublish) {
 		t.Fatalf("unavailable broker: %v", err)
+	}
+}
+
+// Sample the live Go heap during repeated maximum-sized publications, including
+// the real Kafka client's metadata/network buffers. This is a small memory
+// regression check, not a throughput or RSS qualification of the future runtime.
+func TestIntegrationBoundedClientMemory(t *testing.T) {
+	cfg, topic, payload := config(t, "memory")
+	payload = append(payload, bytes.Repeat([]byte(" "), 4096-len(payload))...)
+	runtime.GC()
+	var base runtime.MemStats
+	runtime.ReadMemStats(&base)
+	var peak atomic.Uint64
+	done := make(chan struct{})
+	joined := make(chan struct{})
+	go func() {
+		defer close(joined)
+		ticker := time.NewTicker(time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				var m runtime.MemStats
+				runtime.ReadMemStats(&m)
+				if m.HeapAlloc > base.HeapAlloc {
+					n := m.HeapAlloc - base.HeapAlloc
+					for old := peak.Load(); n > old && !peak.CompareAndSwap(old, n); old = peak.Load() {
+					}
+				}
+			}
+		}
+	}()
+	defer func() {
+		close(done)
+		<-joined
+		t.Logf("sampled incremental live Go heap: %d bytes", peak.Load())
+		if peak.Load() > 16<<20 {
+			t.Errorf("client heap exceeds 16 MiB: %d", peak.Load())
+		}
+	}()
+	p := newProducer(t, cfg, topic)
+	for range 64 {
+		if err := p.Publish(bounded(t, 10*time.Second), payload); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
