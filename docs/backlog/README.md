@@ -85,7 +85,7 @@
 | [IAM-005](tickets/IAM-005.md) | Проверять сессию на защищённом endpoint | IAM-004 | done |
 | [IAM-006](tickets/IAM-006.md) | Выдать одноразовый код привязки Telegram | IAM-005, SET-004 | done |
 | [IAM-007](tickets/IAM-007.md) | Проверять подлинность Telegram webhook | SET-001 | done |
-| [IAM-008](tickets/IAM-008.md) | Поглотить код и привязать Telegram chat | IAM-006, IAM-007, DEC-005 | planned |
+| [IAM-008](tickets/IAM-008.md) | Поглотить код и привязать Telegram chat | IAM-006, IAM-007, DEC-005 | done |
 
 ### Подписки
 
