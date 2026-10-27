@@ -5,13 +5,13 @@
 ## Активная работа
 
 - Активный продуктовый тикет: нет.
-- Незавершённая реализация: нет. SET-007 завершён; следующий по ORDER — SET-008, planned до собственной проверки. MKT-006 ожидает сервисных полномочий SET-008.
-- Последний завершённый тикет: [SET-007](backlog/tickets/SET-007.md). Закреплены gRPC/Protobuf и инструменты генерации; есть probe-контракт, generated client/server, проверка актуальности в CI и loopback test helper. Сетевые сценарии, общий race-прогон, vet/build и проверки бэклога пройдены. Прикладные RPC и runtime ещё не подключены.
+- Незавершённая реализация: нет. SET-008 завершён; следующий по ORDER — MKT-006, planned до собственной проверки.
+- Последний завершённый тикет: [SET-008](backlog/tickets/SET-008.md). Согласованы и реализованы mTLS (TLS 1.3), идентичность клиента из URI SAN и явные права на unary RPC. Сетевые отказы до handler, deadline/cancellation, общий race-прогон и vet/build проверены. Прикладные RPC, runtime и PKI ещё не подключены.
 - Последняя работа над процессом: добавлен проектный skill `binance-ticket-session` с автоматическим выбором и обязательным чтением через AGENTS.md. Он восстанавливает контекст одного тикета, сообщает модель из карточки и ведёт до проверки и передачи результата. Проверены формат skill, YAML, локальные ссылки и целостность бэклога; выбор skill в отдельном новом чате ещё не проверялся. Короткие запросы и проверка новой сессии — в WORKING.md. Продуктовые тикеты этим не закрывались.
 
 ## Что существует
 
-- Unary gRPC: [генерация и использование](../proto/README.md), `python3 scripts/generate_proto.py`, CI-проверка `--check`. `internal/testutil/grpctest.Start` запускает реальный loopback TCP сервер с Cleanup; проверены ответ, deadline, отмена и недоступность. Probe — только тестовый контракт. Сервисные полномочия — SET-008.
+- Unary gRPC: [генерация и использование](../proto/README.md), `python3 scripts/generate_proto.py`, CI-проверка `--check`. `internal/testutil/grpctest.Start` запускает реальный loopback TCP сервер с Cleanup; проверены ответ, deadline, отмена и недоступность. Probe — только тестовый контракт. Сервисные полномочия готовы: [mTLS и права](../internal/platform/serviceauth/README.md), ADR SET-008; защищённый loopback — `grpctest.StartWithClientOptions`.
 
 - Market-data storage: [контракт](../internal/marketdata/storage/README.md), миграция `migrations/market_data/001_quotes_outbox.sql`. BeginGeneration → SetStatus/Accept, Latest, Claim/MarkPublished; gap сохраняется исторически. Перед чтением после рестарта runtime обязан начать новое поколение. `check_postgres.py` проверяет раздельные БД API/market_data на disposable стенде; рабочая миграция этой сессией не применялась.
 
@@ -49,14 +49,14 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [SET-008](backlog/tickets/SET-008.md): подготовить сервисные полномочия внутренних gRPC-вызовов. SET-007 готов; MKT-006 остаётся planned до завершения SET-008. Durable Latest из MKT-017 готов. Следующий тикет в сессии SET-007 не запускался.
+По очереди следующий — [MKT-006](backlog/tickets/MKT-006.md): внутренний интерфейс последней котировки. Генерация SET-007, сервисные полномочия SET-008 и durable Latest MKT-017 готовы. Перед реализацией нужна собственная сессионная проверка, конкретные права и deadline. В сессии SET-008 MKT-006 не запускался.
 
 `python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Идти по этой очереди; разделы каталога и номера ID сами по себе порядок не задают.
 
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show SET-008` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show MKT-006` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

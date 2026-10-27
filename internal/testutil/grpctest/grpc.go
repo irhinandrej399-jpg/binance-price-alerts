@@ -16,6 +16,15 @@ import (
 // Server options allow subsequent adapters to exercise their interceptors.
 func Start(t testing.TB, register func(*grpc.Server), options ...grpc.ServerOption) *grpc.ClientConn {
 	t.Helper()
+	return StartWithClientOptions(t, register, []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}, options...)
+}
+
+// StartWithClientOptions uses explicit client options, including transport
+// credentials, to exercise protected connections on the same loopback harness.
+func StartWithClientOptions(t testing.TB, register func(*grpc.Server), clientOptions []grpc.DialOption, options ...grpc.ServerOption) *grpc.ClientConn {
+	t.Helper()
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen for test gRPC: %v", err)
@@ -38,7 +47,7 @@ func Start(t testing.TB, register func(*grpc.Server), options ...grpc.ServerOpti
 	register(server)
 	go func() { done <- server.Serve(lis) }()
 	conn, err := grpc.NewClient("passthrough:///"+lis.Addr().String(),
-		grpc.WithTransportCredentials(insecure.NewCredentials()))
+		clientOptions...)
 	if err != nil {
 		t.Fatalf("create test gRPC client: %v", err)
 	}

@@ -47,9 +47,12 @@ deadline через `context.WithTimeout`; сервер использует п�
 только на loopback в тестах; это не конфигурация runtime.
 
 MKT-006 добавит отдельную прикладную схему последней котировки и adapter,
-используя эти генерацию и helper. Сервисные полномочия — SET-008; они остаются
-обязательной предпосылкой MKT-006. Прикладные retries, бюджет deadline,
-TLS/runtime и отображение доменных ошибок этим fixture не выбираются.
+используя эти генерацию и helper. Сервисные полномочия SET-008 готовы:
+[mTLS и права unary RPC](../internal/platform/serviceauth/README.md).
+Для защищённых проверок `grpctest.StartWithClientOptions(t, register,
+clientOptions, serverOptions...)` принимает явные клиентские credentials и options
+сервера при том же lifecycle loopback. Прикладные retries, бюджет deadline,
+runtime и отображение доменных ошибок определяются в интерфейсных тикетах.
 
 Источники инструментов: [gRPC Go quick start](https://grpc.io/docs/languages/go/quickstart/),
 [protoc 36.2](https://github.com/protocolbuffers/protobuf/releases/tag/v36.2),

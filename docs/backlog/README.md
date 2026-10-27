@@ -55,7 +55,7 @@
 | [SET-005](tickets/SET-005.md) | Поднять локальный брокер | DEC-007, DEC-008 | done |
 | [SET-006](tickets/SET-006.md) | Подготовить подключение и интеграционные проверки Go с PostgreSQL | SET-001, SET-003, SET-004 | done |
 | [SET-007](tickets/SET-007.md) | Подготовить генерацию Protobuf и сетевые проверки unary gRPC | SET-001, SET-002, DEC-009 | done |
-| [SET-008](tickets/SET-008.md) | Подготовить сервисные полномочия внутренних gRPC-вызовов | SET-007, DEC-009 | planned |
+| [SET-008](tickets/SET-008.md) | Подготовить сервисные полномочия внутренних gRPC-вызовов | SET-007, DEC-009 | done |
 
 ### Контракты
 
