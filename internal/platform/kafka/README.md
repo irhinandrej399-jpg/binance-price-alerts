@@ -72,7 +72,10 @@ bash infra/kafka/verify-go.sh
 Готовность ограничена 180 с, Go-прогон 120 с, отдельные операции — контекстами.
 `KAFKA_GO_CHECK_PORT` позволяет явно назначить свободный порт.
 
-Проверки на неприкладном probe: commit, abort, read_committed/read_uncommitted,
+Прикладной producer PriceObserved — [marketdata/publish](../../marketdata/publish/README.md).
+Та же команда запускает его race-сценарии на отдельном prices topic стенда.
+
+Проверки основы на неприкладном probe: commit, abort, read_committed/read_uncommitted,
 fencing активного старого epoch, потерянный EndTxn response, повтор тем же ID,
 недоступный брокер. В конце явно включённый opt-in с закрытым портом обязан
 провалить интеграционный тест; его `FAIL` в выводе ожидаем и проверяется runner.

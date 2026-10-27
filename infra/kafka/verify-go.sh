@@ -24,7 +24,7 @@ trap 'exit 143' TERM
 export KAFKA_INTEGRATION=1
 export KAFKA_TEST_BROKER="127.0.0.1:$KAFKA_PORT"
 export KAFKA_TEST_PREFIX="$prefix"
-GOTOOLCHAIN=local go test -race -count=1 -v -timeout 120s ./internal/platform/kafka ./internal/testutil/kafkafault
+GOTOOLCHAIN=local go test -race -count=1 -v -timeout 120s ./internal/platform/kafka ./internal/testutil/kafkafault ./internal/marketdata/publish
 # Explicit opt-in against a closed port must fail, rather than skip the tests.
 closed_port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')
 if KAFKA_TEST_BROKER="127.0.0.1:$closed_port" GOTOOLCHAIN=local go test -count=1 -timeout 25s -run '^TestIntegrationCommitAbortIsolation$' ./internal/platform/kafka; then
