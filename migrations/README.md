@@ -19,7 +19,7 @@ python3 scripts/migrate.py --owner notifications
 передаётся в аргументах процесса. `--project` выбирает существующий Compose-проект
 (по умолчанию `binance-storage`); команда не запускает контейнеры сама.
 `--directory /path/to/sql` заменяет каталог `migrations/<owner>` для проверки fixture.
-В `api/001_users.sql` находится схема аккаунтов IAM-001; остальные каталоги
+В `api/001_users.sql` находится схема аккаунтов IAM-001, в `api/002_sessions.sql` — сессии IAM-004; остальные каталоги
 пока пусты. Контракт хранилища — в [account/README](../internal/api/account/README.md).
 
 Файлы — UTF-8 `001_description.sql`, `002_next_step.sql` и далее: положительный

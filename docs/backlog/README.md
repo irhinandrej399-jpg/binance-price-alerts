@@ -81,7 +81,7 @@
 | [IAM-001](tickets/IAM-001.md) | Сохранить учётную запись пользователя | SET-004, SET-006 | done |
 | [IAM-002](tickets/IAM-002.md) | Реализовать хранение и проверку пароля | SET-001 | done |
 | [IAM-003](tickets/IAM-003.md) | Реализовать регистрацию по email | IAM-001, IAM-002 | done |
-| [IAM-004](tickets/IAM-004.md) | Реализовать вход с ограниченным сроком сессии | IAM-001, IAM-002 | planned |
+| [IAM-004](tickets/IAM-004.md) | Реализовать вход с ограниченным сроком сессии | IAM-001, IAM-002 | done |
 | [IAM-005](tickets/IAM-005.md) | Проверять сессию на защищённом endpoint | IAM-004 | planned |
 | [IAM-006](tickets/IAM-006.md) | Выдать одноразовый код привязки Telegram | IAM-005, SET-004 | planned |
 | [IAM-007](tickets/IAM-007.md) | Проверять подлинность Telegram webhook | SET-001 | planned |
