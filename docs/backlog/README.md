@@ -120,7 +120,7 @@
 | [MKT-005](tickets/MKT-005.md) | Публиковать только монотонные цены пары | MKT-002, CON-003 | planned |
 | [MKT-017](tickets/MKT-017.md) | Сохранить котировку и работу публикации атомарно | SET-004, MKT-005, CON-003, DEC-006 | planned |
 | [MKT-006](tickets/MKT-006.md) | Выдать последнюю известную котировку с возрастом | MKT-005, DOM-005, DEC-003, DEC-004, MKT-017, DEC-009 | planned |
-| [MKT-009](tickets/MKT-009.md) | Прочитать цены по одному WebSocket-соединению | MKT-002 | planned |
+| [MKT-009](tickets/MKT-009.md) | Прочитать цены по одному WebSocket-соединению | MKT-002 | done |
 | [MKT-010](tickets/MKT-010.md) | Ограничить управляющие команды WebSocket | MKT-009 | planned |
 | [MKT-011](tickets/MKT-011.md) | Переподключиться после обрыва WebSocket | MKT-009, MKT-010 | planned |
 | [MKT-012](tickets/MKT-012.md) | Планово заменить WebSocket-соединение | MKT-011 | planned |

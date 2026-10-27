@@ -3,6 +3,7 @@ module github.com/irhinandrej399-jpg/binance-price-alerts
 go 1.26.3
 
 require (
+	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.11.0
 	golang.org/x/crypto v0.57.0
 )
