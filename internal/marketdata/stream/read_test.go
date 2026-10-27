@@ -212,3 +212,144 @@ func TestCanceledBeforeDial(t *testing.T) {
 		t.Fatalf("canceled dial: %v", err)
 	}
 }
+
+func TestCommandsAndPongDoNotBlockPrices(t *testing.T) {
+	first := make(chan string, 1)
+	pong := make(chan string, 1)
+	endpoint := server(t, func(c *websocket.Conn) {
+		kind, b, err := c.ReadMessage()
+		if err != nil || kind != websocket.TextMessage {
+			t.Errorf("command: %d %v", kind, err)
+			return
+		}
+		first <- string(b)
+		if err := c.WriteControl(websocket.PingMessage, []byte("budget"), time.Now().Add(time.Second)); err != nil {
+			t.Error(err)
+			return
+		}
+		if err := c.WriteMessage(websocket.TextMessage, []byte("price")); err != nil {
+			t.Error(err)
+			return
+		}
+		stop := errors.New("received pong")
+		c.SetPongHandler(func(s string) error { pong <- s; return stop })
+		// A queued pong must precede the second command.
+		if _, _, err := c.ReadMessage(); !errors.Is(err, stop) {
+			t.Errorf("expected pong before command: %v", err)
+			return
+		}
+		c.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(1000, "done"), time.Now().Add(time.Second))
+	})
+	commands := make(chan []byte, 12)
+	for i := 0; i < 12; i++ {
+		commands <- []byte(`{"method":"SUBSCRIBE","params":["btcusdt@trade"],"id":1}`)
+	}
+	close(commands)
+	config := stream.DefaultConfig()
+	config.Messages = 1
+	prices := make(chan string, 1)
+	done := make(chan error, 1)
+	go func() {
+		done <- stream.ReadWithCommands(testContext(t), endpoint, config, commands, func(_ context.Context, b []byte) error { prices <- string(b); return nil })
+	}()
+	select {
+	case <-first:
+	case <-time.After(3 * time.Second):
+		t.Fatal("no command")
+	}
+	select {
+	case b := <-prices:
+		if b != "price" {
+			t.Fatal(b)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("price blocked by outbound budget")
+	}
+	select {
+	case s := <-pong:
+		if s != "budget" {
+			t.Fatal(s)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("no pong")
+	}
+	select {
+	case err := <-done:
+		var closed *websocket.CloseError
+		if !errors.As(err, &closed) || closed.Code != 1000 {
+			t.Fatalf("close = %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("writer did not stop")
+	}
+}
+
+func TestPongQueueOverflowFailsConnection(t *testing.T) {
+	endpoint := server(t, func(c *websocket.Conn) {
+		if _, _, err := c.ReadMessage(); err != nil {
+			t.Error(err)
+			return
+		}
+		for i := 0; i < 10; i++ {
+			if err := c.WriteControl(websocket.PingMessage, []byte("ping"), time.Now().Add(time.Second)); err != nil {
+				return
+			}
+		}
+		c.ReadMessage()
+	})
+	config := stream.DefaultConfig()
+	config.Messages = 1
+	config.ControlQueue = 1
+	commands := make(chan []byte, 2)
+	commands <- []byte("command")
+	commands <- []byte("command")
+	err := stream.ReadWithCommands(testContext(t), endpoint, config, commands, func(context.Context, []byte) error { return nil })
+	if !errors.Is(err, stream.ErrControlQueueFull) {
+		t.Fatalf("overflow: %v", err)
+	}
+}
+
+func TestCancelPendingCommand(t *testing.T) {
+	connected := make(chan struct{})
+	closed := make(chan struct{})
+	endpoint := server(t, func(c *websocket.Conn) {
+		defer close(closed)
+		if _, _, err := c.ReadMessage(); err != nil {
+			t.Error(err)
+			return
+		}
+		close(connected)
+		c.ReadMessage()
+	})
+	ctx, cancel := context.WithCancel(testContext(t))
+	defer cancel()
+	commands := make(chan []byte, 3)
+	for i := 0; i < 3; i++ {
+		commands <- []byte("command")
+	}
+	config := stream.DefaultConfig()
+	config.Messages = 1
+	done := make(chan error, 1)
+	go func() {
+		done <- stream.ReadWithCommands(ctx, endpoint, config, commands, func(context.Context, []byte) error { return nil })
+	}()
+	select {
+	case <-connected:
+	case <-time.After(3 * time.Second):
+		t.Fatal("no command")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatal(err)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("cancel blocked by budget")
+	}
+	select {
+	case <-closed:
+	case <-time.After(3 * time.Second):
+		t.Fatal("socket open")
+	}
+}
