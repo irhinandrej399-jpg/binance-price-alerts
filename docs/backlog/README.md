@@ -115,7 +115,7 @@
 
 | ID | Один результат | Зависимости | Статус |
 | --- | --- | --- | --- |
-| [MKT-001](tickets/MKT-001.md) | Получить каталог доступных spot-пар USDT | SET-001 | planned |
+| [MKT-001](tickets/MKT-001.md) | Получить каталог доступных spot-пар USDT | SET-001 | done |
 | [MKT-002](tickets/MKT-002.md) | Декодировать одно событие сделки Binance | CON-003, DOM-001 | planned |
 | [MKT-005](tickets/MKT-005.md) | Публиковать только монотонные цены пары | MKT-002, CON-003 | planned |
 | [MKT-017](tickets/MKT-017.md) | Сохранить котировку и работу публикации атомарно | SET-004, MKT-005, CON-003, DEC-006 | planned |
