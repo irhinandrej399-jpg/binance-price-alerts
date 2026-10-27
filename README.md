@@ -58,7 +58,7 @@ Go-пул и изолированные проверки транзакций: `
 
 ## Проверки CI
 
-[Go CI](.github/workflows/go.yml) запускается в GitHub Actions на push, pull request и вручную через workflow_dispatch. Один job на Ubuntu использует Go из `.go-version` и проверяет форматирование, `go vet ./...` и `go test -race ./...`. Любая ошибка завершает job неуспешно; форматирование проверяется без изменения файлов. Кэширование отключено, пока проект не использует внешние зависимости.
+[Go CI](.github/workflows/go.yml) запускается в GitHub Actions на push, pull request и вручную через workflow_dispatch. Один job на Ubuntu использует Go из `.go-version` и проверяет форматирование, актуальность generated Protobuf-кода, `go vet ./...` и `go test -race ./...`. Любая ошибка завершает job неуспешно; форматирование проверяется без изменения файлов. Кэширование Go отключено. Для проверки генерации нужны Python 3 и доступ к GitHub и Go module proxy.
 
 Локальное воспроизведение из корня репозитория (Bash; для race detector нужны CGO и C-компилятор):
 
@@ -70,9 +70,12 @@ if [ -n "$unformatted" ]; then
   printf 'Run gofmt on:\n%s\n' "$unformatted"
   exit 1
 fi
+python3 scripts/generate_proto.py --check
 go vet ./...
 go test -race ./...
 ```
+
+Генерация внутренних gRPC-контрактов из чистого checkout: `python3 scripts/generate_proto.py`. Закреплённые инструменты, размещение схем и loopback test helper описаны в [proto/README.md](proto/README.md).
 
 ## Документация и работа по тикетам
 

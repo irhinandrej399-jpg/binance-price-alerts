@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package binance.probe.v1;
+
+option go_package = "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/probe/v1;probev1";
+
+// Probe is a test fixture for transport checks, never a runtime API.
+service Probe {
+  rpc Call(CallRequest) returns (CallResponse);
+}
+
+message CallRequest {
+  string value = 1;
+}
+
+message CallResponse {
+  string value = 1;
+}
