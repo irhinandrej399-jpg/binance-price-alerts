@@ -2,7 +2,8 @@
 
 Один PostgreSQL, четыре БД: `api`, `market_data`, `matcher`, `notifications`.
 Для каждой — `<owner>_runtime` и `<owner>_migration`, схема `app`.
-Прикладных таблиц и runner миграций пока нет (SET-004).
+Прикладных таблиц пока нет. Runner миграций — SET-004; Go-пул и изолированная
+проверка транзакций — [SET-006](../../internal/platform/postgres/README.md).
 
 ## Функциональный запуск
 

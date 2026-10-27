@@ -5,8 +5,8 @@
 ## Активная работа
 
 - Активный продуктовый тикет: нет.
-- Незавершённая реализация: нет.
-- Последний продуктовый тикет `done`: [CON-004](backlog/tickets/CON-004.md). AlertTriggered v1: запрос delivery_requested, устойчивый workflow ID, версии, владелец/подписка, точный порог и диагностическая котировка. [Контракт и границы](../internal/contracts/alerttriggered/README.md); хранение задания, допуск отправки и доставка ещё не реализованы.
+- Незавершённая реализация: нет. Основа Go/PostgreSQL SET-006 готова; IAM-001 остаётся planned до собственной сессионной проверки.
+- Последний продуктовый тикет `done`: [SET-006](backlog/tickets/SET-006.md). pgx-пул, opt-in Go/PostgreSQL helper и изолированный runner: `python3 scripts/check_postgres.py`. Проверены commit/rollback и два соединения под api_runtime; [инструкция](../internal/platform/postgres/README.md).
 - Последняя работа над процессом: добавлен проектный skill `binance-ticket-session` с автоматическим выбором и обязательным чтением через AGENTS.md. Он восстанавливает контекст одного тикета, сообщает модель из карточки и ведёт до проверки и передачи результата. Проверены формат skill, YAML, локальные ссылки и целостность бэклога; выбор skill в отдельном новом чате ещё не проверялся. Короткие запросы и проверка новой сессии — в WORKING.md. Продуктовые тикеты этим не закрывались.
 
 ## Что существует
@@ -22,6 +22,7 @@
 - Доменный пакет `internal/domain/price` и его unit-тесты — точная цена, процентный порог, предикат и свежесть котировки; контракты и границы описаны в DOM-001/002/003/005.
 - Доменный пакет `internal/domain/subscription` и unit-тесты — чистые переходы жизненного цикла; контракт эффектов и обязанности будущего хранилища описаны в DOM-004.
 - Локальный PostgreSQL: [запуск и проверка](../infra/postgres/README.md), compose и init в `infra/postgres/`; рабочий проект `binance-storage` на loopback:5432. Локальные пароли в игнорируемом `.env`; схем приложения ещё нет. Runner — `python3 scripts/migrate.py --owner <owner>`, отдельно от runtime; [контракт](../migrations/README.md).
+- Подключение Go к PostgreSQL: `internal/platform/postgres.Open`, драйвер pgx v5.11.0. `internal/testutil/postgrestest.Open(t)` и `scripts/check_postgres.py` проверяют реальные транзакции на disposable проекте binance-go-check; обычный go test пропускает opt-in тесты. Прикладные схемы и репозитории ещё не реализованы.
 - Локальная Kafka: [запуск и проверка](../infra/kafka/README.md), Compose/init и изолированный smoke-check в `infra/kafka/`. Рабочий проект `binance-broker` healthy на loopback:9092, префикс topics `local`. Обычный volume без отдельной квоты; нагрузочный override требует отдельную ФС 40 GiB. Прикладных producers/consumers пока нет.
 - Общий конверт `internal/contracts/event`: JSON-метаданные, версия 1, Validate и типизированные ошибки; SubscriptionChanged — `internal/contracts/subscriptionchanged`; PriceObserved — `internal/contracts/priceobserved`; AlertTriggered — `internal/contracts/alerttriggered`; все четыре схемы готовы, транспорт и runtime ещё не реализованы.
 - Go CI: `.github/workflows/go.yml`; команды воспроизведения — в README. Публикация коммита отдельно запустит первую проверку на GitHub.
@@ -39,7 +40,7 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [IAM-001](backlog/tickets/IAM-001.md): хранение учётной записи пользователя. Выполнять только по отдельному поручению и после сессионной проверки. DEC-001–009, SET-001/002/003/004/005 и DOM-001–005, CON-001/002/003/004 завершены.
+По очереди следующий — [IAM-001](backlog/tickets/IAM-001.md): хранение учётной записи пользователя, с готовой основой SET-006. Выполнять только по отдельному поручению и после сессионной проверки. DEC-001–009, SET-001–006 и DOM-001–005, CON-001–004 завершены.
 
 `python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Идти по этой очереди; разделы каталога и номера ID сами по себе порядок не задают.
 
