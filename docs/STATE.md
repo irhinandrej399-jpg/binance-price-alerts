@@ -6,7 +6,7 @@
 
 - Активный продуктовый тикет: нет.
 - Незавершённая реализация: нет.
-- Последний продуктовый тикет `done`: [CON-003](backlog/tickets/CON-003.md). PriceObserved: точная цена, source ID, ревизия поколения/номера по паре, отдельные T/E/приём и состояние разрыва. [Контракт и границы](../internal/contracts/priceobserved/README.md); ingest, durable счётчики и matcher ещё не реализованы.
+- Последний продуктовый тикет `done`: [CON-004](backlog/tickets/CON-004.md). AlertTriggered v1: запрос delivery_requested, устойчивый workflow ID, версии, владелец/подписка, точный порог и диагностическая котировка. [Контракт и границы](../internal/contracts/alerttriggered/README.md); хранение задания, допуск отправки и доставка ещё не реализованы.
 - Последняя работа над процессом: добавлен проектный skill `binance-ticket-session` с автоматическим выбором и обязательным чтением через AGENTS.md. Он восстанавливает контекст одного тикета, сообщает модель из карточки и ведёт до проверки и передачи результата. Проверены формат skill, YAML, локальные ссылки и целостность бэклога; выбор skill в отдельном новом чате ещё не проверялся. Короткие запросы и проверка новой сессии — в WORKING.md. Продуктовые тикеты этим не закрывались.
 
 ## Что существует
@@ -23,7 +23,7 @@
 - Доменный пакет `internal/domain/subscription` и unit-тесты — чистые переходы жизненного цикла; контракт эффектов и обязанности будущего хранилища описаны в DOM-004.
 - Локальный PostgreSQL: [запуск и проверка](../infra/postgres/README.md), compose и init в `infra/postgres/`; рабочий проект `binance-storage` на loopback:5432. Локальные пароли в игнорируемом `.env`; схем приложения ещё нет. Runner — `python3 scripts/migrate.py --owner <owner>`, отдельно от runtime; [контракт](../migrations/README.md).
 - Локальная Kafka: [запуск и проверка](../infra/kafka/README.md), Compose/init и изолированный smoke-check в `infra/kafka/`. Рабочий проект `binance-broker` healthy на loopback:9092, префикс topics `local`. Обычный volume без отдельной квоты; нагрузочный override требует отдельную ФС 40 GiB. Прикладных producers/consumers пока нет.
-- Общий конверт `internal/contracts/event`: JSON-метаданные, версия 1, Validate и типизированные ошибки; SubscriptionChanged — `internal/contracts/subscriptionchanged`; PriceObserved — `internal/contracts/priceobserved`; оставшийся payload — CON-004.
+- Общий конверт `internal/contracts/event`: JSON-метаданные, версия 1, Validate и типизированные ошибки; SubscriptionChanged — `internal/contracts/subscriptionchanged`; PriceObserved — `internal/contracts/priceobserved`; AlertTriggered — `internal/contracts/alerttriggered`; все четыре схемы готовы, транспорт и runtime ещё не реализованы.
 - Go CI: `.github/workflows/go.yml`; команды воспроизведения — в README. Публикация коммита отдельно запустит первую проверку на GitHub.
 - Локальный Git-репозиторий: основная ветка `main`. SHA текущего снимка определяется через `git log -1`; его не нужно дублировать внутри самого коммита.
 - GitHub: [irhinandrej399-jpg/binance-price-alerts](https://github.com/irhinandrej399-jpg/binance-price-alerts), публичный. `origin` указывает на этот репозиторий; публикация текущей main поручена пользователем. Состояние синхронизации проверяется через `git status -sb` и SHA удалённой ветки.
@@ -37,14 +37,14 @@ DEC-001–008 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [CON-004](backlog/tickets/CON-004.md): событие срабатывания. Выполнять только по отдельному поручению и после сессионной проверки. DEC-001–008, SET-001/002/003/004/005 и DOM-001–005, CON-001/002/003 завершены.
+По очереди следующий — [IAM-001](backlog/tickets/IAM-001.md): хранение учётной записи пользователя. Выполнять только по отдельному поручению и после сессионной проверки. DEC-001–008, SET-001/002/003/004/005 и DOM-001–005, CON-001/002/003/004 завершены.
 
 `python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Идти по этой очереди; разделы каталога и номера ID сами по себе порядок не задают.
 
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show CON-004` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show IAM-001` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.
