@@ -1,4 +1,4 @@
-# WebSocket transport — MKT-009 / MKT-010 / MKT-011
+# WebSocket transport — MKT-009 / MKT-010 / MKT-011 / MKT-012
 
 `stream.Read(ctx, endpoint, handle)` открывает один WS/WSS URL, читает полные
 текстовые сообщения последовательно и передаёт исходные bytes в `handle(ctx, data)`.
@@ -81,7 +81,7 @@ FIFO, закрытие канала команд, округление инте�
 Лимиты повторно сверены 27 октября 2026 по официальной Binance-документации выше.
 
 Проверка: `GOTOOLCHAIN=local go test -race ./internal/marketdata/stream`.
-Live Binance, runtime wiring, ротация (MKT-012) и durable приём
+Live Binance, runtime wiring и durable приём
 сюда не входят. Reconnect MKT-011 описан ниже.
 
 ## Reconnect — MKT-011
@@ -124,4 +124,34 @@ raw JSON; успешный dial или отправка команды ещё н
 ошибку handshake → восстановление, доставку цены, остановку и terminal-ошибку
 обработчика. Fake clock проверяет обе границы jitter, экспоненту и потолок,
 переполнение duration, отсутствие попыток до срока и отмену ожидания.
-Ротация, runtime wiring, ACK tracking и backfill здесь не реализованы.
+Runtime wiring, ACK tracking и backfill здесь не реализованы. Ротация — ниже.
+
+
+## Плановая ротация — MKT-012
+
+`Reconnect` заменяет установленное соединение через `RotationAge = 23*time.Hour`
+после успешного handshake (час запаса до внешнего ограничения 24 часа), а также
+при Binance `serverShutdown`: raw `{"e":"serverShutdown"}` или combined
+`{"stream":"!serverShutdown","data":{"e":"serverShutdown"}}`.
+Ключ `e` распознаётся с учётом регистра; `E` не является типом события.
+Эти сообщения поглощаются внутри reconnect, остальные bytes без изменений
+доходят до handler. `Read`/`ReadWithCommands` остаются одноразовым транспортом.
+Внешний контракт повторно сверен 27 октября 2026 по
+[официальному Binance WS](https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-streams.md#server-shutdown).
+
+Причина ротации доступна observer через `errors.Is(err, stream.ErrRotation)`.
+Она проходит существующий bounded backoff/jitter и replay приватной копии
+initialCommands с неизменным URL. Отдельного пути dial или параллельного соединения
+нет. Совпавшие shutdown и возраст заканчивают одну попытку и вызывают одну замену;
+таймер останавливается, его goroutine ожидается до возврата из попытки. У нового
+соединения собственный таймер; старый deadline на него не действует. Context
+приложения завершает весь цикл без следующего dial. Handler должен учитывать
+переданный context также при отмене из-за возраста соединения.
+
+Ротация сообщает возможный gap и не подтверждает восстановление истории/live.
+Вызывающий код сохраняет committed previous для `trade.CheckNext` между
+соединениями; транспорт не владеет границей ID. WS-тесты проверяют ID 10 до
+ротации, повтор 10 и новый 11 после неё: результат фильтра — 10,11.
+Durable фиксация и runtime wiring остаются MKT-017 и последующим задачам.
+Fake clock и локальный WS проверяют возраст, raw/combined shutdown, оба сигнала
+одновременно, один replay двух streams, отсутствие раннего срабатывания и cleanup.

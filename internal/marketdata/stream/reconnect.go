@@ -20,10 +20,12 @@ func DefaultRetryConfig() RetryConfig {
 	return RetryConfig{InitialBackoff: time.Second, MaxBackoff: 30 * time.Second}
 }
 
-// Reconnect retries transport failures until ctx ends, replaying a private copy
+// Reconnect rotates at RotationAge or serverShutdown and retries transport
+// failures until ctx ends, replaying a private copy
 // of initialCommands through the existing per-connection scheduler on every dial.
 // endpoint (including URL streams/query) is unchanged. handle errors are terminal.
-// disconnected is required and runs synchronously after each transport failure,
+// Shutdown messages are consumed internally; other messages reach handle unchanged.
+// disconnected is required and runs synchronously after each failure or rotation,
 // before waiting the reported delay; it must return promptly or honor ctx.
 // It reports a possible data gap, not recovered history or confirmed subscription.
 func Reconnect(ctx context.Context, endpoint string, config Config, retry RetryConfig, initialCommands [][]byte, handle func(context.Context, []byte) error, disconnected func(error, time.Duration)) error {
@@ -31,6 +33,10 @@ func Reconnect(ctx context.Context, endpoint string, config Config, retry RetryC
 }
 
 func readReconnect(ctx context.Context, endpoint string, config Config, retry RetryConfig, initialCommands [][]byte, handle func(context.Context, []byte) error, disconnected func(error, time.Duration), clock writerClock, random func(int64) int64) error {
+	return readReconnectRotating(ctx, endpoint, config, retry, initialCommands, handle, disconnected, clock, random, newRotationTimer)
+}
+
+func readReconnectRotating(ctx context.Context, endpoint string, config Config, retry RetryConfig, initialCommands [][]byte, handle func(context.Context, []byte) error, disconnected func(error, time.Duration), clock writerClock, random func(int64) int64, timer rotationTimer) error {
 	if _, err := config.interval(); err != nil {
 		return err
 	}
@@ -49,11 +55,19 @@ func readReconnect(ctx context.Context, endpoint string, config Config, retry Re
 		}
 		close(input)
 		handlerFailed := false
-		err := ReadWithCommands(ctx, endpoint, config, input, func(ctx context.Context, b []byte) error {
+		err := readWithCommands(ctx, endpoint, config, input, func(ctx context.Context, b []byte) error {
+			if isServerShutdown(b) {
+				return ErrRotation
+			}
 			err := handle(ctx, b)
+			// A cooperative handler may return the connection context cancellation
+			// caused by age. That is a rotation, not a terminal application error.
+			if errors.Is(err, context.Canceled) && errors.Is(context.Cause(ctx), ErrRotation) {
+				return ErrRotation
+			}
 			handlerFailed = err != nil
 			return err
-		})
+		}, timer)
 		return !handlerFailed, err
 	}, disconnected)
 }

@@ -5,14 +5,14 @@
 ## Активная работа
 
 - Активный продуктовый тикет: нет.
-- Незавершённая реализация: нет. MKT-005 завершён; зависимость фильтра для MKT-012 готова. MKT-012 остаётся planned до собственной повторной сессионной проверки.
-- Последний продуктовый тикет `done`: [MKT-005](backlog/tickets/MKT-005.md). Чистый `trade.CheckNext` отсекает повторные/старые raw trade ID одной пары, сохраняет границу через reconnect и признак возможного пропуска. [Контракт](../internal/marketdata/trade/README.md). Unit-тесты, общий race/vet/build пройдены; durable приём остаётся MKT-017, runtime не запускался.
+- Незавершённая реализация: нет. MKT-012 завершён; следующий по ORDER — MKT-017, planned до собственной сессионной проверки.
+- Последний продуктовый тикет `done`: [MKT-012](backlog/tickets/MKT-012.md). `stream.Reconnect` ротирует соединение через 23 часа от handshake или по raw/combined serverShutdown через прежний backoff/replay. Совпавшие сигналы вызывают одну замену с прежними потоками; watcher/таймер очищаются. WS/fake-clock тесты проверяют сохранение границы `trade.CheckNext`; общий race/vet/build пройдены. Runtime/live Binance не запускались.
 - Последняя работа над процессом: добавлен проектный skill `binance-ticket-session` с автоматическим выбором и обязательным чтением через AGENTS.md. Он восстанавливает контекст одного тикета, сообщает модель из карточки и ведёт до проверки и передачи результата. Проверены формат skill, YAML, локальные ссылки и целостность бэклога; выбор skill в отдельном новом чате ещё не проверялся. Короткие запросы и проверка новой сессии — в WORKING.md. Продуктовые тикеты этим не закрывались.
 
 ## Что существует
 
 - [Согласованные требования](requirements.md).
-- WebSocket transport: `internal/marketdata/stream.Read` и `ReadWithCommands(ctx, endpoint, config, commands, handle)`, gorilla/websocket v1.5.3. Общий бюджет команд/pong по умолчанию 5/с, ограниченная очередь pong, отмена и ожидание writer при выходе. `Reconnect` восстанавливает URL/начальные команды после сбоя, сообщает разрыв и ждёт bounded backoff с jitter. Синхронные callbacks должны учитывать context; ротация и runtime wiring ещё не реализованы.
+- WebSocket transport: `internal/marketdata/stream.Read` и `ReadWithCommands(ctx, endpoint, config, commands, handle)`, gorilla/websocket v1.5.3. Общий бюджет команд/pong по умолчанию 5/с, ограниченная очередь pong, отмена и ожидание writer при выходе. `Reconnect` восстанавливает URL/начальные команды после сбоя, сообщает разрыв и ждёт bounded backoff с jitter. Синхронные callbacks должны учитывать context. Ротация через 23 часа/serverShutdown реализована в Reconnect; runtime wiring ещё отсутствует.
 - [Карточки и зависимости](backlog/README.md), включая разделение крупных задач.
 - [Единая последовательность выполнения](backlog/ORDER.md) — от первого тикета к последнему.
 - [Рекомендации моделей и reasoning](backlog/MODELS.md); для DEC-001 — GPT-6.1 Sol · Medium.
@@ -45,14 +45,14 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [MKT-012](backlog/tickets/MKT-012.md): плановая ротация WebSocket. Фильтр MKT-005 готов; при замене соединения сохранять прежнюю границу source ID через `trade.CheckNext`. Выполнять только по новому поручению после повторной сессионной проверки.
+По очереди следующий — [MKT-017](backlog/tickets/MKT-017.md): сохранить котировку и работу публикации атомарно. Выполнять только по новому поручению после собственной сессионной проверки. Фильтр MKT-005 и ротация MKT-012 готовы; committed previous сохранять между соединениями.
 
 `python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Идти по этой очереди; разделы каталога и номера ID сами по себе порядок не задают.
 
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show MKT-012` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show MKT-017` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

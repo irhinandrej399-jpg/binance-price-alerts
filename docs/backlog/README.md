@@ -123,7 +123,7 @@
 | [MKT-009](tickets/MKT-009.md) | Прочитать цены по одному WebSocket-соединению | MKT-002 | done |
 | [MKT-010](tickets/MKT-010.md) | Ограничить управляющие команды WebSocket | MKT-009 | done |
 | [MKT-011](tickets/MKT-011.md) | Переподключиться после обрыва WebSocket | MKT-009, MKT-010 | done |
-| [MKT-012](tickets/MKT-012.md) | Планово заменить WebSocket-соединение | MKT-011, MKT-005 | planned |
+| [MKT-012](tickets/MKT-012.md) | Планово заменить WebSocket-соединение | MKT-011, MKT-005 | done |
 | [MKT-013](tickets/MKT-013.md) | Опубликовать одну цену с подтверждением брокера | MKT-005, SET-005, CON-003, DEC-007 | planned |
 | [MKT-014](tickets/MKT-014.md) | Ограничить буфер принятых цен | MKT-013, DEC-007, MKT-017 | planned |
 | [MKT-015](tickets/MKT-015.md) | Построить план уникальных рыночных потоков | MKT-001 | planned |

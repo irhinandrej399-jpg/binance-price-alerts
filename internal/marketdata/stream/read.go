@@ -31,6 +31,10 @@ func Read(ctx context.Context, endpoint string, handle func(context.Context, []b
 // Closing commands disables command input, without stopping prices or pongs.
 // Responses/acknowledgements remain raw text messages delivered to handle.
 func ReadWithCommands(ctx context.Context, endpoint string, config Config, commands <-chan []byte, handle func(context.Context, []byte) error) error {
+	return readWithCommands(ctx, endpoint, config, commands, handle, nil)
+}
+
+func readWithCommands(ctx context.Context, endpoint string, config Config, commands <-chan []byte, handle func(context.Context, []byte) error, timer rotationTimer) error {
 	if _, err := config.interval(); err != nil {
 		return err
 	}
@@ -51,6 +55,9 @@ func ReadWithCommands(ctx context.Context, endpoint string, config Config, comma
 		return fmt.Errorf("stream: dial: %w", err)
 	}
 	defer conn.Close()
+	if timer != nil {
+		defer watchRotation(ctx, cancel, timer)()
+	}
 	// Close is safe concurrently with reads and control writes. No read goroutine
 	// is detached on cancellation; closing the socket wakes ReadMessage itself.
 	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
