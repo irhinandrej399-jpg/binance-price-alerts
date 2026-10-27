@@ -1,4 +1,5 @@
-// Package stream reads one Binance WebSocket connection without retries.
+// Package stream reads Binance WebSocket connections with paced control writes
+// and an optional reconnect loop.
 package stream
 
 import (

@@ -5,14 +5,14 @@
 ## Активная работа
 
 - Активный продуктовый тикет: нет.
-- Незавершённая реализация: нет. MKT-010 завершён; MKT-011 требует собственной сессионной проверки.
-- Последний продуктовый тикет `done`: [MKT-010](backlog/tickets/MKT-010.md). Общий конфигурируемый планировщик JSON-команд и pong одного WS-соединения; pong приоритетны, чтение цен не ждёт бюджета отправки. [Контракт](../internal/marketdata/stream/README.md). Fake-clock/локальные WS-тесты, общий race/vet/build пройдены; live Binance и runtime не запускались.
+- Незавершённая реализация: нет. MKT-011 завершён; MKT-012 требует собственной сессионной проверки.
+- Последний продуктовый тикет `done`: [MKT-011](backlog/tickets/MKT-011.md). Reconnect с bounded exponential backoff/equal jitter, восстановлением URL и начальных команд через планировщик; обязательный observer сообщает разрыв. [Контракт](../internal/marketdata/stream/README.md). Локальные WS/fake-clock тесты, общий race/vet/build пройдены; live Binance и runtime не запускались.
 - Последняя работа над процессом: добавлен проектный skill `binance-ticket-session` с автоматическим выбором и обязательным чтением через AGENTS.md. Он восстанавливает контекст одного тикета, сообщает модель из карточки и ведёт до проверки и передачи результата. Проверены формат skill, YAML, локальные ссылки и целостность бэклога; выбор skill в отдельном новом чате ещё не проверялся. Короткие запросы и проверка новой сессии — в WORKING.md. Продуктовые тикеты этим не закрывались.
 
 ## Что существует
 
 - [Согласованные требования](requirements.md).
-- WebSocket transport: `internal/marketdata/stream.Read` и `ReadWithCommands(ctx, endpoint, config, commands, handle)`, gorilla/websocket v1.5.3. Общий бюджет команд/pong по умолчанию 5/с, ограниченная очередь pong, отмена и ожидание writer при выходе. Синхронный обработчик должен учитывать context и не задерживать чтение; reconnect, ротация и runtime wiring ещё не реализованы.
+- WebSocket transport: `internal/marketdata/stream.Read` и `ReadWithCommands(ctx, endpoint, config, commands, handle)`, gorilla/websocket v1.5.3. Общий бюджет команд/pong по умолчанию 5/с, ограниченная очередь pong, отмена и ожидание writer при выходе. `Reconnect` восстанавливает URL/начальные команды после сбоя, сообщает разрыв и ждёт bounded backoff с jitter. Синхронные callbacks должны учитывать context; ротация и runtime wiring ещё не реализованы.
 - [Карточки и зависимости](backlog/README.md), включая разделение крупных задач.
 - [Единая последовательность выполнения](backlog/ORDER.md) — от первого тикета к последнему.
 - [Рекомендации моделей и reasoning](backlog/MODELS.md); для DEC-001 — GPT-6.1 Sol · Medium.
@@ -45,14 +45,14 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [MKT-011](backlog/tickets/MKT-011.md): переподключение WebSocket с восстановлением потоков. Транспорт MKT-009 и планировщик MKT-010 готовы; выполнять следующий тикет только по отдельному поручению после проверки зависимостей.
+По очереди следующий — [MKT-012](backlog/tickets/MKT-012.md): плановая ротация WebSocket по возрасту или shutdown через готовый reconnect MKT-011. Выполнять только по отдельному поручению после проверки зависимостей.
 
 `python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Идти по этой очереди; разделы каталога и номера ID сами по себе порядок не задают.
 
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show MKT-011` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show MKT-012` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.
