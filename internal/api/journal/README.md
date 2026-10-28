@@ -47,7 +47,10 @@ admission и replay-адаптерам.
 границу/лимит и переполнение), ErrExists (event ID или второй Append), ErrStorage.
 Ошибки контекста сохраняются; сырые SQL-ошибки с данными не выдаются.
 
-Здесь нет переходов подписки, outbox relay, snapshot-builder, pins/retention,
+Relay публикации реализован отдельно в [api/relay](../relay/README.md); он читает
+исходные bytea и хранит свой cursor без изменения журнала.
+
+Здесь нет переходов подписки, snapshot-builder, pins/retention,
 очистки, сетевого replay или runtime. Writer обязан сам обеспечить идемпотентный
 результат бизнес-команды: конфликт event_id не считается её новым успехом.
 Будущий cleaner должен отдельно учитывать жизнь batches/counter и pins;

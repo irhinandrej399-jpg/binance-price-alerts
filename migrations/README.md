@@ -23,6 +23,7 @@ python3 scripts/migrate.py --owner notifications
 `api/005_subscriptions.sql` — каноническая подписка SUB-001 ([контракт](../internal/api/subscription/README.md));
 `api/006_subscription_quota.sql` — счётчик 0..15 и признак занятого слота SUB-002, с backfill существующих данных (применять при остановленных писателях API);
 `api/007_subscription_journal.sql` — транзакционный счётчик C и неизменяемый полный журнал SUB-021 ([контракт](../internal/api/journal/README.md));
+`api/008_subscription_relay.sql` — отдельные cursor C и lease/token relay SUB-007 ([контракт](../internal/api/relay/README.md));
 matcher/notifications пока пусты. Контракт market-data —
 [storage/README](../internal/marketdata/storage/README.md). Контракт хранилища — в [account/README](../internal/api/account/README.md).
 

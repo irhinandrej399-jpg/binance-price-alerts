@@ -74,6 +74,9 @@ bash infra/kafka/verify-go.sh
 
 Прикладной producer PriceObserved — [marketdata/publish](../../marketdata/publish/README.md).
 Та же команда запускает его race-сценарии на отдельном prices topic стенда.
+`KAFKA_RUN_POSTGRES=1 bash infra/kafka/verify-go.sh` дополнительно запускает
+готовый PostgreSQL runner и [relay подписок](../../api/relay/README.md) против
+обоих disposable стендов; он проверяет SQL-ack и повторы целых пакетов C.
 
 Проверки основы на неприкладном probe: commit, abort, read_committed/read_uncommitted,
 fencing активного старого epoch, потерянный EndTxn response, повтор тем же ID,
