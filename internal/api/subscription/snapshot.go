@@ -12,6 +12,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// ErrSnapshotRequestConflict requires a new request ID for changed parameters.
+var ErrSnapshotRequestConflict = errors.New("snapshot request parameters differ")
+
 // ErrSnapshotLost means restart bootstrap, never an empty replay tail.
 // Missing, foreign, expired and abandoned resources deliberately share an error.
 var ErrSnapshotLost = errors.New("snapshot or replay pin unavailable; restart snapshot")
@@ -47,6 +50,10 @@ func validResource(owner string, ttl time.Duration) bool {
 // retentionConn protects both initial publication and lifetime extension. A
 // cleaner cannot discard an expired pin while Handoff is still extending it.
 func (s *Snapshots) retentionConn(ctx context.Context) (*pgxpool.Conn, func(), error) {
+	return s.snapshotConn(ctx, "", "")
+}
+
+func (s *Snapshots) snapshotConn(ctx context.Context, owner, request string) (*pgxpool.Conn, func(), error) {
 	conn, err := s.pool.Acquire(ctx)
 	if err != nil {
 		return nil, nil, storageError(ctx, err)
@@ -55,7 +62,12 @@ func (s *Snapshots) retentionConn(ctx context.Context) (*pgxpool.Conn, func(), e
 		defer conn.Release()
 		c, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		if _, err := conn.Exec(c, `SELECT pg_advisory_unlock_shared($1)`, RetentionLock); err != nil {
+		query, args := `SELECT pg_advisory_unlock_shared($1)`, []any{RetentionLock}
+		if request != "" {
+			query = `SELECT pg_advisory_unlock_shared($1), pg_advisory_unlock(hashtext($2),hashtext($3))`
+			args = append(args, owner, request)
+		}
+		if _, err := conn.Exec(c, query, args...); err != nil {
 			conn.Hijack().Close(c)
 		}
 	}
@@ -64,26 +76,92 @@ func (s *Snapshots) retentionConn(ctx context.Context) (*pgxpool.Conn, func(), e
 		release()
 		return nil, nil, storageError(ctx, err)
 	}
+	// Session lock BEFORE BEGIN: a waiter must see the winning commit in its
+	// REPEATABLE READ snapshot. Hash collisions only serialize unrelated keys;
+	// the durable primary key uses the complete strings. Two-int locks occupy
+	// a different namespace from the bigint retention lock.
+	if request != "" {
+		if _, err = conn.Exec(ctx, `SELECT pg_advisory_lock(hashtext($1),hashtext($2))`, owner, request); err != nil {
+			release()
+			return nil, nil, storageError(ctx, err)
+		}
+	}
 	return conn, release, nil
 }
 
-// Build returns only after S, C and the initial pin have committed. An ambiguous
-// commit may leave an unused resource; expiry releases it. TTL is a resource
-// budget, not a subscription/workflow TTL. There are no implicit retries.
+// Build creates a fresh resource without request deduplication. Network callers
+// must use BuildRequest to recover a resource after an ambiguous commit.
 func (s *Snapshots) Build(ctx context.Context, owner string, ttl time.Duration) (Snapshot, error) {
+	return s.build(ctx, owner, "", ttl)
+}
+
+// BuildRequest durably binds owner/request to one resource and exact TTL.
+// Keys are never reused, even after the snapshot or pin is removed.
+func (s *Snapshots) BuildRequest(ctx context.Context, owner, request string, ttl time.Duration) (Snapshot, error) {
+	if !validSnapshotRequest(request) {
+		return Snapshot{}, ErrInvalidInput
+	}
+	return s.build(ctx, owner, request, ttl)
+}
+func validSnapshotRequest(id string) bool {
+	if len(id) < 1 || len(id) > 128 {
+		return false
+	}
+	for _, c := range id {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_' || c == '.') {
+			return false
+		}
+	}
+	return true
+}
+func (s *Snapshots) build(ctx context.Context, owner, request string, ttl time.Duration) (Snapshot, error) {
 	if !validResource(owner, ttl) {
 		return Snapshot{}, ErrInvalidInput
 	}
-	conn, release, err := s.retentionConn(ctx)
+	conn, release, err := s.snapshotConn(ctx, owner, request)
 	if err != nil {
 		return Snapshot{}, err
 	}
 	defer release()
-	tx, err := conn.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	return buildSnapshotOn(ctx, conn, owner, request, ttl)
+}
+
+// Caller holds retention and (for nonempty request) request session locks.
+func buildSnapshotOn(ctx context.Context, db Beginner, owner, request string, ttl time.Duration) (Snapshot, error) {
+	tx, err := db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
 		return Snapshot{}, storageError(ctx, err)
 	}
 	defer tx.Rollback(context.Background())
+	if request != "" {
+		var id string
+		var savedTTL int64
+		err = tx.QueryRow(ctx, `SELECT snapshot_id::text,ttl_ns FROM app.subscription_snapshot_requests WHERE owner=$1 AND request_id=$2`, owner, request).Scan(&id, &savedTTL)
+		if err == nil {
+			if savedTTL != int64(ttl) {
+				return Snapshot{}, ErrSnapshotRequestConflict
+			}
+			var snap Snapshot
+			var c int64
+			err = tx.QueryRow(ctx, `SELECT s.id::text,s.boundary,s.expires_at FROM app.subscription_snapshots s JOIN app.subscription_replay_pins p ON p.id=s.id
+ WHERE s.id=$1 AND s.owner=$2 AND p.owner=$2 AND s.expires_at>clock_timestamp()
+ AND p.expires_at>clock_timestamp() AND p.phase<>'abandoned'`, id, owner).Scan(&snap.ID, &c, &snap.ExpiresAt)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return Snapshot{}, ErrSnapshotLost
+			}
+			if err != nil {
+				return Snapshot{}, storageError(ctx, err)
+			}
+			if err = tx.Commit(ctx); err != nil {
+				return Snapshot{}, storageError(ctx, err)
+			}
+			snap.C, snap.ExpiresAt = uint64(c), snap.ExpiresAt.UTC()
+			return snap, nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return Snapshot{}, storageError(ctx, err)
+		}
+	}
 	c, err := journal.Current(ctx, tx)
 	if err != nil {
 		return Snapshot{}, err
@@ -105,6 +183,12 @@ func (s *Snapshots) Build(ctx context.Context, owner string, ttl time.Duration) 
  VALUES($1,$2,$3,$3,'snapshot',$4)`, snap.ID, owner, int64(c), snap.ExpiresAt)
 	if err != nil {
 		return Snapshot{}, storageError(ctx, err)
+	}
+	if request != "" {
+		_, err = tx.Exec(ctx, `INSERT INTO app.subscription_snapshot_requests(owner,request_id,ttl_ns,snapshot_id) VALUES($1,$2,$3,$4)`, owner, request, int64(ttl), snap.ID)
+		if err != nil {
+			return Snapshot{}, storageError(ctx, err)
+		}
 	}
 	var alive bool
 	if err = tx.QueryRow(ctx, `SELECT clock_timestamp()<$1`, snap.ExpiresAt).Scan(&alive); err != nil {

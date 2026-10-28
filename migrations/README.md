@@ -29,6 +29,7 @@ python3 scripts/migrate.py --owner notifications
 `api/011_delivery_results.sql` — append-only аудит исходов известных попыток SUB-019 и первая canonical-квитанция delivered_attempt_id/message_id; состояние/квота и журнал меняются одной транзакцией;
 `api/012_delivery_relay.sql` — lease/token и отдельные подтверждения публикации delivery_outbox SUB-009 ([контракт](../internal/api/deliveryrelay/README.md));
 `api/013_subscription_snapshots.sql` — неизменяемые страницы S/C, ресурс снимка и durable replay-pins SUB-015 ([контракт](../internal/api/subscription/README.md));
+`api/014_subscription_snapshot_requests.sql` — постоянные ключи идемпотентного создания снимка SUB-023, runtime только SELECT/INSERT; удаление ресурса не удаляет ключ;
 matcher/notifications пока пусты. Контракт market-data —
 [storage/README](../internal/marketdata/storage/README.md). Контракт хранилища — в [account/README](../internal/api/account/README.md).
 

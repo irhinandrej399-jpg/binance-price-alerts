@@ -224,7 +224,7 @@ func TestSnapshotDelayedCommits(t *testing.T) {
 	}()
 	waitSnapshotLock(t, ctx, pool, conn.Conn().PgConn().PID())
 	s := NewSnapshots(pool)
-	snap, err := s.Build(ctx, "delayed", time.Minute)
+	snap, err := s.BuildRequest(ctx, "delayed", "delayed-request", time.Minute)
 	if err != nil || snap.C != before {
 		t.Fatalf("snapshot boundary %+v %v", snap, err)
 	}
@@ -279,7 +279,10 @@ func TestSnapshotRetentionOrdering(t *testing.T) {
 		err  error
 	}
 	done := make(chan result, 1)
-	go func() { snap, e := s.Build(ctx, "after-cleaner", time.Minute); done <- result{snap, e} }()
+	go func() {
+		snap, e := s.BuildRequest(ctx, "after-cleaner", "after-cleaner-request", time.Minute)
+		done <- result{snap, e}
+	}()
 	// Wait until a real builder session is blocked on the advisory lock.
 	for {
 		var waiting bool
@@ -332,7 +335,10 @@ func TestSnapshotRetentionOrdering(t *testing.T) {
 	if _, err = blocker.Exec(ctx, `SELECT app.test_snapshot_lock(false)`); err != nil {
 		t.Fatal(err)
 	}
-	go func() { snap, e := s.Build(ctx, "before-cleaner", time.Minute); done <- result{snap, e} }()
+	go func() {
+		snap, e := s.BuildRequest(ctx, "before-cleaner", "before-cleaner-request", time.Minute)
+		done <- result{snap, e}
+	}()
 	for {
 		var waiting bool
 		err = pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE query LIKE 'INSERT INTO app.subscription_snapshots%' AND wait_event_type='Lock')`).Scan(&waiting)
@@ -503,7 +509,10 @@ func TestSnapshotExpiryAndBuilderRollback(t *testing.T) {
 	buildCtx, stop := context.WithCancel(ctx)
 	defer stop()
 	done := make(chan error, 1)
-	go func() { _, e := s.Build(buildCtx, "rollback-builder", time.Minute); done <- e }()
+	go func() {
+		_, e := s.BuildRequest(buildCtx, "rollback-builder", "rollback-builder-request", time.Minute)
+		done <- e
+	}()
 	for {
 		var waiting bool
 		err = pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE query LIKE 'INSERT INTO app.subscription_snapshot_rows%' AND wait_event_type='Lock')`).Scan(&waiting)
