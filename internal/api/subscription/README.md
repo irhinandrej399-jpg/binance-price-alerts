@@ -602,4 +602,5 @@ retention, но обязан сохранять ключ; удаление кл�
 Защищённый сетевой интерфейс готов в [SUB-016](../snapshotrpc/README.md):
 unary BuildSnapshot/ReadSnapshotPage, owner из mTLS matcher, durable request ID,
 конечный deadline и cursor одного снимка. Интерфейс предназначен для matcher;
-прямой доступ к таблицам API не требуется. Handoff/replay/ack остаются SUB-022.
+прямой доступ к таблицам API не требуется. Handoff/replay/ack открыты в [SUB-022](../replayrpc/README.md):
+целые транзакции, durable progress, явный abandon и конечный deadline.

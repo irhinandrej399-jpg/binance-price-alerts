@@ -1,0 +1,37 @@
+syntax = "proto3";
+package api.v1;
+option go_package = "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/api/v1;apiv1";
+// Matcher only; consumer identity comes exclusively from mTLS.
+service SubscriptionReplay {
+  rpc BeginReplay(BeginReplayRequest) returns (ReplayState);
+  rpc ReadReplayPage(ReadReplayPageRequest) returns (ReplayPage);
+  rpc AcknowledgeReplay(AcknowledgeReplayRequest) returns (ReplayState);
+  rpc AbandonReplay(AbandonReplayRequest) returns (AbandonReplayResponse);
+}
+message BeginReplayRequest {
+  string snapshot_id = 1;
+  int64 ttl_millis = 2; // 1..86400000; retries never extend the original replay expiry.
+}
+message ReplayState {
+  string resource_id = 1;
+  uint64 progress = 2; // Durable SQL progress, initially snapshot C.
+  uint64 issued = 3;
+  uint64 head = 4; // Whole committed journal transaction boundary H observed in this call.
+  string expires_at = 5; // UTC RFC3339Nano.
+}
+message ReadReplayPageRequest {
+  string resource_id = 1;
+  uint64 after = 2; // Whole transaction boundary, progress <= after <= issued.
+  int32 max_transactions = 3; // 1..1000, never splits a transaction.
+}
+message ReplayPage {
+  ReplayState state = 1;
+  uint64 next = 2; // Last complete transaction returned, or after for an empty tail.
+  repeated bytes events = 3; // Existing versioned SubscriptionChanged JSON envelope; exact decimal strings.
+}
+message AcknowledgeReplayRequest {
+  string resource_id = 1;
+  uint64 boundary = 2; // Only after consumer commits its projection and checkpoint in SQL.
+}
+message AbandonReplayRequest { string resource_id = 1; }
+message AbandonReplayResponse {}

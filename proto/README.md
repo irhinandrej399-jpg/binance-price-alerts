@@ -74,3 +74,6 @@ runtime и отображение доменных ошибок определя
 `api/v1/snapshot.proto` — защищённые unary BuildSnapshot/ReadSnapshotPage:
 [клиент/сервер SUB-016](../internal/api/snapshotrpc/README.md), snapshot-bound
 cursor, неизменные S/C/expires_at и durable повтор создания по SUB-023.
+
+`api/v1/replay.proto` — matcher-only SQL-replay: BeginReplay/ReadReplayPage/
+AcknowledgeReplay/AbandonReplay, [контракт SUB-022](../internal/api/replayrpc/README.md).

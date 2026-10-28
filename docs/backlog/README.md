@@ -102,7 +102,7 @@
 | [SUB-007](tickets/SUB-007.md) | Опубликовать subscription outbox | SUB-011, SUB-012, SET-005 | done |
 | [SUB-009](tickets/SUB-009.md) | Опубликовать outbox срабатываний | SUB-013, SUB-014, SET-005, SUB-007 | done |
 | [SUB-021](tickets/SUB-021.md) | Добавить транзакционный журнал изменений API | SET-004, CON-002, DEC-006 | done |
-| [SUB-022](tickets/SUB-022.md) | Открыть защищённый SQL-replay подписок | SUB-021, SUB-015, SUB-016, DEC-007, DEC-009 | planned |
+| [SUB-022](tickets/SUB-022.md) | Открыть защищённый SQL-replay подписок | SUB-021, SUB-015, SUB-016, DEC-007, DEC-009 | done |
 | [SUB-011](tickets/SUB-011.md) | Сохранить outbox при создании подписки | SUB-002, CON-002, SUB-021 | done |
 | [SUB-012](tickets/SUB-012.md) | Сохранить outbox при отмене подписки | SUB-005, CON-002, SUB-021 | done |
 | [SUB-013](tickets/SUB-013.md) | Сохранить атомарный запрос работы доставки | SUB-001, DOM-003, DOM-004, CON-004, DEC-004, SUB-021 | done |
