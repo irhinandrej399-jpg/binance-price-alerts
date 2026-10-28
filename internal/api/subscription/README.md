@@ -1,4 +1,4 @@
-# Каноническая подписка, квота и HTTP-создание API (SUB-001/002/003)
+# Каноническая подписка, квота и HTTP API (SUB-001/002/003/004)
 
 Миграция `migrations/api/005_subscriptions.sql`; пакет `internal/api/subscription`.
 `New(db)` принимает pool, connection или `pgx.Tx` через готовый `account.DB`.
@@ -165,3 +165,48 @@ commit оставляет неопределённость для клиента
 Отказ commit проверяется обёрткой над реальной транзакцией: вставка/резервирование
 выполняются, commit возвращает ошибку, defer rollback удаляет оба изменения.
 Без opt-in эти интеграционные тесты пропускаются; обычная компиляция не заменяет их.
+
+## HTTP-список (SUB-004)
+
+`NewListHandler(apiPool)` обслуживает `GET /v1/subscriptions`. Подключать под
+`auth.New(sessionStore, handler)` рядом с POST-обработчиком на родительском router:
+
+```go
+mux.Handle("POST /v1/subscriptions", subscription.NewHandler(pool, catalogs, quotes, time.Now))
+mux.Handle("GET /v1/subscriptions", subscription.NewListHandler(pool))
+protected := auth.New(session.New(pool, nil), mux)
+```
+
+Владелец берётся только из `auth.UserID`, query/header/body user_id не влияет на
+выборку. Без доверенного владельца — 401 invalid_session; отказ чтения — 500
+internal_error без деталей БД и без частичного списка. Успех — 200, application/json,
+Cache-Control: no-store. Пустой результат: `{"subscriptions":[]}`.
+
+В список входят `active`, `pending_delivery`, `sending`, `delivery_blocked`,
+включая active с сохранённым workflow. `delivered`/`cancelled` исключены.
+Один SQL-запрос возвращает согласованный снимок на момент чтения, ORDER BY id ASC,
+LIMIT 15; порядок по UUID, не по времени создания. Используется существующий индекс
+(owner_id,id). Каноническое состояние определяет включение, внутренний
+quota_reserved не используется как фильтр. Квоту писателей обеспечивает SUB-002;
+LIMIT ограничивает ответ даже при ошибочных данных сверх квоты.
+
+Пример элемента:
+
+```json
+{"subscriptions":[{"id":"00000000-0000-4000-8000-000000000001","pair":"BTCUSDT","threshold":"105","direction":"up","percent":"+5","state":"delivery_blocked","version":3,"workflow":{"trigger_id":"trigger-1","version":2},"blocked":{"reason":"channel_unavailable","binding_version":4}}]}
+```
+
+Точные цены и процент — строки, версии — положительные int64. Необязательные
+percent/workflow/blocked отсутствуют, если их нет в сохранённой записи. Причины
+blocked соответствуют каноническому DOM-004/схеме: `channel_unavailable` (проблема
+Telegram-канала, включая отсутствие привязки), `attempts_exhausted`, `permanent_failure`.
+Чтение не проверяет канал/котировки и не выполняет восстановление: оно показывает
+фактическое сохранённое состояние. После будущего восстановления та же подписка
+появляется с новой версией/состоянием, прежними ID, workflow, порогом и процентом,
+без старого blocked. Протокол восстановления — SUB-018/019 и NTF-015.
+
+Возраст/предупреждения текущей цены этот endpoint не возвращает: исходный снимок
+не выдаётся за текущую котировку. История и пагинация отсутствуют. Схема БД не меняется,
+`cmd/api` ещё не подключён. Интеграционные HTTP-тесты используют реальные сессии/БД,
+два владельца, все состояния, лимит 15, fixture восстановления и отказ чтения в
+начале/после получения строк; запуск — `scripts/check_postgres.py` с race detector.

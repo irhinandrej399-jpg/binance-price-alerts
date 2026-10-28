@@ -87,21 +87,32 @@ func (r *Repository) Insert(ctx context.Context, v Record) error {
 // ByID filters by both subscription and authenticated owner. Missing and foreign
 // records return the same error. Matcher must use API interfaces, never this DB.
 func (r *Repository) ByID(ctx context.Context, ownerID, id string) (Record, error) {
-	var v Record
-	var threshold, base string
-	var workflowID, reason *string
-	var workflowVersion, binding *int64
-	err := r.db.QueryRow(ctx, `SELECT id::text,owner_id::text,pair,threshold::text,direction,creation_price::text,
- creation_trade_time,percent,stale,stream_unconfirmed,gap_detected,state,version,activation,
- workflow_id,workflow_version,block_reason,blocked_binding_version
- FROM app.subscriptions WHERE owner_id=$1 AND id=$2`, ownerID, id).Scan(
-		&v.ID, &v.OwnerID, &v.Pair, &threshold, &v.Direction, &base, &v.CreationTradeTime, &v.Percent,
-		&v.Stale, &v.StreamUnconfirmed, &v.GapDetected, &v.State, &v.Version, &v.Activation, &workflowID, &workflowVersion, &reason, &binding)
+	v, err := scanRecord(r.db.QueryRow(ctx, `SELECT `+recordColumns+`
+ FROM app.subscriptions WHERE owner_id=$1 AND id=$2`, ownerID, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Record{}, ErrNotFound
 	}
 	if err != nil {
 		return Record{}, storageError(ctx, err)
+	}
+	return v, nil
+}
+
+const recordColumns = `id::text,owner_id::text,pair,threshold::text,direction,creation_price::text,
+ creation_trade_time,percent,stale,stream_unconfirmed,gap_detected,state,version,activation,
+ workflow_id,workflow_version,block_reason,blocked_binding_version`
+
+// Both single-record and list reads decode the same canonical after-image.
+func scanRecord(row pgx.Row) (Record, error) {
+	var v Record
+	var threshold, base string
+	var workflowID, reason *string
+	var workflowVersion, binding *int64
+	err := row.Scan(&v.ID, &v.OwnerID, &v.Pair, &threshold, &v.Direction, &base,
+		&v.CreationTradeTime, &v.Percent, &v.Stale, &v.StreamUnconfirmed, &v.GapDetected,
+		&v.State, &v.Version, &v.Activation, &workflowID, &workflowVersion, &reason, &binding)
+	if err != nil {
+		return Record{}, err
 	}
 	v.Threshold, err = price.Parse(threshold)
 	if err != nil {
