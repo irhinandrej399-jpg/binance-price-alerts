@@ -98,7 +98,7 @@
 | [SUB-002](tickets/SUB-002.md) | Обеспечить лимит 15 при конкурентном создании | SUB-001, DEC-004 | done |
 | [SUB-003](tickets/SUB-003.md) | Создать подписку через HTTP | SUB-002, IAM-005, DOM-002, DOM-005, MKT-001, MKT-006, DEC-005, IAM-008, MKT-018 | done |
 | [SUB-004](tickets/SUB-004.md) | Вернуть активные подписки владельца | SUB-001, IAM-005 | done |
-| [SUB-005](tickets/SUB-005.md) | Отключить свою активную подписку | SUB-001, IAM-005, DOM-004 | planned |
+| [SUB-005](tickets/SUB-005.md) | Отключить свою активную подписку | SUB-001, SUB-002, IAM-005, DOM-004 | done |
 | [SUB-007](tickets/SUB-007.md) | Опубликовать subscription outbox | SUB-011, SUB-012, SET-005 | planned |
 | [SUB-009](tickets/SUB-009.md) | Опубликовать outbox срабатываний | SUB-013, SUB-014, SET-005, SUB-007 | planned |
 | [SUB-021](tickets/SUB-021.md) | Добавить транзакционный журнал изменений API | SET-004, CON-002, DEC-006 | planned |
