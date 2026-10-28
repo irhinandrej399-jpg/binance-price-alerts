@@ -218,7 +218,7 @@ func admitDelivery(ctx context.Context, db Beginner, c AdmissionCommand, prepare
 		return AdmissionResult{}, storageError(ctx, err)
 	}
 	if mutated {
-		if err = appendAdmissionChange(ctx, tx, result.Record, now); err != nil {
+		if err = appendWorkflowChange(ctx, tx, result.Record, now); err != nil {
 			return AdmissionResult{}, err
 		}
 	}
@@ -229,7 +229,7 @@ func admitDelivery(ctx context.Context, db Beginner, c AdmissionCommand, prepare
 	return result, nil
 }
 
-func appendAdmissionChange(ctx context.Context, tx pgx.Tx, r Record, now time.Time) error {
+func appendWorkflowChange(ctx context.Context, tx pgx.Tx, r Record, now time.Time) error {
 	id := newUUID()
 	_, err := journal.Append(ctx, tx, []journal.Entry{{Metadata: event.Envelope{EventID: id, Type: changed.Type, Version: event.Version1, OccurredAt: now, CorrelationID: id, OrderingKey: r.ID}, Change: changed.Changed{
 		SchemaVersion: changed.Version1, SubscriptionID: r.ID, SubscriptionVersion: uint64(r.Version), State: r.State, Pair: r.Pair, Threshold: &r.Threshold, Direction: r.Direction, Activation: r.Activation,
