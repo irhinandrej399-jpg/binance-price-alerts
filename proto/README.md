@@ -61,3 +61,8 @@ runtime и отображение доменных ошибок определя
 
 Запрос работы доставки API: `api/v1/delivery.proto`, matcher-only mTLS и
 [клиент/сервер SUB-014](../internal/api/deliveryrpc/README.md).
+
+Допуск попытки notifications: `api/v1/admission.proto`, notifications-only mTLS,
+актуальная цена через MKT-006 и [клиент/сервер SUB-018](../internal/api/admissionrpc/README.md).
+Схема импортирует `marketdata/v1/latest.proto`, чтобы сохранить точный полный
+снимок котировки в разрешении; Kafka-контракты остаются JSON.

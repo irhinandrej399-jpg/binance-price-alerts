@@ -699,3 +699,55 @@ func TestAdmissionExpiryWaitAndMissingChannel(t *testing.T) {
 		})
 	}
 }
+
+// Preparation must release locks before network I/O, never persist a command
+// without a price, and detect rebinding while the caller reads that price.
+func TestAdmissionPreparationAndBindingCAS(t *testing.T) {
+	pool := postgrestest.Open(t)
+	ctx := context.Background()
+	v, c := admissionFixture(t, pool, 991100)
+	before, e := journal.Current(ctx, pool)
+	if e != nil {
+		t.Fatal(e)
+	}
+	empty := c
+	empty.Quote = priceobserved.Observed{}
+	_, e = store.PrepareAdmission(ctx, pool, empty)
+	var need *store.AdmissionQuoteRequired
+	if !errors.As(e, &need) || need.Record.ID != v.ID || need.BindingVersion != 1 {
+		t.Fatal(need, e)
+	}
+	var n int
+	if e = pool.QueryRow(ctx, `SELECT count(*) FROM app.delivery_admissions WHERE subscription_id=$1`, v.ID).Scan(&n); e != nil || n != 0 {
+		t.Fatal(n, e)
+	}
+	if pos, e := journal.Current(ctx, pool); e != nil || pos != before {
+		t.Fatal(pos, e)
+	}
+	c.ExpectedBindingVersion = &need.BindingVersion
+	if _, e = pool.Exec(ctx, `UPDATE app.users SET telegram_chat_id=456,telegram_version=2 WHERE id=$1`, v.OwnerID); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = store.AdmitDelivery(ctx, pool, c); !errors.Is(e, store.ErrAdmissionChanged) {
+		t.Fatal(e)
+	}
+	_, e = store.PrepareAdmission(ctx, pool, empty)
+	if !errors.As(e, &need) || need.BindingVersion != 2 {
+		t.Fatal(need, e)
+	}
+	c.ExpectedBindingVersion = &need.BindingVersion
+	first, e := store.AdmitDelivery(ctx, pool, c)
+	if e != nil || first.Attempt == nil || first.Attempt.ChatID != 456 || first.Attempt.BindingVersion != 2 {
+		t.Fatal(first, e)
+	}
+	replay, e := store.PrepareAdmission(ctx, pool, empty)
+	if e != nil || !reflect.DeepEqual(first, replay) {
+		t.Fatal(replay, e)
+	}
+	c.RequestID = "busy-without-price"
+	c.Quote = priceobserved.Observed{}
+	busy, e := store.PrepareAdmission(ctx, pool, c)
+	if e != nil || busy.Outcome != store.AttemptBusy || busy.Attempt != nil {
+		t.Fatal(busy, e)
+	}
+}

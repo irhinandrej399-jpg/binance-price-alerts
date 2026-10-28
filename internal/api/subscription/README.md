@@ -420,3 +420,17 @@ terminal и версии привязки; по завершении текущ�
 восстановление канала, terminal/другие блокировки, общие locks с настоящей
 отменой и поглощением Telegram-кода, rollback INSERT/журнала/commit и потерю
 commit-ответа. Runtime и отправка Telegram остаются отдельными задачами.
+
+### Подготовка сетевого допуска — SUB-018
+
+`PrepareAdmission(ctx, db, command)` использует тот же порядок locks и восстановление
+ответа, что `AdmitDelivery`. Без цены может сохранить только terminal/busy/blocked.
+Если новая цена нужна, возвращает `*AdmissionQuoteRequired{Record, BindingVersion}`
+без записей, освобождая транзакцию до сетевого I/O. Сетевой адаптер передаёт
+эту версию в `AdmissionCommand.ExpectedBindingVersion`; изменение версии до
+допуска возвращает `ErrAdmissionChanged` без записи команды. Нужно повторить
+подготовку и чтение последней цены с прежним request ID в пределах deadline.
+Сохранённый ответ имеет приоритет над этой проверкой. Старые прямые вызовы
+`AdmitDelivery` без подготовки сохраняют контракт SUB-017.
+
+Сетевой интерфейс и правила использования: [admissionrpc](../admissionrpc/README.md).

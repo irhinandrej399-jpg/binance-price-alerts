@@ -17,6 +17,18 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// ErrAdmissionChanged requires another preparation and a fresh price read.
+var ErrAdmissionChanged = errors.New("admission binding changed during quote read")
+
+// AdmissionQuoteRequired is a non-mutating preparation result. The transaction
+// and all locks are released before the caller performs market-data I/O.
+type AdmissionQuoteRequired struct {
+	Record         Record
+	BindingVersion int64
+}
+
+func (*AdmissionQuoteRequired) Error() string { return "latest quote required" }
+
 var ErrAdmissionRejected = errors.New("admission workflow does not match canonical record")
 
 type AdmissionOutcome string
@@ -39,6 +51,7 @@ type AdmissionCommand struct {
 	OwnerID, SubscriptionID, WorkflowID, RequestID string
 	Quote                                          priceobserved.Observed
 	PermitTTL                                      time.Duration
+	ExpectedBindingVersion                         *int64 // Optional binding CAS for a prepared price read.
 }
 
 // AttemptPermission authorizes one immediate HTTP attempt after rate limiting.
@@ -65,6 +78,17 @@ type AdmissionResult struct {
 // A saved response is historical: terminal transitions or lease expiry do not
 // turn its replay into a new permission. New commands check current state.
 func AdmitDelivery(ctx context.Context, db Beginner, c AdmissionCommand) (AdmissionResult, error) {
+	return admitDelivery(ctx, db, c, false)
+}
+
+// PrepareAdmission restores a saved response or commits a quote-independent
+// outcome (terminal, busy, unchanged/missing channel). Otherwise it returns
+// AdmissionQuoteRequired without writing. AdmitDelivery must then receive a new
+// latest quote and ExpectedBindingVersion from that preparation.
+func PrepareAdmission(ctx context.Context, db Beginner, c AdmissionCommand) (AdmissionResult, error) {
+	return admitDelivery(ctx, db, c, true)
+}
+func admitDelivery(ctx context.Context, db Beginner, c AdmissionCommand, prepare bool) (AdmissionResult, error) {
 	if c.OwnerID == "" || c.SubscriptionID == "" || c.WorkflowID == "" || strings.TrimSpace(c.RequestID) == "" || len(c.RequestID) > 200 {
 		return AdmissionResult{}, ErrInvalidInput
 	}
@@ -98,7 +122,7 @@ func AdmitDelivery(ctx context.Context, db Beginner, c AdmissionCommand) (Admiss
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return AdmissionResult{}, storageError(ctx, err)
 	}
-	if c.Quote.Validate() != nil || c.Quote.Pair != r.Pair || c.PermitTTL < time.Microsecond || c.PermitTTL > time.Minute || c.PermitTTL%time.Microsecond != 0 {
+	if !prepare && (c.Quote.Validate() != nil || c.Quote.Pair != r.Pair || c.PermitTTL < time.Microsecond || c.PermitTTL > time.Minute || c.PermitTTL%time.Microsecond != 0) {
 		return AdmissionResult{}, ErrInvalidInput
 	}
 	var chat *int64
@@ -136,6 +160,10 @@ func AdmitDelivery(ctx context.Context, db Beginner, c AdmissionCommand) (Admiss
 			result.Outcome = AdmissionBlocked
 			result.Record.State = domain.DeliveryBlocked
 			result.Record.Blocked = &Blocked{Reason: domain.ChannelUnavailable, BindingVersion: binding}
+		case prepare:
+			return AdmissionResult{}, &AdmissionQuoteRequired{Record: r, BindingVersion: binding}
+		case c.ExpectedBindingVersion != nil && binding != *c.ExpectedBindingVersion:
+			return AdmissionResult{}, ErrAdmissionChanged
 		case !price.Satisfied(*c.Quote.Price, r.Threshold, r.Direction):
 			result.Outcome = WaitCondition
 			result.Record.State = domain.Active
