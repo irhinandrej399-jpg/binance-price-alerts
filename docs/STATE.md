@@ -5,10 +5,11 @@
 ## Активная работа
 
 - Активный продуктовый тикет: нет.
-- Незавершённая реализация: нет. SUB-011 завершён; SUB-012 требует собственной сессионной проверки.
-- Последний завершённый тикет: [SUB-011](backlog/tickets/SUB-011.md). [HTTP-создание и журнал](../internal/api/subscription/README.md): подписка, слот, неизменяемый SubscriptionChanged и C фиксируются одной транзакцией. Проверены точный after-image, устойчивые байты/ID и полный rollback при ошибках INSERT/commit; итоговый disposable PostgreSQL-прогон с race detector прошёл. Отмена, relay и runtime остаются отдельными задачами.
-- [SUB-021](backlog/tickets/SUB-021.md). [Журнал API](../internal/api/journal/README.md): Append полного пакета в pgx.Tx, транзакционный счётчик C и чтение целых пакетов строго после C. Миграция 007, rollback/commit-порядок, точный replay, неизменяемость и REPEATABLE READ проверены на реальном PostgreSQL с race detector. Создание подключено в SUB-011; отмена, relay, snapshot/retention и runtime остаются отдельными задачами.
-- [SUB-005](backlog/tickets/SUB-005.md). [HTTP-отмена](../internal/api/subscription/README.md): DELETE /v1/subscriptions/{id} атомарно проверяет владельца/версию, отменяет любое незавершённое состояние и освобождает слот один раз. Повторы стабильны, ответ явно предупреждает о возможной отправке при наличии workflow. Реальные сессии/PostgreSQL и race detector прошли, включая 20 конкурентных отмен и ожидание новой версии допуска. Runtime, подключение journal/outbox к отмене и сами admission/result writers ещё отсутствуют.
+- Незавершённая реализация: нет. SUB-012 завершён; SUB-007 требует собственной сессионной проверки.
+- Последний завершённый тикет: [SUB-012](backlog/tickets/SUB-012.md). [HTTP-отмена и журнал](../internal/api/subscription/README.md): cancelled, версия, освобождение слота и полный SubscriptionChanged/C фиксируются одной транзакцией; terminal-повторы не создают новых записей. Полный disposable PostgreSQL-прогон с race detector прошёл, включая rollback INSERT/commit и 20 конкурентных отмен с одним событием. Relay и runtime остаются отдельными задачами.
+- [SUB-011](backlog/tickets/SUB-011.md). [HTTP-создание и журнал](../internal/api/subscription/README.md): подписка, слот, неизменяемый SubscriptionChanged и C фиксируются одной транзакцией. Проверены точный after-image, устойчивые байты/ID и полный rollback при ошибках INSERT/commit; итоговый disposable PostgreSQL-прогон с race detector прошёл. Отмена, relay и runtime остаются отдельными задачами.
+- [SUB-021](backlog/tickets/SUB-021.md). [Журнал API](../internal/api/journal/README.md): Append полного пакета в pgx.Tx, транзакционный счётчик C и чтение целых пакетов строго после C. Миграция 007, rollback/commit-порядок, точный replay, неизменяемость и REPEATABLE READ проверены на реальном PostgreSQL с race detector. Создание подключено в SUB-011, отмена — SUB-012; relay, snapshot/retention и runtime остаются отдельными задачами.
+- [SUB-005](backlog/tickets/SUB-005.md). [HTTP-отмена](../internal/api/subscription/README.md): DELETE /v1/subscriptions/{id} атомарно проверяет владельца/версию, отменяет любое незавершённое состояние и освобождает слот один раз. Повторы стабильны, ответ явно предупреждает о возможной отправке при наличии workflow. Реальные сессии/PostgreSQL и race detector прошли, включая 20 конкурентных отмен и ожидание новой версии допуска. Journal/outbox подключён к отмене в SUB-012; runtime и сами admission/result writers ещё отсутствуют.
 - [SUB-004](backlog/tickets/SUB-004.md). [HTTP-список](../internal/api/subscription/README.md): GET /v1/subscriptions возвращает до 15 собственных незавершённых подписок в порядке UUID, включая workflow и причину blocked; показывает сохранённый результат восстановления с прежним порогом. Проверены реальные сессии/PostgreSQL, изоляция двух владельцев, все состояния и ошибки чтения с race detector. Runtime и само восстановление канала остаются отдельными задачами.
 - [SUB-003](backlog/tickets/SUB-003.md). [HTTP-создание](../internal/api/subscription/README.md): POST /v1/subscriptions по цене/проценту, владелец из сессии, проверка пары через внутренний каталог, исходная котировка и предупреждения. Транзакционная квота/Telegram, active даже при true; реальный PostgreSQL/race-прогон пройден, runtime ещё отсутствует; journal/outbox создания подключён в SUB-011.
 - [MKT-018](backlog/tickets/MKT-018.md). [Внутренний каталог](../internal/marketdata/catalogrpc/README.md): unary gRPC Fetch и Go-клиент, полный снимок с исходным UpdatedAt, mTLS-доступ только API, бюджет 1 с и передача отмены источнику. Проверено на защищённом loopback и локальном Binance fixture; runtime не подключён.
@@ -57,14 +58,14 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [SUB-012](backlog/tickets/SUB-012.md): подключить готовый журнал SUB-021 к транзакции отмены. Перед началом проверить зависимости и сессионный размер. Создание уже пишет SubscriptionChanged перед commit; отмена пока не пишет журнал. Relay SUB-007, runtime cmd/api и полный конвейер доставки остаются отдельными задачами.
+По очереди следующий — [SUB-007](backlog/tickets/SUB-007.md): relay журнала изменений подписок в Kafka. Перед началом проверить зависимости и сессионный размер. Создание и отмена уже пишут SubscriptionChanged/C перед commit; runtime cmd/api и полный конвейер доставки остаются отдельными задачами.
 
 `python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Идти по этой очереди; разделы каталога и номера ID сами по себе порядок не задают.
 
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show SUB-012` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show SUB-007` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

@@ -1,21 +1,24 @@
 package subscription_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/jackc/pgx/v5"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/auth"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/journal"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/session"
 	store "github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/subscription"
 	domain "github.com/irhinandrej399-jpg/binance-price-alerts/internal/domain/subscription"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/postgrestest"
+	"github.com/jackc/pgx/v5"
 )
 
 func deleteSubscription(h http.Handler, token, id string) *httptest.ResponseRecorder {
@@ -119,6 +122,10 @@ func TestCancelHTTP(t *testing.T) {
 				wantState = state
 				wantVersion = 3
 			}
+			before, err := journal.Current(ctx, pool)
+			if err != nil {
+				t.Fatal(err)
+			}
 			var first string
 			for repeat := 0; repeat < 2; repeat++ {
 				w := deleteSubscription(h, credentials.AccessToken, v.ID)
@@ -139,6 +146,45 @@ func TestCancelHTTP(t *testing.T) {
 			}
 			if i > 0 && (saved.Workflow == nil || saved.Workflow.Version != 2) {
 				t.Fatal("lost workflow")
+			}
+
+			entries, err := journal.ReadAfter(ctx, pool, before, 10)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if state == domain.Delivered || state == domain.Cancelled {
+				if len(entries) != 0 {
+					t.Fatal("terminal retry emitted event")
+				}
+			} else {
+				if len(entries) != 1 {
+					t.Fatalf("cancel journal len=%d", len(entries))
+				}
+				e := entries[0]
+				c := e.Change
+				if c.SubscriptionID != saved.ID || c.SubscriptionVersion != uint64(saved.Version) || c.State != saved.State || c.Pair != saved.Pair || c.Threshold.String() != saved.Threshold.String() || c.Direction != saved.Direction || c.Activation != saved.Activation || c.CreationSnapshot.Price.String() != saved.CreationPrice.String() || !c.CreationSnapshot.TradeTime.Equal(saved.CreationTradeTime) || c.Position != before+1 || c.TransactionEnd != before+1 {
+					t.Fatalf("cancel after-image differs: %+v vs %+v", c, saved)
+				}
+				if (c.Workflow == nil) != (saved.Workflow == nil) {
+					t.Fatal("workflow presence")
+				}
+				if saved.Workflow != nil && (c.Workflow.TriggerID != saved.Workflow.TriggerID || c.Workflow.Version != uint64(saved.Workflow.Version)) {
+					t.Fatal("workflow differs")
+				}
+				if e.Metadata.EventID == "" || e.Metadata.CorrelationID != e.Metadata.EventID || e.Metadata.OrderingKey != saved.ID || e.Metadata.OccurredAt.IsZero() {
+					t.Fatal(e.Metadata)
+				}
+				replay, err := journal.ReadAfter(ctx, pool, before, 10)
+				if err != nil || !reflect.DeepEqual(entries, replay) {
+					t.Fatal("unstable replay", err)
+				}
+				var first, second []byte
+				if err := pool.QueryRow(ctx, `SELECT body FROM app.api_journal WHERE event_id=$1`, e.Metadata.EventID).Scan(&first); err != nil {
+					t.Fatal(err)
+				}
+				if err := pool.QueryRow(ctx, `SELECT body FROM app.api_journal WHERE event_id=$1`, e.Metadata.EventID).Scan(&second); err != nil || !bytes.Equal(first, second) {
+					t.Fatal("unstable bytes", err)
+				}
 			}
 			// Late-result slot reconciliation cannot free a second slot.
 			if err := quotaTx(ctx, pool, owner, func(q *store.OwnerQuota) error { return q.ReleaseTerminal(ctx, v.ID) }); err != nil {
@@ -161,6 +207,10 @@ func TestCancelConcurrentAndRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	before, err := journal.Current(ctx, pool)
+	if err != nil {
+		t.Fatal(err)
+	}
 	failing := auth.New(sessions, store.NewCancelHandler(failedCommitDB{pool}))
 	w := deleteSubscription(failing, credentials.AccessToken, v.ID)
 	if w.Code != 500 || strings.Contains(w.Body.String(), "private") {
@@ -170,6 +220,9 @@ func TestCancelConcurrentAndRollback(t *testing.T) {
 	saved, err := store.New(pool).ByID(ctx, owner, v.ID)
 	if err != nil || saved.State != domain.Active || saved.Version != 1 {
 		t.Fatal(saved, err)
+	}
+	if c, err := journal.Current(ctx, pool); err != nil || c != before {
+		t.Fatal("commit failure advanced C", c, err)
 	}
 	h := auth.New(sessions, store.NewCancelHandler(pool))
 	start := make(chan struct{})
@@ -185,6 +238,10 @@ func TestCancelConcurrentAndRollback(t *testing.T) {
 		}
 	}
 	assertQuota(t, pool, owner, 0)
+	entries, err := journal.ReadAfter(ctx, pool, before, 10)
+	if err != nil || len(entries) != 1 || entries[0].Change.SubscriptionID != v.ID || entries[0].Change.SubscriptionVersion != 2 {
+		t.Fatalf("concurrent journal: %+v %v", entries, err)
+	}
 	// Freed slot is usable, without a Telegram requirement for cancellation itself.
 	if err := quotaTx(ctx, pool, owner, func(q *store.OwnerQuota) error { return q.Create(ctx, quotaRecord(owner, 910002)) }); err != nil {
 		t.Fatal(err)

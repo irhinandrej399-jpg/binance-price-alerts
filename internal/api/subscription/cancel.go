@@ -5,8 +5,12 @@ import (
 	"errors"
 	"math"
 	"net/http"
+	"time"
 
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/auth"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/journal"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/event"
+	changed "github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/subscriptionchanged"
 	domain "github.com/irhinandrej399-jpg/binance-price-alerts/internal/domain/subscription"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -36,6 +40,7 @@ func NewCancelHandler(db Beginner) http.Handler {
 			createError(w, 400, "invalid_request")
 			return
 		}
+		eventID := newUUID()
 		tx, err := db.BeginTx(r.Context(), pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 		if err != nil {
 			createError(w, 500, "internal_error")
@@ -64,7 +69,8 @@ func NewCancelHandler(db Beginner) http.Handler {
 		// safely exclude a message in flight. Preserve the workflow on cancellation
 		// so retries return the same conservative warning, including after restart.
 		result.MessageMayBeInFlight = workflow != nil && result.State != domain.Delivered
-		if result.State != domain.Cancelled && result.State != domain.Delivered {
+		transitioned := result.State != domain.Cancelled && result.State != domain.Delivered
+		if transitioned {
 			if result.Version == math.MaxInt64 {
 				createError(w, 500, "internal_error")
 				return
@@ -83,7 +89,32 @@ func NewCancelHandler(db Beginner) http.Handler {
 			createError(w, 500, "internal_error")
 			return
 		}
-		// SUB-012 will add journal/outbox here in this same transaction before commit.
+		if transitioned {
+			// Read the persisted after-image before taking the journal lock.
+			// Terminal retries do not allocate a new position or event.
+			record, err := New(tx).ByID(r.Context(), owner, result.ID)
+			if err != nil {
+				createError(w, 500, "internal_error")
+				return
+			}
+			change := changed.Changed{SchemaVersion: changed.Version1, SubscriptionID: record.ID,
+				SubscriptionVersion: uint64(record.Version), State: record.State, Pair: record.Pair,
+				Threshold: &record.Threshold, Direction: record.Direction, Activation: record.Activation,
+				CreationSnapshot: &changed.Snapshot{Price: &record.CreationPrice, TradeTime: record.CreationTradeTime}}
+			if record.Workflow != nil {
+				change.Workflow = &changed.Workflow{TriggerID: record.Workflow.TriggerID, Version: uint64(record.Workflow.Version)}
+			}
+			_, err = journal.Append(r.Context(), tx, []journal.Entry{{
+				Metadata: event.Envelope{EventID: eventID, Type: changed.Type, Version: event.Version1,
+					OccurredAt: time.Now().UTC(), CorrelationID: eventID, OrderingKey: record.ID},
+				Change: change,
+			}})
+			if err != nil {
+				createError(w, 500, "internal_error")
+				return
+			}
+		}
+		// No business locks or external I/O after Append; only end the transaction.
 		if err = tx.Commit(r.Context()); err != nil {
 			createError(w, 500, "internal_error")
 			return
