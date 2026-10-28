@@ -25,6 +25,7 @@ python3 scripts/migrate.py --owner notifications
 `api/007_subscription_journal.sql` — транзакционный счётчик C и неизменяемый полный журнал SUB-021 ([контракт](../internal/api/journal/README.md));
 `api/008_subscription_relay.sql` — отдельные cursor C и lease/token relay SUB-007 ([контракт](../internal/api/relay/README.md));
 `api/009_delivery_outbox.sql` — неизменяемый запрос доставки AlertTriggered SUB-013, уникальный по подписке/trigger_id/event_id; canonical workflow остаётся в subscriptions;
+`api/010_delivery_admission.sql` — неизменяемые ответы команд/разрешения попыток SUB-017 и канонические current_attempt_id/admission_fence; квота не меняется;
 matcher/notifications пока пусты. Контракт market-data —
 [storage/README](../internal/marketdata/storage/README.md). Контракт хранилища — в [account/README](../internal/api/account/README.md).
 
