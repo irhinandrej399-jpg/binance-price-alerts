@@ -5,8 +5,9 @@
 ## Активная работа
 
 - Активный продуктовый тикет: нет.
-- Незавершённая реализация: нет. SUB-013 завершён; SUB-014 требует собственной сессионной проверки.
-- Последний завершённый тикет: [SUB-013](backlog/tickets/SUB-013.md). [Атомарный запрос доставки](../internal/api/subscription/README.md): pending_delivery, устойчивый workflow, неизменяемый AlertTriggered и полный SubscriptionChanged/C сохраняются одной транзакцией, слот остаётся занят. Миграция API 009; конкуренция, отмена, rollback и потеря commit-ответа проверены на disposable PostgreSQL с race detector; volume удалён. Чтение последней цены/защищённый интерфейс — SUB-014, публикация delivery_outbox — SUB-009, runtime отдельно.
+- Незавершённая реализация: нет. SUB-014 завершён; SUB-017 требует собственной сессионной проверки.
+- Последний завершённый тикет: [SUB-014](backlog/tickets/SUB-014.md). [Защищённый запрос работы доставки](../internal/api/deliveryrpc/README.md): unary gRPC с правом только matcher, канонические пара/порог и последняя цена через MKT-006, атомарная SUB-013. Повтор восстанавливает прежний workflow даже при недоступной цене; CAS, mTLS/deadline/отмена, две защищённые связи и конкурентные RPC проверены с race detector на disposable PostgreSQL; volume удалён. Runtime, публикация outbox и допуск отправки остаются отдельно.
+- [SUB-013](backlog/tickets/SUB-013.md). [Атомарный запрос доставки](../internal/api/subscription/README.md): pending_delivery, устойчивый workflow, неизменяемый AlertTriggered и полный SubscriptionChanged/C сохраняются одной транзакцией, слот остаётся занят. Миграция API 009; конкуренция, отмена, rollback и потеря commit-ответа проверены на disposable PostgreSQL с race detector; volume удалён. Чтение последней цены/защищённый интерфейс готовы в SUB-014, публикация delivery_outbox — SUB-009, runtime отдельно.
 - [SUB-007](backlog/tickets/SUB-007.md). [Relay подписок](../internal/api/relay/README.md): один целый пакет C на Kafka-транзакцию, исходные bytea/event_id, стабильный transactional.id/fencing, SQL cursor только после commit. Миграция API 008, lease/token и повторы после lost EndTxn/сбоя SQL-ack проверены на совместном disposable PostgreSQL/Kafka стенде с race detector; оба volumes удалены. Runtime, consumers и replay-pins/retention остаются отдельными задачами.
 - [SUB-012](backlog/tickets/SUB-012.md). [HTTP-отмена и журнал](../internal/api/subscription/README.md): cancelled, версия, освобождение слота и полный SubscriptionChanged/C фиксируются одной транзакцией; terminal-повторы не создают новых записей. Полный disposable PostgreSQL-прогон с race detector прошёл, включая rollback INSERT/commit и 20 конкурентных отмен с одним событием. Relay готов в SUB-007; runtime остаётся отдельной задачей.
 - [SUB-011](backlog/tickets/SUB-011.md). [HTTP-создание и журнал](../internal/api/subscription/README.md): подписка, слот, неизменяемый SubscriptionChanged и C фиксируются одной транзакцией. Проверены точный after-image, устойчивые байты/ID и полный rollback при ошибках INSERT/commit; итоговый disposable PostgreSQL-прогон с race detector прошёл. Отмена, relay и runtime остаются отдельными задачами.
@@ -60,14 +61,14 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [SUB-014](backlog/tickets/SUB-014.md): открыть защищённый внутренний запрос работы доставки, прочитать последнюю цену и вызвать готовую SUB-013. Перед началом проверить зависимости и сессионный размер. Атомарная SQL-операция готова; публикация delivery_outbox, runtime cmd/api и полный конвейер доставки остаются отдельными задачами.
+По очереди следующий — [SUB-017](backlog/tickets/SUB-017.md): сохранить допуск одной попытки доставки. Перед началом проверить зависимости и сессионный размер. Атомарный запрос работы и защищённый RPC готовы в SUB-013/014; публикация delivery_outbox, runtime cmd/api и полный конвейер доставки остаются отдельными задачами.
 
 `python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Идти по этой очереди; разделы каталога и номера ID сами по себе порядок не задают.
 
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show SUB-014` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show SUB-017` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

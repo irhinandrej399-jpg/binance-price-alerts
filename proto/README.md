@@ -58,3 +58,6 @@ runtime и отображение доменных ошибок определя
 [protoc 36.2](https://github.com/protocolbuffers/protobuf/releases/tag/v36.2),
 [gRPC Go](https://github.com/grpc/grpc-go),
 [Protobuf Go](https://github.com/protocolbuffers/protobuf-go).
+
+Запрос работы доставки API: `api/v1/delivery.proto`, matcher-only mTLS и
+[клиент/сервер SUB-014](../internal/api/deliveryrpc/README.md).
