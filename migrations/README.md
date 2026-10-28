@@ -22,6 +22,7 @@ python3 scripts/migrate.py --owner notifications
 В `api/001_users.sql` находится схема аккаунтов IAM-001, в `api/002_sessions.sql` — сессии IAM-004, в `api/003_telegram_link_codes.sql` — хеши кодов привязки IAM-006; `market_data/001_quotes_outbox.sql` — котировка, состояние потока и outbox MKT-017;
 `api/005_subscriptions.sql` — каноническая подписка SUB-001 ([контракт](../internal/api/subscription/README.md));
 `api/006_subscription_quota.sql` — счётчик 0..15 и признак занятого слота SUB-002, с backfill существующих данных (применять при остановленных писателях API);
+`api/007_subscription_journal.sql` — транзакционный счётчик C и неизменяемый полный журнал SUB-021 ([контракт](../internal/api/journal/README.md));
 matcher/notifications пока пусты. Контракт market-data —
 [storage/README](../internal/marketdata/storage/README.md). Контракт хранилища — в [account/README](../internal/api/account/README.md).
 
