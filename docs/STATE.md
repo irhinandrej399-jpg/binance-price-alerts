@@ -5,8 +5,9 @@
 ## Активная работа
 
 - Активный продуктовый тикет: нет.
-- Незавершённая реализация: нет. SUB-019 завершён; SUB-020 требует собственной сессионной проверки.
-- Последний завершённый тикет: [SUB-019](backlog/tickets/SUB-019.md). [Storage-фиксация исходов](../internal/api/subscription/README.md): append-only аудит известных попыток, первая каноническая квитанция delivered/message_id, атомарные слот и SubscriptionChanged/C. Поздний успех принимается после expiry/новой попытки, отмена не возрождается, устаревший отказ не меняет восстановленную работу. Миграция API 011; конкуренция, отмена/перепривязка и rollback/lost commit проверены на disposable PostgreSQL с race detector; volume удалён. Защищённый result RPC — SUB-020, runtime отдельно.
+- Незавершённая реализация: нет. SUB-020 завершён; SUB-009 требует собственной сессионной проверки.
+- Последний завершённый тикет: [SUB-020](backlog/tickets/SUB-020.md). [Защищённая фиксация исхода](../internal/api/resultrpc/README.md): unary gRPC только notifications, проверка идентичностей/исхода и готовая SUB-019; бюджеты 3 с, отмена SQL, текущий canonical ответ при повторе. Timeout после commit требует повторить исход, не Telegram; поздний успех истёкшего permit после отмены аудируется без возрождения. mTLS, конкурентные повторы и PostgreSQL проверены с race detector; disposable volume удалён. Runtime и NTF-014 отдельно.
+- [SUB-019](backlog/tickets/SUB-019.md). [Storage-фиксация исходов](../internal/api/subscription/README.md): append-only аудит известных попыток, первая каноническая квитанция delivered/message_id, атомарные слот и SubscriptionChanged/C. Поздний успех принимается после expiry/новой попытки, отмена не возрождается, устаревший отказ не меняет восстановленную работу. Миграция API 011; конкуренция, отмена/перепривязка и rollback/lost commit проверены на disposable PostgreSQL с race detector; volume удалён. Защищённый result RPC готов в SUB-020, runtime отдельно.
 - [SUB-018](backlog/tickets/SUB-018.md). [Защищённый допуск попытки](../internal/api/admissionrpc/README.md): unary gRPC только для notifications, последняя цена через MKT-006, request ID replay без цены и CAS версии привязки с повторным чтением. Permit содержит точную котировку, chat/версию, attempt/fence/deadline; terminal/busy/blocked не требуют цены. Конкуренция, перепривязка, отмена и timeout после commit проверены на disposable PostgreSQL с двумя mTLS-связями и race detector; volume удалён. Фиксация исходов готова в SUB-019, runtime отдельно.
 - [SUB-017](backlog/tickets/SUB-017.md). [Storage-допуск попытки](../internal/api/subscription/README.md): неизменяемый ответ request ID, sending/active/blocked и SubscriptionChanged/C одной транзакцией; attempt ID/fence/deadline и актуальные chat/версия. Миграция API 010; конкуренция, expiry/replay, отмена/перепривязка и rollback проверены на disposable PostgreSQL с race detector; volume удалён. Сетевой допуск/чтение цены готовы в SUB-018; результаты — SUB-019, runtime отдельно.
 - [SUB-014](backlog/tickets/SUB-014.md). [Защищённый запрос работы доставки](../internal/api/deliveryrpc/README.md): unary gRPC с правом только matcher, канонические пара/порог и последняя цена через MKT-006, атомарная SUB-013. Повтор восстанавливает прежний workflow даже при недоступной цене; CAS, mTLS/deadline/отмена, две защищённые связи и конкурентные RPC проверены с race detector на disposable PostgreSQL; volume удалён. Runtime, публикация outbox и фиксация исходов остаются отдельно.
@@ -58,20 +59,20 @@
 
 [DEC-009](decisions/DEC-009.md) принят 27 октября: REST/JSON для внешнего API, gRPC/Protobuf для прямых внутренних вызовов, Kafka для событий. Карточки интерфейсов уточнены; генерация готова в SET-007, Latest-котировки — в MKT-006; остальные прикладные сетевые адаптеры ещё не реализованы.
 
-DEC-001–009 приняты. DEC-004 пересматривает прежнюю гарантию уведомления по снимку создания и terminal-срабатывание до доставки. SUB-019 завершён; planned-предпосылки MAT-012, SUB-020 и NTF-014 включены в очередь.
+DEC-001–009 приняты. DEC-004 пересматривает прежнюю гарантию уведомления по снимку создания и terminal-срабатывание до доставки. SUB-019/020 завершены; planned-предпосылки MAT-012 и NTF-014 включены в очередь.
 
 Выбраны PostgreSQL и Kafka/KRaft, полный профиль стенда закреплён DEC-008. SQL-replay — SUB-022, cleaner Kafka — OPS-014, ограничители — OPS-015/016. Численные стоимости операций требуют проверки на будущих схемах; скорость cleaner пока считается нулевой. Telegram-политика и freshness согласованы, но не реализованы. Наличие каталога из четырёх сервисов не означает готовность этих решений.
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [SUB-020](backlog/tickets/SUB-020.md): защищённый unary gRPC фиксации исхода доставки. Перед началом проверить зависимости и сессионный размер. Storage-операция SaveDeliveryResult готова в SUB-019; сетевой интерфейс, публикация delivery_outbox и runtime остаются отдельными задачами.
+По очереди следующий — [SUB-009](backlog/tickets/SUB-009.md): публикация delivery_outbox. Перед началом проверить зависимости и сессионный размер. Фиксация исходов готова в SUB-019/020; публикация, runtime и обязанность notifications сообщать результат остаются отдельными задачами.
 
 `python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Идти по этой очереди; разделы каталога и номера ID сами по себе порядок не задают.
 
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show SUB-020` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show SUB-009` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

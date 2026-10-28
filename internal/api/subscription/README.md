@@ -442,7 +442,8 @@ commit-ответа. Runtime и отправка Telegram остаются от�
 доверенный исход notifications: owner/subscription/workflow/attempt ID, outcome и
 положительный Telegram message_id только для успеха; для blocked обязательна
 причина из доменного контракта. Outcome: `succeeded`, `retryable`, `uncertain`,
-`blocked`. Это storage-операция без сети; защищённый RPC — отдельный SUB-020.
+`blocked`. Это storage-операция без сети; защищённый RPC готов в
+[SUB-020](../resultrpc/README.md).
 
 READ COMMITTED: user/привязка → подписка → известный permit/результаты → журнал.
 Attempt должен принадлежать указанным подписке и workflow; fence и версия канала
@@ -485,5 +486,6 @@ INSERT/журнала/commit откатывают всё; после journal.App
 `result_test.go` проверяет реальные SQL-транзакции: повтор/конкурирующие исходы,
 поздний успех после expiry/нового допуска, обе границы гонки с HTTP-отменой,
 перепривязку до blocked, восстановление и устаревший отказ, аудит, первую
-квитанцию, rollback INSERT/журнала/commit и потерю commit-ответа. Отправка Telegram,
-локальная БД notifications, RPC SUB-020, relay и runtime остаются отдельно.
+квитанцию, rollback INSERT/журнала/commit и потерю commit-ответа.
+RPC готов в [SUB-020](../resultrpc/README.md); отправка Telegram, локальная БД
+notifications, relay и runtime остаются отдельно.

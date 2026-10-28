@@ -54,4 +54,5 @@ workflow — FailedPrecondition; неправильная форма запро�
 Проверки: `go test -race ./internal/api/admissionrpc ./internal/api/deliveryrpc`
 (нужен loopback); `python3 scripts/check_postgres.py` — реальный disposable
 PostgreSQL, обе mTLS-связи API/market-data, гонки и потеря ответа после commit.
-Runtime, Telegram worker, лимитеры и сохранение исходов SUB-019 — отдельно.
+Сохранение исходов готово в SUB-019, защищённый RPC —
+[SUB-020](../resultrpc/README.md). Runtime, Telegram worker и лимитеры — отдельно.
