@@ -155,3 +155,74 @@ initialCommands с неизменным URL. Отдельного пути dial 
 Durable фиксация и runtime wiring остаются MKT-017 и последующим задачам.
 Fake clock и локальный WS проверяют возраст, raw/combined shutdown, оба сигнала
 одновременно, один replay двух streams, отсутствие раннего срабатывания и cleanup.
+
+## План каталога → соединения — MKT-016
+
+`NewReconciler(lifetimeCtx, ReconcileConfig, handle, disconnected)` создаёт
+одного владельца feed. `Reconcile(callCtx, catalog.Snapshot)` принимает только
+успешный полный снимок каталога и вызывает `streamplan.Build`; пользовательские
+подписки не участвуют. Пустой успешный снимок удаляет все потоки и соединения;
+ошибку Fetch нельзя заменять пустым снимком.
+
+```go
+r, err := stream.NewReconciler(ctx, stream.ReconcileConfig{
+    Endpoint: "wss://stream.binance.com:9443/ws",
+    Limit: streamplan.MaxStreamsPerConnection,
+    Transport: stream.DefaultConfig(),
+    Retry: stream.DefaultRetryConfig(),
+    AckTimeout: 10 * time.Second,
+}, handle, func(group int, err error, delay time.Duration) {
+    // Сообщить о возможном gap; сохранять причины и учитывать ctx.
+})
+if err != nil { return err }
+defer r.Close()
+return r.Reconcile(ctx, successfulCatalog)
+```
+
+Endpoint обязан иметь путь `/ws` без URL-подписок; разрешён только query
+`timeUnit=MICROSECOND` либо `microsecond`. Прочая конфигурация, callbacks и лимит
+проверяются до dial. Настройки лимитера и retry совпадают с Read/Reconnect.
+AckTimeout положительный, включает очередь лимитера и ответ сервера; пример
+10 секунд — локальный бюджет, не внешний лимит Binance. Слишком маленькое
+значение вызывает видимые повторы. Одновременно ожидается одна команда на группу.
+
+Группа определяется индексом Build. Сначала **во всех** существующих группах
+применяется UNSUBSCRIBE для удаляемых/переносимых потоков, затем SUBSCRIBE для
+добавленных. Переход к добавлениям ждёт подтверждения всех удалений. Временные
+пропуски возможны; пара не подписывается одновременно на двух группах владельца.
+Удалённые пустые группы останавливаются с ожиданием cleanup. Повтор того же плана
+не отправляет команды и не открывает новые соединения при исправном транспорте.
+Индексы групп не являются постоянным shard ID.
+
+Команда имеет числовой ID, возрастающий внутри соединения. Только JSON с точным
+`id` и `result:null`, без `code`, подтверждает применение. ACK и ошибки команд
+поглощаются и не передаются trade handler. Неверный/пропущенный ACK, отказ команды,
+таймаут и транспортный сбой закрывают текущую попытку. По готовому
+`retryConnections` (тот же backoff/jitter, что Reconnect) новая попытка подписывает
+актуальный набор группы заново. Успешная отправка и dial не считаются ACK;
+подтверждения старого соединения не действуют на новом. Ротация использует
+существующие watchRotation/RotationAge/serverShutdown, общий writer/лимитер
+ReadWithCommands и тот же retry-путь. `disconnected(group, err, delay)` вызывается
+после cleanup попытки, сообщает также ошибки ACK и возможный gap.
+
+Вызовы Reconcile сериализованы. Отмена callCtx прекращает ожидание, оставляя
+безопасный промежуточный набор; повторный Reconcile доводит его до последнего
+переданного снимка. Lifetime context/Close останавливает все группы; Close ждёт
+сокеты, writer, command worker и retry loop. Ограничение отмены handshake до
+10 секунд сохраняется. Ошибка прикладного handler завершает всего владельца
+с исходной причиной; она не повторяется как сетевой сбой. Handle и observer могут
+вызываться параллельно разными группами: нужны concurrency-safe callbacks,
+возвращающиеся быстро или учитывающие lifetime/переданный context. Из callback
+нельзя синхронно вызывать Reconcile/Close этого владельца: они ждут callback.
+
+ACK подтверждает подписку, но не live, непрерывность сделок или durable приём.
+Состояние `trade.CheckNext` должно сохраняться по паре через переносы и reconnect.
+Runtime wiring, периодическое обновление каталога, backfill, общий IP-лимит dial
+и многорепличное владение feed сюда не входят. Реальный Binance не вызывался.
+Формат SUBSCRIBE/UNSUBSCRIBE и `result:null` повторно сверен 28 октября 2026 по
+[официальной спецификации Binance](https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-streams.md#live-subscribingunsubscribing-to-streams).
+
+WS-тесты `TestReconcile*` проверяют no-op, дубли каталога, точную разницу команд,
+перенос между группами без двойной подписки, пустой каталог, отказ/потерю/таймаут
+ACK, неверный ID/result, shutdown, replay актуального набора после потерянного ACK
+удаления, отмену/продолжение, terminal handler и Close с ожидающим ACK.
