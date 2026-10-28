@@ -5,8 +5,9 @@
 ## Активная работа
 
 - Активный продуктовый тикет: нет.
-- Незавершённая реализация: нет. SUB-009 завершён; SUB-015 требует собственной сессионной проверки.
-- Последний завершённый тикет: [SUB-009](backlog/tickets/SUB-009.md). [Relay delivery_outbox](../internal/api/deliveryrelay/README.md): исходные AlertTriggered в delivery-requests, ключ subscription_id, стабильные event_id/trigger_id и transactional.id/fencing. Миграция API 012 хранит lease/token и отдельные SQL-отметки после Kafka commit; поздний commit с меньшим UUID не пропускается. Отказы брокера, lost EndTxn, сбой SQL-ack и повторы проверены на disposable PostgreSQL/Kafka с race detector; оба volumes удалены. Runtime и consumers отдельно.
+- Незавершённая реализация: нет. SUB-015 завершён; SUB-016 требует собственной сессионной проверки.
+- Последний завершённый тикет: [SUB-015](backlog/tickets/SUB-015.md). [Материализованный снимок S/C и durable replay-pin](../internal/api/subscription/README.md): неизменяемые страницы всех незавершённых состояний/workflow, owner/expiry, атомарный handoff и монотонный progress по целым выданным транзакциям. Миграция API 013; shared session retention-lock до транзакций Build/Handoff. Поздние commit, cleaner-vs-builder/handoff и rollback/expiry проверены на disposable PostgreSQL с race detector; volume удалён. Сетевые страницы, replay, cleaner и runtime отдельно.
+- [SUB-009](backlog/tickets/SUB-009.md). [Relay delivery_outbox](../internal/api/deliveryrelay/README.md): исходные AlertTriggered в delivery-requests, ключ subscription_id, стабильные event_id/trigger_id и transactional.id/fencing. Миграция API 012 хранит lease/token и отдельные SQL-отметки после Kafka commit; поздний commit с меньшим UUID не пропускается. Отказы брокера, lost EndTxn, сбой SQL-ack и повторы проверены на disposable PostgreSQL/Kafka с race detector; оба volumes удалены. Runtime и consumers отдельно.
 - [SUB-020](backlog/tickets/SUB-020.md). [Защищённая фиксация исхода](../internal/api/resultrpc/README.md): unary gRPC только notifications, проверка идентичностей/исхода и готовая SUB-019; бюджеты 3 с, отмена SQL, текущий canonical ответ при повторе. Timeout после commit требует повторить исход, не Telegram; поздний успех истёкшего permit после отмены аудируется без возрождения. mTLS, конкурентные повторы и PostgreSQL проверены с race detector; disposable volume удалён. Runtime и NTF-014 отдельно.
 - [SUB-019](backlog/tickets/SUB-019.md). [Storage-фиксация исходов](../internal/api/subscription/README.md): append-only аудит известных попыток, первая каноническая квитанция delivered/message_id, атомарные слот и SubscriptionChanged/C. Поздний успех принимается после expiry/новой попытки, отмена не возрождается, устаревший отказ не меняет восстановленную работу. Миграция API 011; конкуренция, отмена/перепривязка и rollback/lost commit проверены на disposable PostgreSQL с race detector; volume удалён. Защищённый result RPC готов в SUB-020, runtime отдельно.
 - [SUB-018](backlog/tickets/SUB-018.md). [Защищённый допуск попытки](../internal/api/admissionrpc/README.md): unary gRPC только для notifications, последняя цена через MKT-006, request ID replay без цены и CAS версии привязки с повторным чтением. Permit содержит точную котировку, chat/версию, attempt/fence/deadline; terminal/busy/blocked не требуют цены. Конкуренция, перепривязка, отмена и timeout после commit проверены на disposable PostgreSQL с двумя mTLS-связями и race detector; volume удалён. Фиксация исходов готова в SUB-019, runtime отдельно.
@@ -66,14 +67,14 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [SUB-015](backlog/tickets/SUB-015.md): согласованный снимок из хранилища. Перед началом проверить зависимости и сессионный размер. Публикация delivery_outbox готова в SUB-009; runtime и обязанность notifications сообщать результат остаются отдельными задачами.
+По очереди следующий — [SUB-016](backlog/tickets/SUB-016.md): защищённый интерфейс страниц снимка. Перед началом проверить зависимости и сессионный размер. Storage снимка/pins готов в SUB-015; SQL-replay — SUB-022, cleaner и runtime отдельно.
 
 `python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Идти по этой очереди; разделы каталога и номера ID сами по себе порядок не задают.
 
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show SUB-015` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show SUB-016` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

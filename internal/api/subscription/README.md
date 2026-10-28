@@ -489,3 +489,74 @@ INSERT/журнала/commit откатывают всё; после journal.App
 квитанцию, rollback INSERT/журнала/commit и потерю commit-ответа.
 RPC готов в [SUB-020](../resultrpc/README.md); отправка Telegram, локальная БД
 notifications и runtime остаются отдельно; relay готов в [SUB-009](../deliveryrelay/README.md).
+
+## Материализованный снимок и replay-pin (SUB-015)
+
+`NewSnapshots(*pgxpool.Pool)` использует миграцию `013_subscription_snapshots.sql`.
+`Build(ctx, consumerID, ttl)` возвращает `Snapshot{ID,C,ExpiresAt}` только после
+commit: одна REPEATABLE READ транзакция читает journal.Current и копирует все
+`active/pending_delivery/sending/delivery_blocked` с полным after-image/workflow.
+SQL-копия сохраняет точные numeric и времена, включая ссылки на текущую попытку.
+Сетевой интерфейс использует `Record`; внутренние поля попыток не являются
+полномочием отправки. Terminal-состояния в S не входят, но их изменения после C
+читаются из журнала. Каждый Build создаёт новый ресурс; при неизвестном исходе
+commit ненайденный ресурс истечёт. Идемпотентность сетевого создания — SUB-016.
+
+`Page(ctx, consumerID, snapshotID, afterID, limit)` читает только сохранённые
+строки. Порядок — UUID по возрастанию; `afterID=""` начинает чтение, `Next=""`
+завершает. Непустой cursor должен быть ID строки этого снимка. Лимит 1..1000,
+буфер не больше limit+1; повтор с тем же cursor даёт те же записи. C одинакова
+на всех страницах, replay начинается **строго после C**, не после cursor страницы.
+Снимок/его строки runtime может только INSERT/SELECT, без UPDATE/DELETE.
+
+TTL задаётся явно, от 1 мкс до 24 ч, отсчитывается по часам PostgreSQL с создания
+ресурса; бюджет включает материализацию. Если он истёк до публикации, builder
+откатывается. Это срок ресурса bootstrap, у подписки/workflow TTL нет. После
+истечения страницы отклоняются; хранение истёкших строк само по себе не означает
+действующий ресурс. Удаление ресурсов/журнала — отдельный cleaner, здесь его нет.
+
+Сразу при Build атомарно создаётся durable pin с owner=consumerID,
+progress=issued=C, phase=snapshot и тем же expires_at.
+`Handoff(ctx, consumerID, ID, replayTTL)` атомарно меняет **тот же** pin в replay
+и назначает срок replay; повтор возвращает прежний срок без продления. Перед проверкой срока и продлением handoff берёт тот же shared retention-lock:
+очистка не может признать pin истёкшим между проверкой и продлением. Между
+snapshot и replay pin не удаляется. Ни Kafka publish, ни heartbeat его не снимают.
+`CheckPin` явно проверяет жизнь/владельца ресурса. `RecordIssued` — доверенный
+storage-вызов API для уже выдаваемой целой границы replay, **не ввод consumer**.
+`Acknowledge` принимает только монотонный C от progress до issued и конец целого
+пакета SUB-021; repeat равного progress допустим. Все операции сериализуются по
+строке pin; старое подтверждение не откатывает новое. Начальный C остаётся
+валидным, даже если будущий cleaner уже удалил пакет ровно на этой границе.
+`Abandon` идемпотентно освобождает pin своего владельца, без удаления истории.
+
+Ошибки через errors.Is: `ErrSnapshotLost` — отсутствующий, чужой, истёкший или
+отозванный ресурс; клиент обязан отбросить частичную загрузку и начать snapshot.
+Это никогда не пустой хвост. `ErrInvalidInput` — лимит/cursor/TTL/граница или
+регресс прогресса; контекст сохраняется, SQL-данные не выдаются наружу.
+
+Builder на выделенном соединении берёт session-level shared advisory lock
+`RetentionLock` **до BEGIN REPEATABLE READ** и держит до commit pin. При отмене
+или ошибке lock освобождается; если unlock не подтверждён, соединение изымается
+из pool и закрывается. Будущий cleaner обязан взять session-level exclusive
+lock с тем же ключом **до BEGIN READ COMMITTED**, затем прочитать актуальные
+pins (`phase <> 'abandoned' AND expires_at > clock_timestamp()`). Безопасная
+верхняя граница удаления — не выше минимального progress действующих pins,
+с дополнительным учётом всех обязательных потребителей и relay. Неизвестный
+обязательный consumer не исчезает по отсутствию heartbeat. Нельзя начинать
+REPEATABLE READ до ожидания retention-lock или выводить прогресс из publish.
+Само по себе отсутствие pins ещё не разрешает удаление.
+
+Схема snapshot_rows фиксирует текущие столбцы subscriptions через LIKE; будущая
+миграция canonical-представления должна синхронно обновить snapshot-проекцию и
+INSERT builder. Snapshot не держит долгую SQL-транзакцию между страницами.
+Защищённые страницы — SUB-016; SQL-replay, его H/ответы и authenticated consumer —
+SUB-022. Их адаптеры обязаны взять owner из сервисной идентичности, проверять pin
+перед чтением и перед выдачей ответа (в том числе пустого хвоста), выдавать только
+целые транзакции и подтверждать только durable
+прогресс matcher. Cleaner, matcher-проекция и runtime здесь не реализуются.
+
+Проверки `TestSnapshot*` выполняются командой
+`GOCACHE=/tmp/binance-go-build python3 scripts/check_postgres.py` на disposable
+PostgreSQL с runtime-правами и race detector: стабильные страницы/точные значения,
+поздние commit T1/T2, целые границы, foreign/expired/abandoned pin, handoff,
+обе стороны retention-lock и rollback builder при отмене.

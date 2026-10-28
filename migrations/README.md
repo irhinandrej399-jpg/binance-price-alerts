@@ -28,6 +28,7 @@ python3 scripts/migrate.py --owner notifications
 `api/010_delivery_admission.sql` — неизменяемые ответы команд/разрешения попыток SUB-017 и канонические current_attempt_id/admission_fence; квота не меняется;
 `api/011_delivery_results.sql` — append-only аудит исходов известных попыток SUB-019 и первая canonical-квитанция delivered_attempt_id/message_id; состояние/квота и журнал меняются одной транзакцией;
 `api/012_delivery_relay.sql` — lease/token и отдельные подтверждения публикации delivery_outbox SUB-009 ([контракт](../internal/api/deliveryrelay/README.md));
+`api/013_subscription_snapshots.sql` — неизменяемые страницы S/C, ресурс снимка и durable replay-pins SUB-015 ([контракт](../internal/api/subscription/README.md));
 matcher/notifications пока пусты. Контракт market-data —
 [storage/README](../internal/marketdata/storage/README.md). Контракт хранилища — в [account/README](../internal/api/account/README.md).
 
