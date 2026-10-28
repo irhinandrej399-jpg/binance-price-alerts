@@ -329,7 +329,7 @@ AlertTriggered в `app.delivery_outbox` и полный SubscriptionChanged че
 и event_id, хранит точные wire-байты и разрешает runtime только SELECT/INSERT.
 Ссылка на подписку логическая: удаление canonical-строки не удаляет retained work
 каскадно, как и в журнале; целостность записи обеспечивает общая транзакция.
-Публикация и её cursor/lease — SUB-009; миграция не реализует relay.
+Публикация, отдельные SQL-отметки и lease готовы в [SUB-009](../deliveryrelay/README.md); исходный outbox остаётся неизменяемым.
 
 Повтор возвращает текущий Record с прежним workflow, даже если исходная версия
 уже изменилась. Он не создаёт новое событие и не меняет active/sending/blocked
@@ -350,7 +350,7 @@ commit требует повтора по подписке и восстанов
 
 Защищённый unary-запрос работы доставки и чтение последней цены доступны через
 [deliveryrpc (SUB-014)](../deliveryrpc/README.md). Он вызывает эту атомарную
-операцию; подключение runtime и публикация outbox остаются отдельными задачами.
+операцию; публикация готова в [deliveryrelay (SUB-009)](../deliveryrelay/README.md), runtime подключается отдельно.
 
 
 ## Допуск одной попытки (SUB-017)
@@ -488,4 +488,4 @@ INSERT/журнала/commit откатывают всё; после journal.App
 перепривязку до blocked, восстановление и устаревший отказ, аудит, первую
 квитанцию, rollback INSERT/журнала/commit и потерю commit-ответа.
 RPC готов в [SUB-020](../resultrpc/README.md); отправка Telegram, локальная БД
-notifications, relay и runtime остаются отдельно.
+notifications и runtime остаются отдельно; relay готов в [SUB-009](../deliveryrelay/README.md).
