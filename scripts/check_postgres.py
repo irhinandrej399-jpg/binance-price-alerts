@@ -67,8 +67,13 @@ def main():
             # the fresh outbox before other packages create unpublished work.
             relay = 'github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/relay'
             run(['go', 'test', '-race', '-count=1', '-v', relay])
+            # Storage claims the whole outbox too; Latest fixtures must follow it.
+            storage = 'github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/storage'
+            run(['go', 'test', '-race', '-count=1', '-v', storage])
             packages = run(['go', 'list', './...'], capture_output=True, text=True).stdout.splitlines()
-            run(['go', 'test', '-race', '-count=1', '-v'] + [p for p in packages if p != relay])
+            # Journal tests assert global C; subscription HTTP now writes that journal.
+            # Keep packages sequential on the shared disposable database.
+            run(['go', 'test', '-p=1', '-race', '-count=1', '-v'] + [p for p in packages if p not in (relay, storage)])
         finally:
             # This project is explicitly disposable. Working binance-storage,
             # migration-check and role-check projects are never addressed.

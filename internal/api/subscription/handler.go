@@ -12,6 +12,9 @@ import (
 	"time"
 
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/auth"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/journal"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/event"
+	changed "github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/subscriptionchanged"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/domain/price"
 	domain "github.com/irhinandrej399-jpg/binance-price-alerts/internal/domain/subscription"
 	pb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/marketdata/v1"
@@ -59,7 +62,8 @@ type createResponse struct {
 
 // NewHandler mounts POST /v1/subscriptions. Wrap with auth.New; an absent trusted
 // owner is always rejected. Sources must enforce finite RPC budgets. There is no
-// automatic retry, runtime wiring, workflow, journal or outbox in this adapter.
+// automatic retry, runtime wiring or workflow in this adapter. Creation and its
+// immutable journal/outbox event commit in the same transaction.
 func NewHandler(db Beginner, catalogs CatalogSource, quotes QuoteSource, now func() time.Time) http.Handler {
 	if now == nil {
 		now = time.Now
@@ -156,11 +160,10 @@ func NewHandler(db Beginner, catalogs CatalogSource, quotes QuoteSource, now fun
 			createError(w, 503, "quote_unavailable")
 			return
 		}
-		raw := make([]byte, 16)
-		rand.Read(raw)
-		raw[6] = (raw[6] & 0x0f) | 0x40
-		raw[8] = (raw[8] & 0x3f) | 0x80
-		record.ID = fmt.Sprintf("%x-%x-%x-%x-%x", raw[:4], raw[4:6], raw[6:8], raw[8:10], raw[10:])
+		record.ID = newUUID()
+		// Assigned once per command, before any journal write. Publication must
+		// reuse these persisted metadata; this handler never retries creation.
+		eventID := newUUID()
 		tx, err := db.BeginTx(r.Context(), pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 		if err != nil {
 			createError(w, 500, "internal_error")
@@ -189,6 +192,25 @@ func NewHandler(db Beginner, catalogs CatalogSource, quotes QuoteSource, now fun
 			default:
 				createError(w, 500, "internal_error")
 			}
+			return
+		}
+		// Use the actual persisted after-image, including PostgreSQL timestamp
+		// precision. All business reads/writes finish before the journal lock.
+		record, err = New(tx).ByID(r.Context(), owner, record.ID)
+		if err != nil {
+			createError(w, 500, "internal_error")
+			return
+		}
+		_, err = journal.Append(r.Context(), tx, []journal.Entry{{
+			Metadata: event.Envelope{EventID: eventID, Type: changed.Type, Version: event.Version1,
+				OccurredAt: checked, CorrelationID: eventID, OrderingKey: record.ID},
+			Change: changed.Changed{SchemaVersion: changed.Version1, SubscriptionID: record.ID,
+				SubscriptionVersion: uint64(record.Version), State: record.State, Pair: record.Pair,
+				Threshold: &record.Threshold, Direction: record.Direction, Activation: record.Activation,
+				CreationSnapshot: &changed.Snapshot{Price: &record.CreationPrice, TradeTime: record.CreationTradeTime}},
+		}})
+		if err != nil {
+			createError(w, 500, "internal_error")
 			return
 		}
 		if err = tx.Commit(r.Context()); err != nil {
@@ -233,4 +255,13 @@ func createJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// newUUID creates independent subscription/event identities once per command.
+func newUUID() string {
+	raw := make([]byte, 16)
+	rand.Read(raw)
+	raw[6] = (raw[6] & 0x0f) | 0x40
+	raw[8] = (raw[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", raw[:4], raw[4:6], raw[6:8], raw[8:10], raw[10:])
 }
