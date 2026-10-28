@@ -70,3 +70,7 @@ runtime и отображение доменных ошибок определя
 Фиксация исхода notifications: `api/v1/result.proto`, notifications-only mTLS и
 [клиент/сервер SUB-020](../internal/api/resultrpc/README.md) поверх SUB-019.
 Повторяется исход известного attempt; ошибка RPC не разрешает повтор Telegram.
+
+`api/v1/snapshot.proto` — защищённые unary BuildSnapshot/ReadSnapshotPage:
+[клиент/сервер SUB-016](../internal/api/snapshotrpc/README.md), snapshot-bound
+cursor, неизменные S/C/expires_at и durable повтор создания по SUB-023.

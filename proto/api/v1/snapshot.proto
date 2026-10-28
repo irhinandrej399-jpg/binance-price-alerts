@@ -1,0 +1,54 @@
+syntax = "proto3";
+package api.v1;
+option go_package = "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/api/v1;apiv1";
+
+// Matcher only. Owner is derived from the verified certificate URI, never input.
+service SubscriptionSnapshots {
+  rpc BuildSnapshot(BuildSnapshotRequest) returns (SnapshotPageResponse);
+  rpc ReadSnapshotPage(ReadSnapshotPageRequest) returns (SnapshotPageResponse);
+}
+message BuildSnapshotRequest {
+  string request_id = 1; // Stable across timeout/reconnect; 1..128 ASCII [A-Za-z0-9_.-].
+  int64 ttl_millis = 2; // 1..86400000; repeat with identical TTL, never renews.
+  int32 page_size = 3; // 1..1000; may change on retry (not a resource parameter).
+}
+message ReadSnapshotPageRequest {
+  string snapshot_id = 1;
+  string cursor = 2; // Empty starts from first page. Opaque snapshot cursor, not journal C or price revision.
+  int32 page_size = 3; // 1..1000.
+}
+message SnapshotPageResponse {
+  string snapshot_id = 1;
+  uint64 boundary_c = 2; // Subscription journal transaction boundary; replay strictly after C.
+  string expires_at = 3; // UTC RFC3339Nano, unchanged on replay.
+  repeated SnapshotSubscription subscriptions = 4;
+  string next_cursor = 5; // Empty completes this snapshot; expiry is an RPC error, never an empty page.
+}
+// Complete frozen after-image. Decimal values are exact strings. Creation data
+// is audit data; it never authorizes sending a notification.
+message SnapshotSubscription {
+  string subscription_id = 1;
+  string owner_id = 2;
+  string pair = 3;
+  string threshold = 4;
+  string direction = 5;
+  string creation_price = 6;
+  string creation_trade_time = 7;
+  optional string percent = 8;
+  bool stale = 9;
+  bool stream_unconfirmed = 10;
+  bool gap_detected = 11;
+  string state = 12;
+  int64 version = 13;
+  string activation = 14;
+  SnapshotWorkflow workflow = 15;
+  SnapshotBlocked blocked = 16;
+}
+message SnapshotWorkflow {
+  string trigger_id = 1;
+  int64 version = 2;
+}
+message SnapshotBlocked {
+  string reason = 1;
+  int64 binding_version = 2;
+}

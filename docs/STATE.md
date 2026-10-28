@@ -5,8 +5,9 @@
 ## Активная работа
 
 - Активный продуктовый тикет: нет.
-- Незавершённая реализация: нет. SUB-023 завершён; storage-предпосылка идемпотентного создания для SUB-016 готова. SUB-016 остаётся planned до своей сессионной проверки.
-- Последний завершённый тикет: [SUB-023](backlog/tickets/SUB-023.md). [Идемпотентный BuildRequest](../internal/api/subscription/README.md): owner/request ID, снимок S/C и pin одной транзакцией; повторы восстанавливают прежний ресурс без продления срока. Миграция API 014; постоянный ключ сохраняется после expiry/Abandon/удаления ресурса. Конкуренция двух pools, rollback/lost commit, retention и отмена проверены на disposable PostgreSQL с race detector; volume удалён. Сетевой интерфейс, cleaner и runtime отдельно.
+- Незавершённая реализация: нет. SUB-016 завершён; сетевые страницы снимка готовы для SUB-022 и MAT-007.
+- Последний завершённый тикет: [SUB-016](backlog/tickets/SUB-016.md). [Защищённые страницы снимка](../internal/api/snapshotrpc/README.md): unary BuildSnapshot/ReadSnapshotPage, mTLS только matcher, owner из сертификата, неизменные ID/C/expires_at и cursor одного снимка. Повтор через другой сервер/пул после потери ответа, конкуренция, expiry, права и SQL-отмена проверены с race detector на disposable PostgreSQL; volume удалён. SQL-replay, matcher, cleaner и runtime отдельно.
+- [SUB-023](backlog/tickets/SUB-023.md). [Идемпотентный BuildRequest](../internal/api/subscription/README.md): owner/request ID, снимок S/C и pin одной транзакцией; повторы восстанавливают прежний ресурс без продления срока. Миграция API 014; постоянный ключ сохраняется после expiry/Abandon/удаления ресурса. Конкуренция двух pools, rollback/lost commit, retention и отмена проверены на disposable PostgreSQL с race detector; volume удалён. Сетевой интерфейс, cleaner и runtime отдельно.
 - [SUB-015](backlog/tickets/SUB-015.md). [Материализованный снимок S/C и durable replay-pin](../internal/api/subscription/README.md): неизменяемые страницы всех незавершённых состояний/workflow, owner/expiry, атомарный handoff и монотонный progress по целым выданным транзакциям. Миграция API 013; shared session retention-lock до транзакций Build/Handoff. Поздние commit, cleaner-vs-builder/handoff и rollback/expiry проверены на disposable PostgreSQL с race detector; volume удалён. Сетевые страницы, replay, cleaner и runtime отдельно.
 - [SUB-009](backlog/tickets/SUB-009.md). [Relay delivery_outbox](../internal/api/deliveryrelay/README.md): исходные AlertTriggered в delivery-requests, ключ subscription_id, стабильные event_id/trigger_id и transactional.id/fencing. Миграция API 012 хранит lease/token и отдельные SQL-отметки после Kafka commit; поздний commit с меньшим UUID не пропускается. Отказы брокера, lost EndTxn, сбой SQL-ack и повторы проверены на disposable PostgreSQL/Kafka с race detector; оба volumes удалены. Runtime и consumers отдельно.
 - [SUB-020](backlog/tickets/SUB-020.md). [Защищённая фиксация исхода](../internal/api/resultrpc/README.md): unary gRPC только notifications, проверка идентичностей/исхода и готовая SUB-019; бюджеты 3 с, отмена SQL, текущий canonical ответ при повторе. Timeout после commit требует повторить исход, не Telegram; поздний успех истёкшего permit после отмены аудируется без возрождения. mTLS, конкурентные повторы и PostgreSQL проверены с race detector; disposable volume удалён. Runtime и NTF-014 отдельно.
@@ -68,14 +69,14 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [SUB-016](backlog/tickets/SUB-016.md): защищённый интерфейс страниц снимка. Перед началом повторить сессионную проверку. Storage S/C/pins готов в SUB-015, идемпотентный BuildRequest — в SUB-023; SQL-replay — SUB-022, cleaner и runtime отдельно.
+По очереди следующий — [SUB-022](backlog/tickets/SUB-022.md): защищённый SQL-replay подписок. Перед началом повторить сессионную проверку. Журнал готов в SUB-021, durable pin — SUB-015, сетевые страницы снимка — SUB-016; cleaner и runtime отдельно.
 
 `python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Идти по этой очереди; разделы каталога и номера ID сами по себе порядок не задают.
 
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show SUB-016` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show SUB-022` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.
