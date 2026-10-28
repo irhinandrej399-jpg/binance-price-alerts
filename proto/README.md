@@ -47,7 +47,7 @@ deadline через `context.WithTimeout`; сервер использует п�
 только на loopback в тестах; это не конфигурация runtime.
 
 Прикладная схема `marketdata/v1/latest.proto` и adapter последней котировки
-готовы в [MKT-006](../internal/marketdata/latest/README.md), используя эти генерацию и helper. Сервисные полномочия SET-008 готовы:
+готовы в [MKT-006](../internal/marketdata/latest/README.md), используя эти генерацию и helper. Каталог `marketdata/v1/catalog.proto` и Go-клиент/сервер готовы в [MKT-018](../internal/marketdata/catalogrpc/README.md). Сервисные полномочия SET-008 готовы:
 [mTLS и права unary RPC](../internal/platform/serviceauth/README.md).
 Для защищённых проверок `grpctest.StartWithClientOptions(t, register,
 clientOptions, serverOptions...)` принимает явные клиентские credentials и options

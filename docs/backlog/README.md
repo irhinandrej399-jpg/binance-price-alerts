@@ -96,7 +96,7 @@
 | --- | --- | --- | --- |
 | [SUB-001](tickets/SUB-001.md) | Сохранить подписку с версией состояния | SET-004, DOM-001, DOM-004, DEC-003 | done |
 | [SUB-002](tickets/SUB-002.md) | Обеспечить лимит 15 при конкурентном создании | SUB-001, DEC-004 | done |
-| [SUB-003](tickets/SUB-003.md) | Создать подписку через HTTP | SUB-002, IAM-005, DOM-002, DOM-005, MKT-001, MKT-006, DEC-005, IAM-008 | planned |
+| [SUB-003](tickets/SUB-003.md) | Создать подписку через HTTP | SUB-002, IAM-005, DOM-002, DOM-005, MKT-001, MKT-006, DEC-005, IAM-008, MKT-018 | planned |
 | [SUB-004](tickets/SUB-004.md) | Вернуть активные подписки владельца | SUB-001, IAM-005 | planned |
 | [SUB-005](tickets/SUB-005.md) | Отключить свою активную подписку | SUB-001, IAM-005, DOM-004 | planned |
 | [SUB-007](tickets/SUB-007.md) | Опубликовать subscription outbox | SUB-011, SUB-012, SET-005 | planned |
@@ -118,6 +118,7 @@
 
 | ID | Один результат | Зависимости | Статус |
 | --- | --- | --- | --- |
+| [MKT-018](tickets/MKT-018.md) | Выдать каталог пар через внутренний gRPC | MKT-001, DEC-003, DEC-009, SET-007, SET-008 | done |
 | [MKT-001](tickets/MKT-001.md) | Получить каталог доступных spot-пар USDT | SET-001 | done |
 | [MKT-002](tickets/MKT-002.md) | Декодировать одно событие сделки Binance | CON-003, DOM-001 | done |
 | [MKT-005](tickets/MKT-005.md) | Публиковать только монотонные цены пары | MKT-002, CON-003 | done |

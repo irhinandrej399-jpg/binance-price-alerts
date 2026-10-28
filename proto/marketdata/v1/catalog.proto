@@ -1,0 +1,17 @@
+syntax = "proto3";
+package marketdata.v1;
+option go_package = "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/marketdata/v1;marketdatav1";
+
+service Catalog {
+  rpc Fetch(CatalogRequest) returns (CatalogResponse);
+}
+message CatalogRequest {}
+message CatalogPair {
+  string symbol = 1; // Exact source symbol, including Unicode; never reconstructed.
+  string base_asset = 2;
+  string quote_asset = 3;
+}
+message CatalogResponse {
+  repeated CatalogPair pairs = 1; // Complete successful snapshot, possibly empty.
+  string updated_at = 2; // UTC RFC3339Nano; original catalog completion time.
+}

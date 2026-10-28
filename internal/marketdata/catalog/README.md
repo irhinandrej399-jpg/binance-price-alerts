@@ -32,3 +32,5 @@ HTTP для локальных fixture-серверов, путь/query/credenti
 Fixtures синтетические, содержат только нужные поля и не требуют живого Binance.
 
 Проверка: `GOTOOLCHAIN=local go test -race ./internal/marketdata/catalog`.
+
+Внутренний gRPC поверх Fetch и клиент API готовы в [MKT-018](../catalogrpc/README.md); фильтрация остаётся в этом пакете.
