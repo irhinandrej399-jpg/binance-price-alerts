@@ -65,6 +65,7 @@ func New(db account.DB) *Repository { return &Repository{db: db} }
 // Insert never overwrites an existing identity. The caller supplies a stable
 // UUID and version; retries report ErrExists, not a second subscription. This
 // method alone does not enforce quota, channel policy or command idempotency.
+// User-facing creation must use OwnerQuota.Create, never this primitive directly.
 func (r *Repository) Insert(ctx context.Context, v Record) error {
 	var workflowID, workflowVersion, reason, binding any
 	if v.Workflow != nil {
