@@ -4,9 +4,10 @@
 
 ## Активная работа
 
-- Активный тикет: нет. Следующий по ORDER — MAT-008 после сессионной проверки готовности.
-- Незавершённая реализация: нет. Durable проекция, индекс, подключение цен и загрузка снимка matcher готовы; replay/переключение и runtime-связь выполняются отдельно.
-- Последний завершённый тикет: [MAT-007](backlog/tickets/MAT-007.md). [Загрузчик снимка](../internal/matcher/snapshotload/README.md): полные immutable after-images в отдельном durable поколении, атомарная страница/completion, одна C/expiry и идемпотентный повтор с начала. Страницы, пустой снимок, обрыв, отмена, конкурентность, rollback и реальный RPC-клиент проверены на disposable PostgreSQL с race detector; vet/build прошли, тестовые ресурсы удалены. Live checkpoint не меняется; readiness требует replay и последних цен.
+- Активный тикет: нет. Следующий по ORDER — MAT-015 после сессионной проверки готовности. MAT-008 остаётся planned до MAT-015.
+- Незавершённая реализация: нет. Durable проекция снимка/SQL-replay, индекс, подключение цен и загрузка снимка matcher готовы; Kafka-источник, координатор replay/переключения и runtime-связь выполняются отдельно.
+- Последний завершённый тикет: [MAT-014](backlog/tickets/MAT-014.md). [Storage снимка/SQL-replay](../internal/matcher/projection/README.md): атомарная инициализация complete поколения на исходной C, replay без Kafka offsets и согласованный обход after-images. Миграция matcher 003; полные protobuf поля, uint64, rollback инициализации/replay, повторы через два pool, 1001 строка, изоляция и Kafka-дубли проверены на disposable PostgreSQL с race detector; общий прогон/vet/build прошли, volume удалён. Активация/pin/readiness и runtime отдельно.
+- [MAT-007](backlog/tickets/MAT-007.md). [Загрузчик снимка](../internal/matcher/snapshotload/README.md): полные immutable after-images в отдельном durable поколении, атомарная страница/completion, одна C/expiry и идемпотентный повтор с начала. Страницы, пустой снимок, обрыв, отмена, конкурентность, rollback и реальный RPC-клиент проверены на disposable PostgreSQL с race detector; vet/build прошли, тестовые ресурсы удалены. Live checkpoint не меняется; readiness требует replay и последних цен.
 - [MAT-012](backlog/tickets/MAT-012.md). [Подключение последней цены](../internal/matcher/priceconnection/README.md): Register до Latest, слияние по generation/sequence, Current/Next и отзыв готовности через Done/Err. Snapshot/update/replay, временный true, reconnect, отмена и реальный Latest RPC проверены с race detector; Kafka TryNext и общие vet/build прошли. Durable ack/кандидаты, snapshot/replay проекции, consumer group и runtime отдельно.
 - [MAT-013](backlog/tickets/MAT-013.md). [Источник цен matcher](../internal/matcher/pricefeed/README.md): read_committed назначенных партиций, LSO-барьер регистрации до Latest, исходные идентичность/позиция и bounded очередь. Ошибки контракта/позиции, отзыв и переполнение требуют нового bootstrap. Kafka race-прогон и общие Go-проверки прошли; disposable ресурсы удалены. Latest/слияние ревизий готовы в MAT-012; durable checkpoint, consumer group и runtime отдельно.
 - [MAT-002](backlog/tickets/MAT-002.md). [Индекс порогов](../internal/matcher/thresholdindex/README.md): точные включённые диапазоны по паре/направлению, AVL без полного перебора, замена/удаление ID. Границы, одинаковые пороги, случайный oracle, баланс и конкурентность проверены; benchmark распределённого/горячего набора выполнен. Связь с durable проекцией/последними ценами и runtime отдельно.
@@ -76,14 +77,14 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [MAT-008](backlog/tickets/MAT-008.md): выполнить replay после C снимка и безопасный переход в live. Загрузка снимка MAT-007, SQL-replay SUB-022 и ценовой адаптер MAT-012 готовы. Перед ready проверить интерфейсы staging-поколения, durable проекции и координации replay/цен; Complete не означает действующий pin или readiness.
+По очереди следующий — [MAT-015](backlog/tickets/MAT-015.md): подготовить read_committed Kafka-источник SubscriptionChanged и целых транзакций. Storage-предпосылка [MAT-014](backlog/tickets/MAT-014.md) завершена: Initialize/ApplyReplay/ReadImage/Walk готовы. После MAT-015 — возврат к координатору [MAT-008](backlog/tickets/MAT-008.md). Complete снимка и локальная C не доказывают действующий pin или readiness; handoff/pages/ack, актуальный head, индекс/цены и активация остаются MAT-008.
 
 `python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Идти по этой очереди; разделы каталога и номера ID сами по себе порядок не задают.
 
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show MAT-008` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show MAT-015` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

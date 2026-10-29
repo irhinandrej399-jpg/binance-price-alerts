@@ -46,21 +46,12 @@ func (s *Store) Handle(ctx context.Context, b Batch, ack func(context.Context, i
 	if ack == nil || strings.TrimSpace(s.id) == "" || strings.TrimSpace(b.Topic) == "" || b.Partition < 0 || b.NextOffset <= 0 || len(b.Events) == 0 {
 		return ErrSequence
 	}
-	changes := make([]changed.Changed, len(b.Events))
-	for i, raw := range b.Events {
-		_, c, err := changed.Decode(raw)
-		if err != nil {
-			return err
-		}
-		changes[i] = c
-		if i > 0 && (changes[i-1].Position == ^uint64(0) || c.Position != changes[i-1].Position+1 || c.TransactionEnd != changes[0].TransactionEnd) {
-			return ErrSequence
-		}
+	changes, err := decodeTransaction(b.Events)
+	if err != nil {
+		return err
 	}
 	first, last := changes[0], changes[len(changes)-1]
-	if last.Position != first.TransactionEnd {
-		return ErrSequence
-	}
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -69,8 +60,9 @@ func (s *Store) Handle(ctx context.Context, b Batch, ack func(context.Context, i
 	if _, err = tx.Exec(ctx, `INSERT INTO app.matcher_checkpoints(projection_id,topic,partition) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, s.id, b.Topic, b.Partition); err != nil {
 		return err
 	}
-	var ctext, topic string
-	var partition int32
+	var ctext string
+	var topic *string
+	var partition *int32
 	var next int64
 	err = tx.QueryRow(ctx, `SELECT journal_c::text,next_offset,topic,partition FROM app.matcher_checkpoints WHERE projection_id=$1 FOR UPDATE`, s.id).Scan(&ctext, &next, &topic, &partition)
 	if err != nil {
@@ -80,31 +72,22 @@ func (s *Store) Handle(ctx context.Context, b Batch, ack func(context.Context, i
 	if err != nil {
 		return err
 	}
-	if topic != b.Topic || partition != b.Partition {
+	if topic != nil && (*topic != b.Topic || partition == nil || *partition != b.Partition) {
 		return ErrSequence
 	}
 	if last.Position > c {
 		if c == ^uint64(0) || first.Position != c+1 || b.NextOffset <= next {
 			return ErrSequence
 		}
-		for _, change := range changes {
-			body, err := json.Marshal(change)
-			if err != nil {
-				return err
-			}
-			_, err = tx.Exec(ctx, `INSERT INTO app.matcher_subscriptions(projection_id,subscription_id,version,body) VALUES($1,$2,$3::numeric,$4)
-     ON CONFLICT(projection_id,subscription_id) DO UPDATE SET version=EXCLUDED.version,body=EXCLUDED.body
-     WHERE app.matcher_subscriptions.version < EXCLUDED.version`, s.id, change.SubscriptionID, strconv.FormatUint(change.SubscriptionVersion, 10), body)
-			if err != nil {
-				return err
-			}
+		if err := s.applyChanges(ctx, tx, changes); err != nil {
+			return err
 		}
 		c = last.Position
 	} // An already committed whole transaction is a harmless replay.
 	if b.NextOffset > next {
 		next = b.NextOffset
 	}
-	_, err = tx.Exec(ctx, `UPDATE app.matcher_checkpoints SET journal_c=$2::numeric,next_offset=$3 WHERE projection_id=$1`, s.id, strconv.FormatUint(c, 10), next)
+	_, err = tx.Exec(ctx, `UPDATE app.matcher_checkpoints SET journal_c=$2::numeric,next_offset=$3,topic=$4,partition=$5 WHERE projection_id=$1`, s.id, strconv.FormatUint(c, 10), next, b.Topic, b.Partition)
 	if err != nil {
 		return err
 	}
@@ -141,6 +124,31 @@ func (s *Store) Get(ctx context.Context, id string) (changed.Changed, error) {
 	if err != nil {
 		return c, err
 	}
+	if body == nil {
+		return c, ErrSnapshotImage
+	}
 	err = json.Unmarshal(body, &c)
 	return c, err
+}
+
+func decodeTransaction(events [][]byte) ([]changed.Changed, error) {
+	if len(events) == 0 {
+		return nil, ErrSequence
+	}
+	changes := make([]changed.Changed, len(events))
+	for i, raw := range events {
+		_, c, err := changed.Decode(raw)
+		if err != nil {
+			return nil, err
+		}
+		changes[i] = c
+		if i > 0 && (changes[i-1].Position == ^uint64(0) || c.Position != changes[i-1].Position+1 || c.TransactionEnd != changes[0].TransactionEnd) {
+			return nil, ErrSequence
+		}
+	}
+	first, last := changes[0], changes[len(changes)-1]
+	if last.Position != first.TransactionEnd {
+		return nil, ErrSequence
+	}
+	return changes, nil
 }

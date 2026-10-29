@@ -3,7 +3,7 @@
 `New(pool, projectionID)` использует только собственную БД matcher. Схема —
 `migrations/matcher/001_subscription_projection.sql`, runtime её не создаёт.
 Идентификатор проекции стабилен при рестарте; будущее поколение snapshot может
-использовать отдельный ID. Этот пакет не создаёт snapshot и не переключает поколения.
+использовать отдельный ID. Этот пакет не создаёт snapshot и не переключает активное поколение.
 [MAT-007](../snapshotload/README.md) сохраняет полный снимок в отдельных
 staging-таблицах; загрузка сама по себе не меняет этот рабочий checkpoint.
 
@@ -48,3 +48,57 @@ Kafka polling/сборка batch, bootstrap/replay/live, перестроени�
 `infra/postgres/fixtures/go_matcher/9223372036854775806_projection_failure.sql`
 вызывает ошибку UPDATE checkpoint после записи after-image только для тестовой
 проекции: проверяется rollback обеих частей, без production fault hooks.
+
+## Snapshot и SQL-replay — MAT-014
+
+Миграция `003_snapshot_projection.sql` добавляет origin snapshot и отсутствие
+Kafka identity до первого реального `Handle`. `Initialize(ctx, snapshotID)`
+атомарно копирует **только полное** поколение MAT-007 в отдельный `projectionID`
+и устанавливает исходную C. Клиентская память ограничена страницей 1000 строк;
+вся инициализация остаётся одной SQL-транзакцией. Пустой снимок допустим.
+Повтор с тем же origin ничего не переписывает, в том числе после replay;
+другой origin или существующая Kafka-проекция дают `ErrProjectionExists`.
+Никакой указатель рабочего поколения не переключается. Проверка expiry/pin
+и handoff остаются у MAT-008: complete означает лишь завершённую загрузку.
+
+`ApplyReplay(ctx, events)` принимает одну целую CON-002 транзакцию из SUB-022.
+Декодирование и проверка порядка общие с Kafka-путём. Новая транзакция начинается
+на durable C+1 и заканчивается на transaction_end; пропуск, пересечение C,
+незавершённая транзакция и неверный контракт отклоняются. Целые повторы до C
+безопасны. Версии, tombstones и C обновляются атомарно под блокировкой checkpoint.
+Сохраняется полный after-image источника; меньшая/равная версия его не заменяет.
+SQL-путь требует предварительного Initialize, не создаёт topic/partition и не
+меняет NextOffset. После неоднозначного commit повторить те же events через
+любой pool, прочитать `Checkpoint`, и только потом подтверждать API. Сам пакет
+не вызывает AcknowledgeReplay и не объявляет readiness.
+
+Первый реальный Kafka batch устанавливает topic/partition даже при C-дубле;
+он может продвинуть только свой обработанный NextOffset. Последующий SQL-replay
+сохраняет транспортную позицию. Проверять непрерывность **реального** Kafka
+префикса обязан caller MAT-015/008, как и раньше в MAT-001.
+
+`ReadImage(ctx, subscriptionID)` возвращает `Image` с ровно одним полем:
+`Snapshot` — исходный полный protobuf MAT-007, либо `Change` — последний полный
+CON-002 after-image после более новой версии. У снимка сохраняются owner,
+optional percent, flags, workflow, blocked, исходные decimal-строки и наносекунды.
+Snapshot не получает выдуманных journal positions. При более новой версии
+источником становится CON-002: отсутствующие в нём snapshot audit-поля не
+синтезируются и старый blocked не переносится в новое состояние. Исходный
+immutable снимок остаётся в MAT-007. `Get` сохраняет интерфейс MAT-001 для
+журнальных записей, а для snapshot-представления возвращает `ErrSnapshotImage`.
+
+`Walk(ctx, visit)` обходит все after-images одной проекции, включая tombstones,
+по ID в одном REPEATABLE READ view; возвращает checkpoint того же view. Callback
+получает `Image`, должен учитывать context; ошибка callback прекращает обход.
+Конкурентный replay не смешивает строки/С разных моментов; координация изменений
+после обхода и переключение индекса выполняются MAT-008. Ошибка/отмена обхода
+означает неполный результат: возвращённый checkpoint нельзя использовать для
+активации. Несуществующие строки/generation дают `pgx.ErrNoRows`, неполное
+поколение — `ErrIncomplete`, ошибки последовательности — `ErrSequence`,
+контракт/SQL/context передаются caller. Checkpoint отсутствующей проекции
+остаётся нулевым для совместимости MAT-001; Initialize/Walk проверяют существование.
+
+Проверка тем же `scripts/check_postgres.py`: MAT-007 pages → Initialize →
+SQL-replay → реальный Kafka batch, два pools, конкурентные повторы, uint64 C
+выше int64, полные protobuf/точные цены, rollback после after-image, пустой
+снимок, изоляция проекций и согласованность Walk при конкурентном commit.

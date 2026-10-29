@@ -33,6 +33,7 @@ python3 scripts/migrate.py --owner notifications
 `matcher/001_subscription_projection.sql` — durable проекция и C/NextOffset MAT-001;
 `matcher/002_snapshot_generations.sql` — изолированные поколения снимка MAT-007,
 полные immutable after-images и атомарная отметка завершения загрузки;
+`matcher/003_snapshot_projection.sql` — origin полного снимка, его protobuf after-images и независимый SQL-replay C без Kafka offsets MAT-014;
 notifications пока пуст. Контракт market-data —
 [storage/README](../internal/marketdata/storage/README.md). Контракт хранилища — в [account/README](../internal/api/account/README.md).
 
