@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	changed "github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/subscriptionchanged"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/fencing"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -30,8 +31,9 @@ type Checkpoint struct {
 	NextOffset int64
 }
 type Store struct {
-	pool *pgxpool.Pool
-	id   string
+	pool   *pgxpool.Pool
+	id     string
+	grants []fencing.Grant
 }
 
 // New binds storage to a stable projection identity (a future bootstrap generation).
@@ -51,11 +53,14 @@ func (s *Store) Handle(ctx context.Context, b Batch, ack func(context.Context, i
 	}
 	first, last := changes[0], changes[len(changes)-1]
 
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(context.Background())
+	if err = s.authorize(ctx, tx); err != nil {
+		return err
+	}
 	if _, err = tx.Exec(ctx, `INSERT INTO app.matcher_checkpoints(projection_id,topic,partition) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, s.id, b.Topic, b.Partition); err != nil {
 		return err
 	}
@@ -156,4 +161,15 @@ func decodeTransaction(events [][]byte) ([]changed.Changed, error) {
 		return nil, ErrSequence
 	}
 	return changes, nil
+}
+
+// NewFenced requires the complete assignment set of this replica-local view.
+func NewFenced(pool *pgxpool.Pool, id string, grants []fencing.Grant) *Store {
+	return &Store{pool: pool, id: id, grants: append([]fencing.Grant(nil), grants...)}
+}
+func (s *Store) authorize(ctx context.Context, tx pgx.Tx) error {
+	if err := fencing.Lock(ctx, tx); err != nil {
+		return err
+	}
+	return fencing.Projection(ctx, tx, s.id, s.grants)
 }

@@ -4,7 +4,7 @@
 `004_price_work.sql`. `scope` — стабильная идентичность обработчика/шарда,
 сохраняемая при рестарте и смене поколения проекции. Это пространство ключей,
 а не lease или fencing token. Один владелец сериализует завершение и ack
-ценовой партиции; распределённое владение остаётся MAT-010/011.
+ценовой партиции; защищённый путь SQL готов в MAT-017 (см. ниже), групповое владение — MAT-010/011.
 
 | Операция | Вход и результат |
 | --- | --- |
@@ -88,5 +88,15 @@ owner/subscription/version для восстановления canonical workflo
 Проверки: `python3 scripts/check_postgres.py` — реальный disposable PostgreSQL,
 две pool, race detector, rollback при INSERT/progress/checkpoint и deferred
 commit, 37/100, повторы, superseded, Latest, независимые шкалы и CAS. Без opt-in
-SQL-тесты явно SKIP. Consumer, API orchestration, fencing, runtime, нагрузка,
+SQL-тесты явно SKIP. Consumer, runtime, нагрузка,
 постраничное чтение больших работ и очистка результатов остаются отдельно.
+
+## SQL-полномочия — MAT-017
+
+`NewFenced(pool, fencing.Grant)` защищает постоянный scope назначенной ценовой
+партиции. Accept/Record/Complete проверяют token внутри транзакции, включая
+повторы terminal результата/Prefix; ErrAuthority запрещает ack. Старый New
+не может менять уже защищённые scope или использовать защищённую ProjectionID.
+Pending/Get сохраняются при смене token; исходная ProjectionID принятой работы
+остаётся аудитом. Точный протокол Assign/Current/Revoke, новая view, Latest и
+полномочия полной проекции — [fencing](../fencing/README.md).

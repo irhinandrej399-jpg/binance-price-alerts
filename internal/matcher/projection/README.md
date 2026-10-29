@@ -136,3 +136,13 @@ after-image заменяет snapshot целиком, owner из прежнег�
 Тесты проверяют реальные API journal bytes через SQL ApplyReplay и Kafka Handle,
 повторное открытие pool, snapshot → новая версия → tombstone, legacy отказ без
 продвижения C/offset и bootstrap в отдельное поколение.
+
+## SQL-полномочия — MAT-017
+
+`NewFenced(pool, id, []fencing.Grant)` требует полный набор ценовых назначений
+реплики. Initialize/ApplyReplay/Handle, включая дубли, проверяют все tokens
+в той же транзакции, что after-images/C/checkpoint. Отзыв любой партиции
+останавливает прежний writer полной view; C не шардируется. Старый New не
+обходит уже защищённый ID. Snapshotload сохраняет изолированный immutable
+снимок без ценового offset; защищено его Initialize в изменяемую view.
+Протокол выдачи/отзыва и смены членства — [fencing](../fencing/README.md).

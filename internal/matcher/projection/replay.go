@@ -50,11 +50,14 @@ func (s *Store) Initialize(ctx context.Context, snapshotID string) error {
 	if strings.TrimSpace(s.id) == "" || snapshotID == "" {
 		return ErrSequence
 	}
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(context.Background())
+	if err = s.authorize(ctx, tx); err != nil {
+		return err
+	}
 	var c string
 	var complete bool
 	err = tx.QueryRow(ctx, `SELECT boundary_c::text,complete FROM app.matcher_snapshot_generations WHERE snapshot_id=$1`, snapshotID).Scan(&c, &complete)
@@ -130,11 +133,14 @@ func (s *Store) ApplyReplay(ctx context.Context, events [][]byte) error {
 	if strings.TrimSpace(s.id) == "" {
 		return ErrSequence
 	}
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(context.Background())
+	if err = s.authorize(ctx, tx); err != nil {
+		return err
+	}
 	var ctext string
 	var origin *string
 	if err = tx.QueryRow(ctx, `SELECT journal_c::text,snapshot_id FROM app.matcher_checkpoints WHERE projection_id=$1 FOR UPDATE`, s.id).Scan(&ctext, &origin); err != nil {

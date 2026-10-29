@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	observed "github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/priceobserved"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/fencing"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -63,6 +64,12 @@ type Prefix struct {
 type Store struct {
 	pool  *pgxpool.Pool
 	scope string
+	grant *fencing.Grant
 }
 
-func New(pool *pgxpool.Pool, scope string) *Store { return &Store{pool, scope} }
+func New(pool *pgxpool.Pool, scope string) *Store { return &Store{pool: pool, scope: scope} }
+
+// NewFenced binds the stable pricework scope to one durable SQL assignment.
+func NewFenced(pool *pgxpool.Pool, grant fencing.Grant) *Store {
+	return &Store{pool: pool, scope: grant.Scope, grant: &grant}
+}

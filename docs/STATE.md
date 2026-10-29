@@ -4,9 +4,10 @@
 
 ## Активная работа
 
-- Активный тикет: нет. Следующий по ORDER — MAT-010 после новой сессионной проверки.
-- Незавершённая реализация: нет. Handler и восстановление принятой ценовой работы готовы; владение партициями, fencing и runtime отдельно.
-- Последний завершённый тикет: [MAT-005](backlog/tickets/MAT-005.md). [Recover/Resume](../internal/matcher/pricehandler/README.md) восстанавливают Pending/Get через актуальную view, canonical исходы и terminal повтор ack. 37/100, lost API response, исчезнувшее условие, разные пары/Latest и 100 уникальных workflow через mTLS проверены на disposable PostgreSQL с race detector; vet/build прошли, volume удалён. Префикс доказывает транспортный владелец; runtime отдельно.
+- Активная реализация: нет. MAT-017 завершён; следующий по ORDER — MAT-018. MAT-010 ожидает групповой источник MAT-018; SQL fencing уже готов.
+- Незавершённая реализация: нет. Handler/recovery и SQL fencing готовы; Kafka group и runtime отдельно.
+- Последний завершённый тикет: [MAT-017](backlog/tickets/MAT-017.md). [SQL fencing](../internal/matcher/fencing/README.md): durable CAS/ledger назначения, постоянный pricework scope и полный набор tokens проекции. Accept/Record/Complete/Prefix и Initialize/replay/Handle проверяют полномочия до commit; legacy обход запрещён. PostgreSQL/race, vet/build и проверки бэклога прошли, disposable volume удалён. Kafka-владение подтверждает caller; группа/runtime отдельно.
+- [MAT-005](backlog/tickets/MAT-005.md). [Recover/Resume](../internal/matcher/pricehandler/README.md) восстанавливают Pending/Get через актуальную view, canonical исходы и terminal повтор ack. 37/100, lost API response, исчезнувшее условие, разные пары/Latest и 100 уникальных workflow через mTLS проверены на disposable PostgreSQL с race detector; vet/build прошли, volume удалён. Префикс доказывает транспортный владелец; runtime отдельно.
 - [MAT-004](backlog/tickets/MAT-004.md). [Handler цены](../internal/matcher/pricehandler/README.md) сохраняет набор owner/sub/version до SUB-014, durable исход/superseded и отдельный Prefix до ack; повторы и recovery workflow после закрытия пары безопасны. Полный PostgreSQL/race, mTLS SUB-014, vet/build прошли, disposable volume удалён. Восстановление Pending готово в MAT-005; consumer loop — отдельно.
 - [SUB-025](backlog/tickets/SUB-025.md): owner доступен через ReadImage/Image.OwnerID() из snapshot и Changed v2. Legacy требует нового bootstrap без ack; порядок обновления писателей/relay — [контракт](../internal/contracts/subscriptionchanged/README.md).
 - [MAT-016](backlog/tickets/MAT-016.md). [SQL-хранилище обработки цены](../internal/matcher/pricework/README.md): immutable вход/кандидаты, восстановление через другой pool, атомарный исход/прогресс, явный superseded и отдельный CAS-префикс prices до ack. 37/100, повторы, rollback/deferred commit и независимые шкалы проверены на disposable PostgreSQL с race detector; полный финальный прогон/vet/build прошли, volume удалён. Handler и API-вызовы готовы в MAT-004; restart-оркестрация готова в MAT-005; группы/fencing и runtime отдельно. Нерегулярный отказ snapshot RPC при первом Green записан в SUB-024; на финальном прогоне PASS.
@@ -84,7 +85,7 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [MAT-010](backlog/tickets/MAT-010.md), после новой сессионной проверки: назначение ценовых партиций двум matcher и связь с durable fencing token. В этой сессии он не начинался.
+По очереди следующий — [MAT-018](backlog/tickets/MAT-018.md), после новой сессионной проверки: Kafka group-источник цен с явным назначением/отзывом. Затем MAT-010 интегрирует его с готовым [SQL fencing MAT-017](../internal/matcher/fencing/README.md), handler и recovery. MAT-010 остаётся planned; MAT-018 в этой сессии не начинался.
 
 [MAT-005](../internal/matcher/pricehandler/README.md) предоставляет Recover (Pending/Get → Handle без transport ack) и Resume по сохранённому ключу/паре/Position, включая terminal работу после потери ack. До продолжения caller восстанавливает live-проекцию и актуальную Latest; новая цена supersede-ит старую работу без исторических RPC. Полную текущую view runtime проверяет отдельно новым ключом, в том числе после superseded при новой подходящей цене. Маршрутизация повторной broker-доставки в ключ, доказательство Prefix и runtime ещё не подключены.
 
@@ -97,7 +98,7 @@ Restart проекции готов в MAT-009; продолжение прин�
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show MAT-010` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show MAT-018` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

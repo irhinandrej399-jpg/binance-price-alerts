@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
 
 	observed "github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/priceobserved"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/fencing"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -54,11 +56,34 @@ func (s *Store) Accept(ctx context.Context, in Input) error {
 	if err != nil {
 		return err
 	}
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(context.Background())
+	if err = fencing.Lock(ctx, tx); err != nil {
+		return err
+	}
+	if err = fencing.Price(ctx, tx, s.scope, s.grant); err != nil {
+		return err
+	}
+
+	if err = s.authorizeInput(ctx, tx, in, false); err != nil {
+		// Exact acceptance retry may refer to an older generation, whose identity
+		// remains immutable audit data. Never insert new work from an old view.
+		if s.grant == nil || !errors.Is(err, fencing.ErrAuthority) {
+			return err
+		}
+		var old []byte
+		if e := tx.QueryRow(ctx, `SELECT input FROM app.matcher_price_work WHERE scope=$1 AND work_key=$2`, s.scope, in.Key).Scan(&old); e != nil || !bytes.Equal(old, body) {
+			return err
+		}
+		if err = s.authorizeInput(ctx, tx, in, true); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	}
+
 	tag, err := tx.Exec(ctx, `INSERT INTO app.matcher_price_work(scope,work_key,input,total) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`, s.scope, in.Key, body, len(in.Candidates))
 	if err != nil {
 		return err
@@ -180,15 +205,31 @@ func (s *Store) Record(ctx context.Context, key, subscriptionID string, result R
 	if err != nil {
 		return err
 	}
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(context.Background())
-	var state string
-	if err = tx.QueryRow(ctx, `SELECT state FROM app.matcher_price_work WHERE scope=$1 AND work_key=$2 FOR UPDATE`, s.scope, key).Scan(&state); err != nil {
+	if err = fencing.Lock(ctx, tx); err != nil {
 		return err
 	}
+	if err = fencing.Price(ctx, tx, s.scope, s.grant); err != nil {
+		return err
+	}
+
+	var state string
+	var inputBody []byte
+	if err = tx.QueryRow(ctx, `SELECT state,input FROM app.matcher_price_work WHERE scope=$1 AND work_key=$2 FOR UPDATE`, s.scope, key).Scan(&state, &inputBody); err != nil {
+		return err
+	}
+	var in Input
+	if err = json.Unmarshal(inputBody, &in); err != nil {
+		return err
+	}
+	if err = s.authorizeInput(ctx, tx, in, true); err != nil {
+		return err
+	}
+
 	var old []byte
 	if err = tx.QueryRow(ctx, `SELECT result FROM app.matcher_price_candidates WHERE scope=$1 AND work_key=$2 AND subscription_id=$3`, s.scope, key, subscriptionID).Scan(&old); err != nil {
 		return err
@@ -218,11 +259,18 @@ func (s *Store) Complete(ctx context.Context, key string, replacement *observed.
 	if !s.valid(key) {
 		return ErrInvalid
 	}
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(context.Background())
+	if err = fencing.Lock(ctx, tx); err != nil {
+		return err
+	}
+	if err = fencing.Price(ctx, tx, s.scope, s.grant); err != nil {
+		return err
+	}
+
 	var body, oldReplacement []byte
 	var state string
 	var total, completed int
@@ -234,6 +282,10 @@ func (s *Store) Complete(ctx context.Context, key string, replacement *observed.
 	if err = json.Unmarshal(body, &in); err != nil {
 		return err
 	}
+	if err = s.authorizeInput(ctx, tx, in, true); err != nil {
+		return err
+	}
+
 	target := "completed"
 	var nextReplacement []byte
 	if replacement != nil {
@@ -300,4 +352,19 @@ func (s *Store) Checkpoint(ctx context.Context, topic string, partition int32) (
 	var next int64
 	err := s.pool.QueryRow(ctx, `SELECT next_offset FROM app.matcher_price_checkpoints WHERE scope=$1 AND topic=$2 AND partition=$3`, s.scope, topic, partition).Scan(&next)
 	return next, err
+}
+
+// Resuming existing work keeps its original projection as audit. Only new work
+// must use the assignment's current generation; transport identity stays fixed.
+func (s *Store) authorizeInput(ctx context.Context, tx pgx.Tx, in Input, resume bool) error {
+	if s.grant == nil {
+		return fencing.Projection(ctx, tx, in.ProjectionID, nil)
+	}
+	if !resume && in.ProjectionID != s.grant.ProjectionID {
+		return fencing.ErrAuthority
+	}
+	if p := in.Position; p != nil && (p.Topic != s.grant.Identity.Topic || p.Partition != s.grant.Identity.Partition) {
+		return fencing.ErrAuthority
+	}
+	return nil
 }
