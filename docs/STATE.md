@@ -4,9 +4,10 @@
 
 ## Активная работа
 
-- Активный тикет: нет. MAT-001 завершён; следующий по ORDER — MAT-002 после сессионной проверки.
-- Незавершённая реализация: нет. Durable проекция matcher готова; snapshot/replay bootstrap, индекс и подключение цен выполняются отдельно.
-- Последний завершённый тикет: [MAT-001](backlog/tickets/MAT-001.md). [Durable проекция matcher](../internal/matcher/projection/README.md): версионированный after-image/workflow и terminal tombstone, C/NextOffset одной транзакцией до ack. Миграция matcher 001; rollback, потеря ack/restart, конкурентные дубли и uint64 проверены на disposable PostgreSQL с race detector; volume удалён. Kafka polling, bootstrap, индекс, цены и runtime отдельно.
+- Активный тикет: нет. MAT-002 завершён; следующий по ORDER — MAT-012 после сессионной проверки.
+- Незавершённая реализация: нет. Durable проекция и индекс matcher готовы; их runtime-связь, snapshot/replay bootstrap и подключение цен выполняются отдельно.
+- Последний завершённый тикет: [MAT-002](backlog/tickets/MAT-002.md). [Индекс порогов](../internal/matcher/thresholdindex/README.md): точные включённые диапазоны по паре/направлению, AVL без полного перебора, замена/удаление ID. Границы, одинаковые пороги, случайный oracle, баланс и конкурентность проверены; benchmark распределённого/горячего набора выполнен. Связь с durable проекцией/последними ценами и runtime отдельно.
+- [MAT-001](backlog/tickets/MAT-001.md). [Durable проекция matcher](../internal/matcher/projection/README.md): версионированный after-image/workflow и terminal tombstone, C/NextOffset одной транзакцией до ack. Миграция matcher 001; rollback, потеря ack/restart, конкурентные дубли и uint64 проверены на disposable PostgreSQL с race detector; volume удалён. Kafka polling, bootstrap, индекс, цены и runtime отдельно.
 - [SET-010](backlog/tickets/SET-010.md): PostgreSQL harness matcher, отдельные миграции/fixture, runtime DSN и изоляция прав готовы.
 - [SUB-022](backlog/tickets/SUB-022.md). [Защищённый SQL-replay](../internal/api/replayrpc/README.md): unary handoff/pages/ack/abandon, mTLS matcher, прежний durable pin без окна, целые транзакции C/H, монотонный SQL-progress. Потеря ответов, конкурентные commit/ack, размер, expiry, права и SQL-отмена проверены на disposable PostgreSQL с race detector; volume удалён. Runtime, проекция matcher, cleaner и нагрузка отдельно.
 - [SUB-016](backlog/tickets/SUB-016.md). [Защищённые страницы снимка](../internal/api/snapshotrpc/README.md): unary BuildSnapshot/ReadSnapshotPage, mTLS только matcher, owner из сертификата, неизменные ID/C/expires_at и cursor одного снимка. Повтор через другой сервер/пул после потери ответа, конкуренция, expiry, права и SQL-отмена проверены с race detector на disposable PostgreSQL; volume удалён. SQL-replay, matcher, cleaner и runtime отдельно.
@@ -72,14 +73,14 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [MAT-002](backlog/tickets/MAT-002.md): находить кандидатов в индексе порогов. MAT-001 завершён, durable проекция и checkpoint готовы; перед началом выполнить сессионную проверку. Подключение цен, snapshot/replay bootstrap и runtime выполняются отдельно.
+По очереди следующий — [MAT-012](backlog/tickets/MAT-012.md): подключить подписку к последней цене. MAT-001/002 завершены, durable проекция/checkpoint и индекс готовы; перед началом проверить все зависимости и сессионный размер. Snapshot/replay bootstrap и runtime выполняются отдельно.
 
 `python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Идти по этой очереди; разделы каталога и номера ID сами по себе порядок не задают.
 
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show MAT-002` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show MAT-012` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.
