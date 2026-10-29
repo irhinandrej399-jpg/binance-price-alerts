@@ -4,9 +4,10 @@
 
 ## Активная работа
 
-- Активный тикет: нет. Следующий по ORDER — MAT-007 после сессионной проверки готовности.
-- Незавершённая реализация: нет. Durable проекция, индекс и подключение цен matcher готовы; их runtime-связь и snapshot/replay bootstrap выполняются отдельно.
-- Последний завершённый тикет: [MAT-012](backlog/tickets/MAT-012.md). [Подключение последней цены](../internal/matcher/priceconnection/README.md): Register до Latest, слияние по generation/sequence, Current/Next и отзыв готовности через Done/Err. Snapshot/update/replay, временный true, reconnect, отмена и реальный Latest RPC проверены с race detector; Kafka TryNext и общие vet/build прошли. Durable ack/кандидаты, snapshot/replay проекции, consumer group и runtime отдельно.
+- Активный тикет: нет. Следующий по ORDER — MAT-008 после сессионной проверки готовности.
+- Незавершённая реализация: нет. Durable проекция, индекс, подключение цен и загрузка снимка matcher готовы; replay/переключение и runtime-связь выполняются отдельно.
+- Последний завершённый тикет: [MAT-007](backlog/tickets/MAT-007.md). [Загрузчик снимка](../internal/matcher/snapshotload/README.md): полные immutable after-images в отдельном durable поколении, атомарная страница/completion, одна C/expiry и идемпотентный повтор с начала. Страницы, пустой снимок, обрыв, отмена, конкурентность, rollback и реальный RPC-клиент проверены на disposable PostgreSQL с race detector; vet/build прошли, тестовые ресурсы удалены. Live checkpoint не меняется; readiness требует replay и последних цен.
+- [MAT-012](backlog/tickets/MAT-012.md). [Подключение последней цены](../internal/matcher/priceconnection/README.md): Register до Latest, слияние по generation/sequence, Current/Next и отзыв готовности через Done/Err. Snapshot/update/replay, временный true, reconnect, отмена и реальный Latest RPC проверены с race detector; Kafka TryNext и общие vet/build прошли. Durable ack/кандидаты, snapshot/replay проекции, consumer group и runtime отдельно.
 - [MAT-013](backlog/tickets/MAT-013.md). [Источник цен matcher](../internal/matcher/pricefeed/README.md): read_committed назначенных партиций, LSO-барьер регистрации до Latest, исходные идентичность/позиция и bounded очередь. Ошибки контракта/позиции, отзыв и переполнение требуют нового bootstrap. Kafka race-прогон и общие Go-проверки прошли; disposable ресурсы удалены. Latest/слияние ревизий готовы в MAT-012; durable checkpoint, consumer group и runtime отдельно.
 - [MAT-002](backlog/tickets/MAT-002.md). [Индекс порогов](../internal/matcher/thresholdindex/README.md): точные включённые диапазоны по паре/направлению, AVL без полного перебора, замена/удаление ID. Границы, одинаковые пороги, случайный oracle, баланс и конкурентность проверены; benchmark распределённого/горячего набора выполнен. Связь с durable проекцией/последними ценами и runtime отдельно.
 - [MAT-001](backlog/tickets/MAT-001.md). [Durable проекция matcher](../internal/matcher/projection/README.md): версионированный after-image/workflow и terminal tombstone, C/NextOffset одной транзакцией до ack. Миграция matcher 001; rollback, потеря ack/restart, конкурентные дубли и uint64 проверены на disposable PostgreSQL с race detector; volume удалён. Kafka polling, bootstrap, индекс, цены и runtime отдельно.
@@ -75,14 +76,14 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [MAT-007](backlog/tickets/MAT-007.md): загрузить исходный снимок в отдельное durable поколение проекции matcher. Проверить готовность схемы/интерфейсов; частичный снимок не должен заменять рабочее поколение. Ценовой адаптер MAT-012 готов, подключение всей проекции и runtime остаются отдельными задачами.
+По очереди следующий — [MAT-008](backlog/tickets/MAT-008.md): выполнить replay после C снимка и безопасный переход в live. Загрузка снимка MAT-007, SQL-replay SUB-022 и ценовой адаптер MAT-012 готовы. Перед ready проверить интерфейсы staging-поколения, durable проекции и координации replay/цен; Complete не означает действующий pin или readiness.
 
 `python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Идти по этой очереди; разделы каталога и номера ID сами по себе порядок не задают.
 
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show MAT-007` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show MAT-008` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

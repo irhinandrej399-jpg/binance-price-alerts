@@ -4,6 +4,8 @@
 `migrations/matcher/001_subscription_projection.sql`, runtime её не создаёт.
 Идентификатор проекции стабилен при рестарте; будущее поколение snapshot может
 использовать отдельный ID. Этот пакет не создаёт snapshot и не переключает поколения.
+[MAT-007](../snapshotload/README.md) сохраняет полный снимок в отдельных
+staging-таблицах; загрузка сама по себе не меняет этот рабочий checkpoint.
 
 `Handle(ctx, Batch, ack)` принимает **одну целую транзакцию** API-журнала:
 исходные JSON-конверты SubscriptionChanged в порядке position, с общим

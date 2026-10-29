@@ -143,7 +143,7 @@
 | [MAT-002](tickets/MAT-002.md) | Находить кандидатов в индексе порогов | MAT-001, DOM-003 | done |
 | [MAT-004](tickets/MAT-004.md) | Обработать цену и запросить фиксацию кандидатов | MAT-002, MAT-007, MAT-008, MAT-009, MKT-013, MKT-014, SUB-013, SUB-014, MAT-012 | planned |
 | [MAT-005](tickets/MAT-005.md) | Восстановить обработку цены после частичного сбоя | MAT-004 | planned |
-| [MAT-007](tickets/MAT-007.md) | Загрузить исходный снимок в проекцию matcher | MAT-001, SUB-016, DEC-004 | planned |
+| [MAT-007](tickets/MAT-007.md) | Загрузить исходный снимок в проекцию matcher | MAT-001, SUB-016, DEC-004 | done |
 | [MAT-008](tickets/MAT-008.md) | Догнать изменения и переключить matcher в live | MAT-007, DEC-004, DEC-007, MAT-012, SUB-022 | planned |
 | [MAT-009](tickets/MAT-009.md) | Возобновить проекцию с сохранённого cursor | MAT-008 | planned |
 | [MAT-013](tickets/MAT-013.md) | Подготовить источник ценовых обновлений matcher | SET-009, CON-003, MKT-014, DEC-007 | done |
