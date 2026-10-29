@@ -1,8 +1,10 @@
-# Источник цен matcher (MAT-013)
+# Источник цен matcher (MAT-013 / MAT-018)
 
 `pricefeed` — ephemeral вход Kafka для [MAT-012](../priceconnection/README.md). Использует закреплённый
-franz-go v1.22.2 и `priceobserved.Decode`. Durable обработка/offset commit,
-арбитраж ревизий, Latest, consumer group и runtime выполняются отдельно.
+franz-go v1.22.2 и `priceobserved.Decode`. Ниже описан direct API MAT-013.
+[Group API MAT-018](group.md) использует реальный Kafka group protocol,
+тот же диспетчер регистраций и явный broker commit после сигнала caller.
+Durable обработка, SQL fencing, арбитраж ревизий, Latest и runtime выполняются отдельно.
 
 ```go
 feed, err := pricefeed.New(ownerCtx, pricefeed.Config{

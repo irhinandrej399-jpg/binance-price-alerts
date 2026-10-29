@@ -1,5 +1,6 @@
-// Package pricefeed provides a bounded, ephemeral read_committed subscription.
-// It never commits offsets or decides whether a quote is current.
+// Package pricefeed provides bounded read_committed price streams. Direct
+// sources never commit offsets; group assignments require explicit durable
+// confirmation. Neither adapter decides whether a quote is current.
 package pricefeed
 
 import (
@@ -68,6 +69,7 @@ type Source struct {
 	cancel          context.CancelFunc
 	done            chan struct{}
 	closeOnce       sync.Once
+	groupAssignment *Assignment // non-nil only for the single group reader
 }
 
 type Registration struct {
@@ -188,6 +190,9 @@ func (s *Source) Register(ctx context.Context, pair string, partition int32) (*R
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.groupAssignment != nil && s.ctx.Err() != nil && s.err == nil {
+		s.failLocked(s.ctx.Err())
+	}
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -245,6 +250,9 @@ func (r *Registration) Next(ctx context.Context) (Update, error) {
 	s := r.source
 	for {
 		s.mu.Lock()
+		if s.groupAssignment != nil && s.ctx.Err() != nil && s.err == nil {
+			s.failLocked(s.ctx.Err())
+		}
 		if r.err != nil {
 			err := r.err
 			s.mu.Unlock()
@@ -275,6 +283,9 @@ func (r *Registration) TryNext() (Update, bool, error) {
 	s := r.source
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.groupAssignment != nil && s.ctx.Err() != nil && s.err == nil {
+		s.failLocked(s.ctx.Err())
+	}
 	if r.err != nil {
 		return Update{}, false, r.err
 	}
@@ -289,7 +300,11 @@ func (r *Registration) popLocked() (Update, error) {
 	q := r.queue[0]
 	r.queue[0] = queued{}
 	r.queue = r.queue[1:]
-	r.source.buffered--
+	if a := r.source.groupAssignment; a != nil && r == a.all {
+		a.delivered[q.position.Partition] = append(a.delivered[q.position.Partition], q.position)
+	} else {
+		r.source.buffered--
+	}
 	meta, quote, err := priceobserved.Decode(q.payload)
 	if err != nil {
 		return Update{}, ErrContract
@@ -313,6 +328,9 @@ func (s *Source) failLocked(err error) {
 	}
 	s.regs = make(map[string]*Registration)
 	s.buffered = 0
+	if s.groupAssignment != nil {
+		s.groupAssignment.delivered = nil
+	}
 	s.cancel()
 }
 func (s *Source) fail(err error) { s.mu.Lock(); defer s.mu.Unlock(); s.failLocked(err) }
@@ -361,6 +379,9 @@ func (s *Source) read() {
 func (s *Source) dispatch(r *kgo.Record) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.groupAssignment != nil && s.ctx.Err() != nil && s.err == nil {
+		s.failLocked(s.ctx.Err())
+	}
 	if s.err != nil {
 		return false
 	}
@@ -376,6 +397,19 @@ func (s *Source) dispatch(r *kgo.Record) bool {
 	if err != nil || string(r.Key) != quote.Pair {
 		s.failLocked(ErrContract)
 		return false
+	}
+	if a := s.groupAssignment; a != nil {
+		if PairPartition(quote.Pair) != r.Partition {
+			s.failLocked(ErrContract)
+			return false
+		}
+		if s.buffered >= s.limit {
+			s.failLocked(ErrOverflow)
+			return false
+		}
+		a.all.queue = append(a.all.queue, queued{Position{r.Topic, r.Partition, r.Offset}, string(r.Key), append([]byte(nil), r.Value...)})
+		s.buffered++
+		a.all.wake()
 	}
 	reg := s.regs[quote.Pair]
 	if reg == nil {
