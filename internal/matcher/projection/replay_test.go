@@ -136,7 +136,7 @@ func TestSnapshotReplayAndKafkaIndependence(t *testing.T) {
 		t.Fatal(err)
 	}
 	im, err = reader.ReadImage(ctx, replaySub)
-	if err != nil || im.Snapshot != nil || im.Change.State != "cancelled" || im.Change.SubscriptionVersion != 9 {
+	if err != nil || im.Snapshot != nil || im.Change.State != "cancelled" || im.Change.SubscriptionVersion != 9 || im.Change.OwnerID != replaySnapshot {
 		t.Fatal(im, err)
 	}
 	cp, err = reader.Checkpoint(ctx)
@@ -176,13 +176,18 @@ func TestSnapshotReplayAndKafkaIndependence(t *testing.T) {
 		t.Fatal(cp, err)
 	}
 	im, err = s.ReadImage(ctx, replaySub)
-	if err != nil || im.Change.State != "cancelled" {
+	if err != nil || im.Change.State != "cancelled" || im.Change.OwnerID != replaySnapshot {
 		t.Fatal(im, err)
 	}
 	// A new subscription after C is included, and newer workflow state survives.
 	create := []byte(strings.ReplaceAll(string(replayWire(highC+6, highC+6, 1, "sending")), replaySub, "00000000-0000-4000-8000-000000000005"))
 	if err := s.ApplyReplay(ctx, [][]byte{create}); err != nil {
 		t.Fatal(err)
+	}
+	fresh := projection.New(postgrestest.OpenWithDSN(t, "MATCHER_DATABASE_URL"), t.Name())
+	im, err = fresh.ReadImage(ctx, "00000000-0000-4000-8000-000000000005")
+	if err != nil || im.Change == nil || im.Change.OwnerID != replaySnapshot {
+		t.Fatal(im, err)
 	}
 	count = 0
 	cp, err = s.Walk(ctx, func(im projection.Image) error { count++; return nil })
@@ -332,6 +337,55 @@ func TestInitializeRollback(t *testing.T) {
 		t.Fatal(n, err)
 	}
 	if _, err := s.ReadImage(ctx, replaySub); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatal(err)
+	}
+}
+
+func TestLegacyDurableStateAndFreshBootstrap(t *testing.T) {
+	pool := postgrestest.OpenWithDSN(t, "MATCHER_DATABASE_URL")
+	ctx := context.Background()
+	s := projection.New(pool, t.Name())
+	first := wire(1, 1, 1, "active")
+	if err := s.Handle(ctx, projection.Batch{Topic: "changes", NextOffset: 1, Events: [][]byte{first}}, func(context.Context, int64) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	legacy := []byte(strings.Replace(string(wire(2, 2, 2, "cancelled")), `"schema_version":2,"owner_id":"`+replaySnapshot+`"`, `"schema_version":1`, 1))
+	if err := s.Handle(ctx, projection.Batch{Topic: "changes", NextOffset: 2, Events: [][]byte{legacy}}, func(context.Context, int64) error { t.Fatal("legacy ack"); return nil }); !errors.Is(err, projection.ErrOwnerMissing) {
+		t.Fatal(err)
+	}
+	cp, err := s.Checkpoint(ctx)
+	if err != nil || cp.C != 1 || cp.NextOffset != 1 {
+		t.Fatal(cp, err)
+	}
+	// Model bytes already stored by the previous release, without rewriting API history.
+	if _, err := pool.Exec(ctx, `UPDATE app.matcher_subscriptions SET body=convert_to((jsonb_set(convert_from(body,'UTF8')::jsonb,'{schema_version}','1'::jsonb) - 'owner_id')::text,'UTF8') WHERE projection_id=$1`, t.Name()); err != nil {
+		t.Fatal(err)
+	}
+
+	reader := projection.New(postgrestest.OpenWithDSN(t, "MATCHER_DATABASE_URL"), t.Name())
+	if _, err := reader.ReadImage(ctx, "sub"); !errors.Is(err, projection.ErrOwnerMissing) {
+		t.Fatal(err)
+	}
+	if _, err := reader.Get(ctx, "sub"); !errors.Is(err, projection.ErrOwnerMissing) {
+		t.Fatal(err)
+	}
+	if _, err := reader.Walk(ctx, func(projection.Image) error { t.Fatal("legacy visited"); return nil }); !errors.Is(err, projection.ErrOwnerMissing) {
+		t.Fatal(err)
+	}
+	id := "b0250000-0000-4000-8000-000000000001"
+	loadGeneration(t, pool, id, 2, snapshotRow(1, "active"))
+	fresh := projection.New(pool, t.Name()+"-new")
+	if err := fresh.Initialize(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	im, err := fresh.ReadImage(ctx, replaySub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if owner, err := im.OwnerID(); err != nil || owner != replaySnapshot {
+		t.Fatal(owner, err)
+	}
+	if err := fresh.ApplyReplay(ctx, [][]byte{replayWire(3, 3, 8, "cancelled")}); err != nil {
 		t.Fatal(err)
 	}
 }

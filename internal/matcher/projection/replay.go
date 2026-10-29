@@ -14,6 +14,7 @@ import (
 )
 
 var (
+	ErrOwnerMissing     = errors.New("projection owner unavailable; new snapshot bootstrap required")
 	ErrIncomplete       = errors.New("snapshot is incomplete")
 	ErrProjectionExists = errors.New("projection already has another origin")
 	ErrSnapshotImage    = errors.New("use ReadImage for snapshot after-image")
@@ -25,6 +26,21 @@ var (
 type Image struct {
 	Snapshot *pb.SnapshotSubscription
 	Change   *changed.Changed
+}
+
+// OwnerID returns the canonical subscription owner from either durable form.
+// Missing legacy ownership requires a new snapshot, never a guessed identity.
+func (im Image) OwnerID() (string, error) {
+	var owner string
+	if im.Snapshot != nil && im.Change == nil {
+		owner = im.Snapshot.OwnerId
+	} else if im.Change != nil && im.Snapshot == nil && im.Change.SchemaVersion == changed.Version2 {
+		owner = im.Change.OwnerID
+	}
+	if strings.TrimSpace(owner) == "" {
+		return "", ErrOwnerMissing
+	}
+	return owner, nil
 }
 
 // Initialize binds this isolated projection to a complete immutable generation.
@@ -166,11 +182,27 @@ func decodeImage(body, snapshot []byte) (Image, error) {
 	if snapshot != nil {
 		r := new(pb.SnapshotSubscription)
 		err := proto.Unmarshal(snapshot, r)
-		return Image{Snapshot: r}, err
+		if err != nil {
+			return Image{}, err
+		}
+		im := Image{Snapshot: r}
+		_, err = im.OwnerID()
+		if err != nil {
+			return Image{}, err
+		}
+		return im, nil
 	}
 	var c changed.Changed
 	err := json.Unmarshal(body, &c)
-	return Image{Change: &c}, err
+	if err != nil {
+		return Image{}, err
+	}
+	im := Image{Change: &c}
+	_, err = im.OwnerID()
+	if err != nil {
+		return Image{}, err
+	}
+	return im, nil
 }
 func (s *Store) ReadImage(ctx context.Context, id string) (Image, error) {
 	var body, snapshot []byte

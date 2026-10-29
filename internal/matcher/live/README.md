@@ -148,3 +148,9 @@ MAT-007/008. Координатор не создаёт снимок скрыт�
 и после SQL-replay commit через второй pool, отзыв pin, новые цены после restart.
 Storage дополнительно проверяет rollback checkpoint после записи after-image,
 полные workflow, uint64 C и отказ cursor ниже границы origin.
+
+SUB-025: entry проверяет owner обеих форм durable Image до включения в live view.
+Legacy без owner отзывает готовность; NewResume сопоставляет ErrOwnerMissing с
+ErrBootstrap. MAT-004 читает owner через `projection.Image.OwnerID()` после
+ReadImage; идентичность владельца не берётся из индексного Entry либо pin.
+Политика v1 и порядок нового bootstrap — в [контракте](../../contracts/subscriptionchanged/README.md#владелец-и-совместимость--sub-025).

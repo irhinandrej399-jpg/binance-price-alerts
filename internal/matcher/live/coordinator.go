@@ -420,6 +420,9 @@ func transactions(events [][]byte, after, next uint64) ([][][]byte, error) {
 	return batches, nil
 }
 func entry(im projection.Image) (thresholdindex.Entry, bool, error) {
+	if _, err := im.OwnerID(); err != nil {
+		return thresholdindex.Entry{}, false, err
+	}
 	var e thresholdindex.Entry
 	var state string
 	if im.Snapshot != nil && im.Change == nil {

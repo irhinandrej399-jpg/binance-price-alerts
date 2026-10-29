@@ -3,7 +3,6 @@ package projection
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -127,8 +126,11 @@ func (s *Store) Get(ctx context.Context, id string) (changed.Changed, error) {
 	if body == nil {
 		return c, ErrSnapshotImage
 	}
-	err = json.Unmarshal(body, &c)
-	return c, err
+	im, err := decodeImage(body, nil)
+	if err != nil {
+		return c, err
+	}
+	return *im.Change, nil
 }
 
 func decodeTransaction(events [][]byte) ([]changed.Changed, error) {
@@ -139,6 +141,9 @@ func decodeTransaction(events [][]byte) ([]changed.Changed, error) {
 	for i, raw := range events {
 		_, c, err := changed.Decode(raw)
 		if err != nil {
+			return nil, err
+		}
+		if _, err := (Image{Change: &c}).OwnerID(); err != nil {
 			return nil, err
 		}
 		changes[i] = c

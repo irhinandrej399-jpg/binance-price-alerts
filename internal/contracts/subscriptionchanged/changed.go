@@ -17,6 +17,7 @@ import (
 const (
 	Type        = "subscription.changed"
 	Version1    = 1
+	Version2    = 2
 	LatestPrice = "latest_price"
 )
 
@@ -46,6 +47,7 @@ type Changed struct {
 	SchemaVersion       int                `json:"schema_version"`
 	Position            uint64             `json:"position"`
 	TransactionEnd      uint64             `json:"transaction_end"`
+	OwnerID             string             `json:"owner_id,omitempty"`
 	SubscriptionID      string             `json:"subscription_id"`
 	SubscriptionVersion uint64             `json:"subscription_version"`
 	State               subscription.State `json:"state"`
@@ -58,10 +60,13 @@ type Changed struct {
 }
 
 func (c Changed) Validate() error {
-	if c.SchemaVersion != Version1 {
+	if c.SchemaVersion != Version1 && c.SchemaVersion != Version2 {
 		return fmt.Errorf("%w: %d", ErrUnsupportedVersion, c.SchemaVersion)
 	}
 	invalid := func(field string) error { return fmt.Errorf("%w: %s", ErrInvalidChange, field) }
+	if c.SchemaVersion == Version2 && strings.TrimSpace(c.OwnerID) == "" {
+		return invalid("owner_id")
+	}
 	if c.Position == 0 || c.TransactionEnd < c.Position {
 		return invalid("journal position/transaction_end")
 	}

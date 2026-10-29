@@ -204,7 +204,7 @@ func NewHandler(db Beginner, catalogs CatalogSource, quotes QuoteSource, now fun
 		_, err = journal.Append(r.Context(), tx, []journal.Entry{{
 			Metadata: event.Envelope{EventID: eventID, Type: changed.Type, Version: event.Version1,
 				OccurredAt: checked, CorrelationID: eventID, OrderingKey: record.ID},
-			Change: changed.Changed{SchemaVersion: changed.Version1, SubscriptionID: record.ID,
+			Change: changed.Changed{SchemaVersion: changed.Version2, OwnerID: record.OwnerID, SubscriptionID: record.ID,
 				SubscriptionVersion: uint64(record.Version), State: record.State, Pair: record.Pair,
 				Threshold: &record.Threshold, Direction: record.Direction, Activation: record.Activation,
 				CreationSnapshot: &changed.Snapshot{Price: &record.CreationPrice, TradeTime: record.CreationTradeTime}},

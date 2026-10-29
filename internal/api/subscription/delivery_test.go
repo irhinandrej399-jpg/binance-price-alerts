@@ -88,7 +88,7 @@ func TestDeliveryConcurrent(t *testing.T) {
 		t.Fatal(entries, err)
 	}
 	c := entries[0].Change
-	if c.State != first.State || c.SubscriptionVersion != 2 || c.Workflow.TriggerID != first.Workflow.TriggerID || c.Workflow.Version != 1 || c.Position != before+1 || c.TransactionEnd != before+1 || c.Threshold.String() != v.Threshold.String() || c.CreationSnapshot.Price.String() != v.CreationPrice.String() || !c.CreationSnapshot.TradeTime.Equal(v.CreationTradeTime) {
+	if c.SchemaVersion != 2 || c.OwnerID != v.OwnerID || c.State != first.State || c.SubscriptionVersion != 2 || c.Workflow.TriggerID != first.Workflow.TriggerID || c.Workflow.Version != 1 || c.Position != before+1 || c.TransactionEnd != before+1 || c.Threshold.String() != v.Threshold.String() || c.CreationSnapshot.Price.String() != v.CreationPrice.String() || !c.CreationSnapshot.TradeTime.Equal(v.CreationTradeTime) {
 		t.Fatal(c)
 	}
 	var body, again []byte

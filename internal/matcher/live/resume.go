@@ -59,7 +59,7 @@ func NewResume(store ResumeStore, replay Replay, register func(context.Context, 
 }
 
 func bootstrapError(err error) error {
-	if errors.Is(err, projection.ErrRecovery) || errors.Is(err, projection.ErrSequence) || errors.Is(err, ErrPin) || errors.Is(err, ErrProtocol) || errors.Is(err, changefeed.ErrPosition) || status.Code(err) == codes.FailedPrecondition || status.Code(err) == codes.NotFound {
+	if errors.Is(err, projection.ErrOwnerMissing) || errors.Is(err, projection.ErrRecovery) || errors.Is(err, projection.ErrSequence) || errors.Is(err, ErrPin) || errors.Is(err, ErrProtocol) || errors.Is(err, changefeed.ErrPosition) || status.Code(err) == codes.FailedPrecondition || status.Code(err) == codes.NotFound {
 		return errors.Join(ErrBootstrap, err)
 	}
 	return err

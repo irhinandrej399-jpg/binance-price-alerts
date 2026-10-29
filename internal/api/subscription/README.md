@@ -604,3 +604,8 @@ unary BuildSnapshot/ReadSnapshotPage, owner из mTLS matcher, durable request I
 конечный deadline и cursor одного снимка. Интерфейс предназначен для matcher;
 прямой доступ к таблицам API не требуется. Handoff/replay/ack открыты в [SUB-022](../replayrpc/README.md):
 целые транзакции, durable progress, явный abandon и конечный deadline.
+
+SUB-025: все писатели SubscriptionChanged используют payload v2 с каноническим
+`Record.OwnerID` (включая общий appendWorkflowChange для admission/result).
+Journal/outbox/SQL-replay сохраняют исходные байты и ID. Совместимость v1 и
+порядок обновления окружения — в [контракте SubscriptionChanged](../../contracts/subscriptionchanged/README.md#владелец-и-совместимость--sub-025).

@@ -103,7 +103,7 @@ func (r *replayFixture) AcknowledgeReplay(_ context.Context, q *pb.AcknowledgeRe
 }
 
 func wire(pos, end uint64, state string) []byte {
-	return []byte(fmt.Sprintf(`{"event_id":"e-%d","type":"subscription.changed","version":1,"occurred_at":"2026-10-29T10:00:00Z","correlation_id":"test","ordering_key":"sub","payload":{"schema_version":1,"position":%d,"transaction_end":%d,"subscription_id":"sub","subscription_version":%d,"state":"%s","pair":"BTCUSDT","threshold":"100","direction":"up","activation":"latest_price","creation_snapshot":{"price":"101","trade_time":"2026-10-29T09:00:00Z"}}}`, pos, pos, end, pos, state))
+	return []byte(fmt.Sprintf(`{"event_id":"e-%d","type":"subscription.changed","version":1,"occurred_at":"2026-10-29T10:00:00Z","correlation_id":"test","ordering_key":"sub","payload":{"schema_version":2,"owner_id":"a4444444-4444-4444-8444-444444444444","position":%d,"transaction_end":%d,"subscription_id":"sub","subscription_version":%d,"state":"%s","pair":"BTCUSDT","threshold":"100","direction":"up","activation":"latest_price","creation_snapshot":{"price":"101","trade_time":"2026-10-29T09:00:00Z"}}}`, pos, pos, end, pos, state))
 }
 
 func TestWholePagesAndMalformedBoundaries(t *testing.T) {

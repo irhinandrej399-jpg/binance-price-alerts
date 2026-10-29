@@ -12,7 +12,7 @@ import (
 )
 
 func wire(pos, end, version uint64, state string) []byte {
-	return []byte(fmt.Sprintf(`{"event_id":"e-%d","type":"subscription.changed","version":1,"occurred_at":"2026-10-29T10:00:00Z","correlation_id":"test","ordering_key":"sub","payload":{"schema_version":1,"position":%d,"transaction_end":%d,"subscription_id":"sub","subscription_version":%d,"state":"%s","pair":"BTCUSDT","threshold":"999999999999999999.123456789012345678","direction":"up","activation":"latest_price","creation_snapshot":{"price":"0.000000000000000001","trade_time":"2026-10-29T09:00:00Z"},"workflow":{"trigger_id":"trigger","version":%d}}}`, pos, pos, end, version, state, version))
+	return []byte(fmt.Sprintf(`{"event_id":"e-%d","type":"subscription.changed","version":1,"occurred_at":"2026-10-29T10:00:00Z","correlation_id":"test","ordering_key":"sub","payload":{"schema_version":2,"owner_id":"a4444444-4444-4444-8444-444444444444","position":%d,"transaction_end":%d,"subscription_id":"sub","subscription_version":%d,"state":"%s","pair":"BTCUSDT","threshold":"999999999999999999.123456789012345678","direction":"up","activation":"latest_price","creation_snapshot":{"price":"0.000000000000000001","trade_time":"2026-10-29T09:00:00Z"},"workflow":{"trigger_id":"trigger","version":%d}}}`, pos, pos, end, version, state, version))
 }
 
 func TestDurableVersionsAndAck(t *testing.T) {
@@ -53,7 +53,7 @@ func TestDurableVersionsAndAck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.SubscriptionVersion != 3 || c.State != "pending_delivery" || c.Workflow.TriggerID != "trigger" || c.Threshold.String() != "999999999999999999.123456789012345678" {
+	if c.OwnerID != "a4444444-4444-4444-8444-444444444444" || c.SubscriptionVersion != 3 || c.State != "pending_delivery" || c.Workflow.TriggerID != "trigger" || c.Threshold.String() != "999999999999999999.123456789012345678" {
 		t.Fatalf("projection rolled back: %+v", c)
 	}
 	handle(5, 4, "sending")

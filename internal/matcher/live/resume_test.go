@@ -87,3 +87,12 @@ func TestSQLCheckpointAheadOfAPIHeadCannotActivate(t *testing.T) {
 		t.Fatalf("invalid checkpoint accepted: %v", err)
 	}
 }
+
+func TestLegacyOwnershipRequiresBootstrap(t *testing.T) {
+	if err := bootstrapError(projection.ErrOwnerMissing); !errors.Is(err, ErrBootstrap) {
+		t.Fatal(err)
+	}
+	if _, _, err := entry(projection.Image{Snapshot: &pb.SnapshotSubscription{SubscriptionId: "sub", State: "active", Threshold: "100", Version: 1}}); !errors.Is(err, projection.ErrOwnerMissing) {
+		t.Fatal(err)
+	}
+}

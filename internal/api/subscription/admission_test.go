@@ -77,7 +77,7 @@ func TestAdmissionConcurrentAndReplay(t *testing.T) {
 		t.Fatal(busy, e)
 	}
 	entries, e := journal.ReadAfter(ctx, pool, before, 10)
-	if e != nil || len(entries) != 1 || entries[0].Change.State != domain.Sending || entries[0].Change.SubscriptionVersion != 3 || entries[0].Change.Workflow.TriggerID != v.Workflow.TriggerID {
+	if e != nil || len(entries) != 1 || entries[0].Change.SchemaVersion != 2 || entries[0].Change.OwnerID != v.OwnerID || entries[0].Change.State != domain.Sending || entries[0].Change.SubscriptionVersion != 3 || entries[0].Change.Workflow.TriggerID != v.Workflow.TriggerID {
 		t.Fatal(entries, e)
 	}
 	assertQuota(t, pool, v.OwnerID, 1)

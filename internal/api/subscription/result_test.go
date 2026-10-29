@@ -43,7 +43,7 @@ func TestDeliveryResultSuccessReplay(t *testing.T) {
 	}
 	assertQuota(t, pool, v.OwnerID, 0)
 	entries, e := journal.ReadAfter(ctx, pool, before, 10)
-	if e != nil || len(entries) != 1 || entries[0].Change.State != domain.Delivered {
+	if e != nil || len(entries) != 1 || entries[0].Change.SchemaVersion != 2 || entries[0].Change.OwnerID != v.OwnerID || entries[0].Change.State != domain.Delivered {
 		t.Fatal(entries, e)
 	}
 	var message int64

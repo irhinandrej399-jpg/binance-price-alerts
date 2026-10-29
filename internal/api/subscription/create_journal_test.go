@@ -15,10 +15,12 @@ import (
 	store "github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/subscription"
 	changed "github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/subscriptionchanged"
 	pb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/marketdata/v1"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/projection"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/postgrestest"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"strconv"
 )
 
 func TestCreateHTTPJournalCommit(t *testing.T) {
@@ -52,7 +54,7 @@ func TestCreateHTTPJournalCommit(t *testing.T) {
 		}
 		e := entries[0]
 		c := e.Change
-		if c.SubscriptionID != saved.ID || c.SubscriptionVersion != uint64(saved.Version) || c.State != saved.State || c.Pair != saved.Pair || c.Threshold.String() != saved.Threshold.String() || c.Direction != saved.Direction || c.Activation != saved.Activation || c.Workflow != nil || c.CreationSnapshot.Price.String() != saved.CreationPrice.String() || !c.CreationSnapshot.TradeTime.Equal(saved.CreationTradeTime) || c.Position != before+1 || c.TransactionEnd != before+1 {
+		if c.SchemaVersion != 2 || c.OwnerID != saved.OwnerID || c.SubscriptionID != saved.ID || c.SubscriptionVersion != uint64(saved.Version) || c.State != saved.State || c.Pair != saved.Pair || c.Threshold.String() != saved.Threshold.String() || c.Direction != saved.Direction || c.Activation != saved.Activation || c.Workflow != nil || c.CreationSnapshot.Price.String() != saved.CreationPrice.String() || !c.CreationSnapshot.TradeTime.Equal(saved.CreationTradeTime) || c.Position != before+1 || c.TransactionEnd != before+1 {
 			t.Fatalf("after-image differs: %+v vs %+v", c, saved)
 		}
 		if e.Metadata.EventID == "" || e.Metadata.CorrelationID == "" || e.Metadata.OrderingKey != saved.ID || !e.Metadata.OccurredAt.Equal(createNow) {
@@ -67,6 +69,37 @@ func TestCreateHTTPJournalCommit(t *testing.T) {
 		meta, _, err := changed.Decode(second)
 		if err != nil || !bytes.Equal(first, second) || meta.EventID != e.Metadata.EventID {
 			t.Fatal("unstable stored event", err)
+		}
+
+		// An empty complete snapshot at the observed C precedes this actual API event.
+		// Nonempty snapshot replacement is covered by projection replay tests.
+		matcher := postgrestest.OpenWithDSN(t, "MATCHER_DATABASE_URL")
+		snapshotID := "owner-" + saved.ID
+		if _, err := matcher.Exec(ctx, `INSERT INTO app.matcher_snapshot_generations(snapshot_id,boundary_c,expires_at,expires_text,complete) VALUES($1,$2::numeric,now()+interval '1 hour','fixture',true)`, snapshotID, strconv.FormatUint(before, 10)); err != nil {
+			t.Fatal(err)
+		}
+		sql := projection.New(matcher, snapshotID+"-sql")
+		kafka := projection.New(matcher, snapshotID+"-kafka")
+		for _, st := range []*projection.Store{sql, kafka} {
+			if err := st.Initialize(ctx, snapshotID); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := sql.ApplyReplay(ctx, [][]byte{first}); err != nil {
+			t.Fatal(err)
+		}
+		if err := kafka.Handle(ctx, projection.Batch{Topic: "changes", NextOffset: 47, Events: [][]byte{first}}, func(context.Context, int64) error { return nil }); err != nil {
+			t.Fatal(err)
+		}
+		reopened := postgrestest.OpenWithDSN(t, "MATCHER_DATABASE_URL")
+		for _, id := range []string{snapshotID + "-sql", snapshotID + "-kafka"} {
+			im, err := projection.New(reopened, id).ReadImage(ctx, saved.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if owner, err := im.OwnerID(); err != nil || owner != saved.OwnerID {
+				t.Fatal(owner, err)
+			}
 		}
 		if c, err := journal.Current(ctx, pool); err != nil || c != before+1 {
 			t.Fatal(c, err)

@@ -91,7 +91,7 @@ func RequestDelivery(ctx context.Context, db Beginner, c DeliveryCandidate) (Rec
 		return Record{}, storageError(ctx, err)
 	}
 	_, err = journal.Append(ctx, tx, []journal.Entry{{Metadata: event.Envelope{EventID: changeID, Type: changed.Type, Version: event.Version1, OccurredAt: now, CorrelationID: workID, OrderingKey: r.ID},
-		Change: changed.Changed{SchemaVersion: changed.Version1, SubscriptionID: r.ID, SubscriptionVersion: uint64(r.Version), State: r.State, Pair: r.Pair,
+		Change: changed.Changed{SchemaVersion: changed.Version2, OwnerID: r.OwnerID, SubscriptionID: r.ID, SubscriptionVersion: uint64(r.Version), State: r.State, Pair: r.Pair,
 			Threshold: &r.Threshold, Direction: r.Direction, Activation: r.Activation, CreationSnapshot: &changed.Snapshot{Price: &r.CreationPrice, TradeTime: r.CreationTradeTime},
 			Workflow: &changed.Workflow{TriggerID: r.Workflow.TriggerID, Version: uint64(r.Workflow.Version)}}}})
 	if err != nil {

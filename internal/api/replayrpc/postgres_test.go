@@ -33,7 +33,7 @@ import (
 
 func entry(id string, state domain.State) journal.Entry {
 	p, _ := price.Parse("999999999999999999.123456789012345678")
-	return journal.Entry{Metadata: event.Envelope{EventID: id, Type: changed.Type, Version: 1, OccurredAt: time.Now().UTC(), CorrelationID: id, OrderingKey: "sub-replay"}, Change: changed.Changed{SchemaVersion: 1, SubscriptionID: "sub-replay", SubscriptionVersion: 1, State: state, Pair: "BTCUSDT", Threshold: &p, Direction: price.Up, Activation: changed.LatestPrice, CreationSnapshot: &changed.Snapshot{Price: &p, TradeTime: time.Now().UTC()}}}
+	return journal.Entry{Metadata: event.Envelope{EventID: id, Type: changed.Type, Version: 1, OccurredAt: time.Now().UTC(), CorrelationID: id, OrderingKey: "sub-replay"}, Change: changed.Changed{SchemaVersion: 2, OwnerID: "canonical-subscription-owner", SubscriptionID: "sub-replay", SubscriptionVersion: 1, State: state, Pair: "BTCUSDT", Threshold: &p, Direction: price.Up, Activation: changed.LatestPrice, CreationSnapshot: &changed.Snapshot{Price: &p, TradeTime: time.Now().UTC()}}}
 }
 func appendBatch(t *testing.T, pool *pgxpool.Pool, states ...domain.State) (pgx.Tx, uint64) {
 	t.Helper()

@@ -58,7 +58,7 @@ func TestRejectInvalidContracts(t *testing.T) {
 		old, new string
 		want     error
 	}{
-		{`"schema_version":1`, `"schema_version":2`, changed.ErrUnsupportedVersion},
+		{`"schema_version":1`, `"schema_version":99`, changed.ErrUnsupportedVersion},
 		{`"schema_version":1,`, ``, changed.ErrUnsupportedVersion},
 		{`"position":9007199254740993`, `"position":0`, changed.ErrInvalidChange},
 		{`"transaction_end":9007199254740994`, `"transaction_end":1`, changed.ErrInvalidChange},
@@ -153,5 +153,23 @@ func TestMissingPayload(t *testing.T) {
 	raw = []byte(strings.Replace(string(raw), `,"payload":null`, "", 1))
 	if _, _, err = changed.Decode(raw); !errors.Is(err, changed.ErrInvalidChange) {
 		t.Fatal(err)
+	}
+}
+
+func TestVersion2Owner(t *testing.T) {
+	input := strings.Replace(message, `"schema_version":1`, `"schema_version":2,"owner_id":"canonical-owner"`, 1)
+	meta, c, err := changed.Decode([]byte(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := changed.Encode(meta, c)
+	if err != nil || !strings.Contains(string(raw), `"owner_id":"canonical-owner"`) {
+		t.Fatalf("owner lost: %s %v", raw, err)
+	}
+	for _, owner := range []string{``, `,"owner_id":""`, `,"owner_id":" "`, `,"owner_id":42`} {
+		bad := strings.Replace(input, `,"owner_id":"canonical-owner"`, owner, 1)
+		if _, _, err := changed.Decode([]byte(bad)); !errors.Is(err, changed.ErrInvalidChange) {
+			t.Fatalf("accepted invalid owner: %v", err)
+		}
 	}
 }

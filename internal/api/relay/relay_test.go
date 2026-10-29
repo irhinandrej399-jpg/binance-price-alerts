@@ -25,7 +25,7 @@ func (p testPublisher) Publish(c context.Context, rs ...kafka.Record) error { re
 func (p testPublisher) Close()                                              {}
 func fixture(id string) journal.Entry {
 	p, _ := price.Parse("100.123456789012345678")
-	return journal.Entry{Metadata: event.Envelope{EventID: id, Type: changed.Type, Version: 1, OccurredAt: time.Now().UTC(), CorrelationID: id, OrderingKey: "sub-1"}, Change: changed.Changed{SchemaVersion: 1, SubscriptionID: "sub-1", SubscriptionVersion: 1, State: domain.Active, Pair: "BTCUSDT", Threshold: &p, Direction: price.Up, Activation: changed.LatestPrice, CreationSnapshot: &changed.Snapshot{Price: &p, TradeTime: time.Now().UTC()}}}
+	return journal.Entry{Metadata: event.Envelope{EventID: id, Type: changed.Type, Version: 1, OccurredAt: time.Now().UTC(), CorrelationID: id, OrderingKey: "sub-1"}, Change: changed.Changed{SchemaVersion: 2, OwnerID: "canonical-owner", SubscriptionID: "sub-1", SubscriptionVersion: 1, State: domain.Active, Pair: "BTCUSDT", Threshold: &p, Direction: price.Up, Activation: changed.LatestPrice, CreationSnapshot: &changed.Snapshot{Price: &p, TradeTime: time.Now().UTC()}}}
 }
 func TestRecovery(t *testing.T) {
 	pool := postgrestest.Open(t)
@@ -54,7 +54,9 @@ func TestRecovery(t *testing.T) {
 	}
 	defer tx.Rollback(ctx)
 	id := fmt.Sprintf("relay-%d", time.Now().UnixNano())
-	end, e := journal.Append(ctx, tx, []journal.Entry{fixture(id + "-1"), fixture(id + "-2")})
+	legacy := fixture(id + "-2")
+	legacy.Change.SchemaVersion, legacy.Change.OwnerID = 1, ""
+	end, e := journal.Append(ctx, tx, []journal.Entry{fixture(id + "-1"), legacy})
 	if e != nil {
 		t.Fatal(e)
 	}

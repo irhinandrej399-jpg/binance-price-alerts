@@ -232,7 +232,7 @@ func admitDelivery(ctx context.Context, db Beginner, c AdmissionCommand, prepare
 func appendWorkflowChange(ctx context.Context, tx pgx.Tx, r Record, now time.Time) error {
 	id := newUUID()
 	_, err := journal.Append(ctx, tx, []journal.Entry{{Metadata: event.Envelope{EventID: id, Type: changed.Type, Version: event.Version1, OccurredAt: now, CorrelationID: id, OrderingKey: r.ID}, Change: changed.Changed{
-		SchemaVersion: changed.Version1, SubscriptionID: r.ID, SubscriptionVersion: uint64(r.Version), State: r.State, Pair: r.Pair, Threshold: &r.Threshold, Direction: r.Direction, Activation: r.Activation,
+		SchemaVersion: changed.Version2, OwnerID: r.OwnerID, SubscriptionID: r.ID, SubscriptionVersion: uint64(r.Version), State: r.State, Pair: r.Pair, Threshold: &r.Threshold, Direction: r.Direction, Activation: r.Activation,
 		CreationSnapshot: &changed.Snapshot{Price: &r.CreationPrice, TradeTime: r.CreationTradeTime}, Workflow: &changed.Workflow{TriggerID: r.Workflow.TriggerID, Version: uint64(r.Workflow.Version)},
 	}}})
 	return err

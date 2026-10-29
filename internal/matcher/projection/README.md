@@ -114,3 +114,25 @@ SQL-replay → реальный Kafka batch, два pools, конкурентн�
 Срок загрузки снимка не проверяется: действительность replay-pin устанавливает
 `live.NewResume` через API. Идентификатор поколения выбирает внешний владелец;
 распределённое владение и активный указатель runtime этим методом не создаются.
+
+## Владелец подписки — SUB-025
+
+`ReadImage` возвращает durable owner из `Snapshot.OwnerId` либо `Change.OwnerID`
+(payload v2), включая новые подписки после C и обновления snapshot-подписок.
+`image.OwnerID() (string, error)` унифицирует обе формы для MAT-004. После чтения
+проверить ошибку, взять canonical subscription ID/версию из той же Image и
+передать оба ID в SUB-014. Это не обходит каноническую проверку API. Новый
+after-image заменяет snapshot целиком, owner из прежнего snapshot не наследуется.
+
+`ErrOwnerMissing` запрещает использование старой проекции без owner: её
+возвращают Get/ReadImage/Walk и оба входных пути для v1 (в том числе дублей).
+Не вызывать RequestDelivery/ack и не объявлять readiness. NewResume возвращает
+также live.ErrBootstrap; нужен свежий snapshot с новым projection ID. При Walk
+ошибка означает неполный обход. Snapshot и v2 проверяются до построения live
+индекса; отсутствующий owner не подменяется владельцем pin/сертификата.
+
+Миграция таблиц не требуется; политика v1/v2 и порядок безопасного обновления
+писателей/relay/bootstrap описаны в [контракте](../../contracts/subscriptionchanged/README.md#владелец-и-совместимость--sub-025).
+Тесты проверяют реальные API journal bytes через SQL ApplyReplay и Kafka Handle,
+повторное открытие pool, snapshot → новая версия → tombstone, legacy отказ без
+продвижения C/offset и bootstrap в отдельное поколение.

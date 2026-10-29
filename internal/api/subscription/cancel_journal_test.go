@@ -99,7 +99,7 @@ func TestCancelHTTPJournalFailure(t *testing.T) {
 	h = auth.New(sessions, store.NewCancelHandler(pool))
 	decodeCancel(t, deleteSubscription(h, credentials.AccessToken, v.ID))
 	entries, err = journal.ReadAfter(ctx, pool, before, 10)
-	if err != nil || len(entries) != 1 || entries[0].Change.SubscriptionVersion != 2 {
+	if err != nil || len(entries) != 1 || entries[0].Change.OwnerID != owner || entries[0].Change.SchemaVersion != 2 || entries[0].Change.SubscriptionVersion != 2 {
 		t.Fatal(entries, err)
 	}
 	assertQuota(t, pool, owner, 0)

@@ -111,6 +111,7 @@
 | [SUB-015](tickets/SUB-015.md) | Прочитать согласованный снимок из хранилища | SUB-001, SUB-011, SUB-012, DEC-004, SUB-021 | done |
 | [SUB-023](tickets/SUB-023.md) | Создать снимок идемпотентно по request ID | SUB-015, DEC-009 | done |
 | [SUB-016](tickets/SUB-016.md) | Открыть внутренний интерфейс страниц снимка | SUB-015, SUB-023, DEC-003, DEC-009 | done |
+| [SUB-025](tickets/SUB-025.md) | Передать владельца подписки в live-проекцию matcher | CON-002, SUB-011, SUB-012, SUB-013, SUB-017, SUB-019, SUB-014, MAT-014 | done |
 | [SUB-024](tickets/SUB-024.md) | Исследовать нестабильный expiry в SQL snapshot RPC тестах | SUB-016, SET-006 | planned |
 | [SUB-017](tickets/SUB-017.md) | Сохранить допуск одной попытки доставки | SUB-013, DOM-004, DEC-004, IAM-008, DEC-005, SUB-021 | done |
 | [SUB-018](tickets/SUB-018.md) | Открыть допуск доставки с проверкой последней цены | SUB-017, MKT-006, DEC-009 | done |
@@ -142,7 +143,7 @@
 | --- | --- | --- | --- |
 | [MAT-001](tickets/MAT-001.md) | Применить версионированное изменение подписки | CON-002, DEC-003, SET-005, SET-004, SET-010 | done |
 | [MAT-002](tickets/MAT-002.md) | Находить кандидатов в индексе порогов | MAT-001, DOM-003 | done |
-| [MAT-004](tickets/MAT-004.md) | Обработать цену и запросить фиксацию кандидатов | MAT-002, MAT-007, MAT-008, MAT-009, MKT-013, MKT-014, SUB-013, SUB-014, MAT-012, MAT-016 | planned |
+| [MAT-004](tickets/MAT-004.md) | Обработать цену и запросить фиксацию кандидатов | MAT-002, MAT-007, MAT-008, MAT-009, MKT-013, MKT-014, SUB-013, SUB-014, MAT-012, MAT-016, SUB-025 | planned |
 | [MAT-016](tickets/MAT-016.md) | Сохранить durable результат обработки цены | SET-010, CON-003, MAT-014, DEC-007 | done |
 | [MAT-005](tickets/MAT-005.md) | Восстановить обработку цены после частичного сбоя | MAT-004 | planned |
 | [MAT-007](tickets/MAT-007.md) | Загрузить исходный снимок в проекцию matcher | MAT-001, SUB-016, DEC-004 | done |

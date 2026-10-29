@@ -10,10 +10,11 @@
 производитель до commit; сериализация их не генерирует и не заменяет.
 `Encode` заменяет `Envelope.Payload` переданным Changed.
 
-| Payload | Правило версии `schema_version=1` |
+| Payload | Правило версии `schema_version=2` |
 | --- | --- |
 | `position` | Положительная uint64-позиция одной записи транзакционного журнала API. |
 | `transaction_end` | Положительная uint64-граница C всей транзакции, не меньше position. Все её записи имеют один конец; последняя имеет position=transaction_end. |
+| `owner_id` | Непробельный канонический владелец подписки из API Record.OwnerID; не principal matcher и не владелец replay/snapshot pin. Обязателен в v2. |
 | `subscription_id`, `subscription_version` | Непробельный ID и положительная uint64-версия канонической подписки. |
 | `state` | active, pending_delivery, sending, delivery_blocked, delivered или cancelled. Терминальная запись передаётся целиком, не является удалением без версии. |
 | `pair` | Нормализованная непустая пара: ASCII A–Z и 0–9. Наличие пары в каталоге проверяет API. |
@@ -59,3 +60,34 @@ workflow проверяются API перед каждой попыткой. С
 Доставка, БД, проверка последовательности и runtime здесь не реализованы.
 
 Проверка: `GOTOOLCHAIN=local go test ./internal/contracts/subscriptionchanged`.
+
+## Владелец и совместимость — SUB-025
+
+Все production-переходы API (create, cancel, RequestDelivery, AdmitDelivery,
+SaveDeliveryResult) записывают `schema_version=2` и `owner_id` из сохранённого
+канонического Record. Envelope остаётся v1; версия подписки, C и Kafka offset
+не зависят от версии payload. Owner не является допуском доставки: API SUB-014
+по-прежнему проверяет оба ID и текущее каноническое состояние.
+
+Decoder сохраняет поддержку исторической v1 без owner для чтения immutable
+журнала, SQL-replay и relay. V1 не становится пригодным кандидатом matcher даже
+при добавленном поле owner. В v2 отсутствующий/null/пустой/пробельный owner —
+`ErrInvalidChange`; неизвестная версия — `ErrUnsupportedVersion`. При ошибке
+получатель JSON не меняется. Relay передаёт исходные байты, не пересериализует
+старые записи и не заменяет ID. Journal API никогда не обновляется ради backfill.
+
+Matcher принимает только v2 с owner либо snapshot с OwnerId. Старая запись v1,
+включая дубль до C, даёт `projection.ErrOwnerMissing` до SQL/ack; старый after-image
+в durable проекции даёт ту же ошибку при чтении/обходе. Требуется новый snapshot
+и отдельный projection ID по существующему bootstrap, а не подстановка owner из
+старого snapshot, сертификата, pin или запрос в чужую БД.
+
+Порядок обновления существующего окружения: остановить старые API-писатели,
+обновить всех писателей до v2, дать relay опубликовать весь старый журнал;
+после этого зарегистрировать Kafka на текущем LSO и построить свежий snapshot
+существующим bootstrap. Изменения после C уже v2. Старые Kafka consumer offsets
+и projection ID для этого bootstrap не переиспользовать. Это необходимо из-за
+строгого отказа даже исторических v1-дублей; простой restart старой проекции не
+миграция. Runtime/автоматизация rollout остаются вне SUB-025. SQL-миграции не
+нужны: owner хранится внутри имеющегося JSON body; protobuf snapshot уже имеет
+OwnerId. Старые проекции и журнал автоматически не переписываются.

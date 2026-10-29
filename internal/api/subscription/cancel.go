@@ -97,7 +97,7 @@ func NewCancelHandler(db Beginner) http.Handler {
 				createError(w, 500, "internal_error")
 				return
 			}
-			change := changed.Changed{SchemaVersion: changed.Version1, SubscriptionID: record.ID,
+			change := changed.Changed{SchemaVersion: changed.Version2, OwnerID: record.OwnerID, SubscriptionID: record.ID,
 				SubscriptionVersion: uint64(record.Version), State: record.State, Pair: record.Pair,
 				Threshold: &record.Threshold, Direction: record.Direction, Activation: record.Activation,
 				CreationSnapshot: &changed.Snapshot{Price: &record.CreationPrice, TradeTime: record.CreationTradeTime}}
