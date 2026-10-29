@@ -4,9 +4,10 @@
 
 ## Активная работа
 
-- Активный тикет: нет. Следующий по ORDER — MAT-008 после сессионной проверки: его Kafka-предпосылка MAT-015 завершена.
-- Незавершённая реализация: нет. Durable проекция снимка/SQL-replay, индекс, подключение цен и загрузка снимка matcher готовы; Kafka-источник готов в MAT-015; координатор replay/переключения и runtime-связь выполняются отдельно.
-- Последний завершённый тикет: [MAT-015](backlog/tickets/MAT-015.md). [Kafka-источник изменений](../internal/matcher/changefeed/README.md): регистрация единственной партиции/LSO до H, read_committed целые пакеты после commit marker, исходные JSON/C/позиции и отдельный Confirm. Дубли/gap, open/abort/commit, границы/лимиты, 1 024×4 KiB, отмена/idle loss и OffsetOutOfRange проверены на disposable Kafka с race detector; общие race/vet/build прошли, volume удалён. SQL-replay/head/pin/readiness, группы и runtime отдельно.
+- Активный тикет: нет. Следующий по ORDER — MAT-009 после сессионной проверки.
+- Незавершённая реализация: нет. Snapshot/storage, индекс, цены, Kafka и координатор нового поколения matcher готовы; restart, обработка кандидатов, владение и runtime отдельно.
+- Последний завершённый тикет: [MAT-008](backlog/tickets/MAT-008.md). [Координатор нового поколения](../internal/matcher/live/README.md): Kafka до H, SQL-replay/ack после durable commit, индекс и MAT-012 до live, периодический head и отзыв readiness. Create/cancel, Kafka-дубли/gap, SQL-only хвост, исчезнувший true/первая цена, release/reconnect пары и idle loss проверены на совместном disposable PostgreSQL/Kafka/mTLS с race detector; vet/build прошли, volumes удалены. Restart, durable кандидаты, группы/fencing и runtime отдельно.
+- [MAT-015](backlog/tickets/MAT-015.md). [Kafka-источник изменений](../internal/matcher/changefeed/README.md): регистрация единственной партиции/LSO до H, read_committed целые пакеты после commit marker, исходные JSON/C/позиции и отдельный Confirm. Дубли/gap, open/abort/commit, границы/лимиты, 1 024×4 KiB, отмена/idle loss и OffsetOutOfRange проверены на disposable Kafka с race detector; общие race/vet/build прошли, volume удалён. SQL-replay/head/pin/readiness, группы и runtime отдельно.
 - [MAT-014](backlog/tickets/MAT-014.md). [Storage снимка/SQL-replay](../internal/matcher/projection/README.md): атомарная инициализация complete поколения на исходной C, replay без Kafka offsets и согласованный обход after-images. Миграция matcher 003; полные protobuf поля, uint64, rollback инициализации/replay, повторы через два pool, 1001 строка, изоляция и Kafka-дубли проверены на disposable PostgreSQL с race detector; общий прогон/vet/build прошли, volume удалён. Активация/pin/readiness и runtime отдельно.
 - [MAT-007](backlog/tickets/MAT-007.md). [Загрузчик снимка](../internal/matcher/snapshotload/README.md): полные immutable after-images в отдельном durable поколении, атомарная страница/completion, одна C/expiry и идемпотентный повтор с начала. Страницы, пустой снимок, обрыв, отмена, конкурентность, rollback и реальный RPC-клиент проверены на disposable PostgreSQL с race detector; vet/build прошли, тестовые ресурсы удалены. Live checkpoint не меняется; readiness требует replay и последних цен.
 - [MAT-012](backlog/tickets/MAT-012.md). [Подключение последней цены](../internal/matcher/priceconnection/README.md): Register до Latest, слияние по generation/sequence, Current/Next и отзыв готовности через Done/Err. Snapshot/update/replay, временный true, reconnect, отмена и реальный Latest RPC проверены с race detector; Kafka TryNext и общие vet/build прошли. Durable ack/кандидаты, snapshot/replay проекции, consumer group и runtime отдельно.
@@ -78,14 +79,14 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — координатор [MAT-008](backlog/tickets/MAT-008.md): после сессионной проверки соединить snapshot/replay с Kafka-входом. Storage-предпосылка [MAT-014](backlog/tickets/MAT-014.md) завершена: Initialize/ApplyReplay/ReadImage/Walk готовы. Kafka-предпосылка [MAT-015](backlog/tickets/MAT-015.md) завершена: Register до H, целые Transaction и явный Confirm после durable записи. Complete снимка и локальная C не доказывают действующий pin или readiness; handoff/pages/ack, актуальный head, индекс/цены и активация остаются MAT-008.
+По очереди следующий — [MAT-009](backlog/tickets/MAT-009.md): восстановление из durable checkpoint и pin либо явный новый bootstrap. Перед реализацией проверить интерфейсы `projection.Checkpoint/Walk`, SUB-022 и [MAT-008](../internal/matcher/live/README.md). MAT-008 обслуживает новое отдельное поколение, однократный Run и ephemeral view; он не реализует restart или durable указатель активного поколения. SQL C, API progress/issued, Kafka NextOffset и ценовая ревизия — разные шкалы. Потеря pin требует нового snapshot, readiness требует действующих регистраций и актуальных цен.
 
 `python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Идти по этой очереди; разделы каталога и номера ID сами по себе порядок не задают.
 
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show MAT-008` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show MAT-009` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.
