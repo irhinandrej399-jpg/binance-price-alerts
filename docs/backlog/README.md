@@ -145,7 +145,7 @@
 | [MAT-002](tickets/MAT-002.md) | Находить кандидатов в индексе порогов | MAT-001, DOM-003 | done |
 | [MAT-004](tickets/MAT-004.md) | Обработать цену и запросить фиксацию кандидатов | MAT-002, MAT-007, MAT-008, MAT-009, MKT-013, MKT-014, SUB-013, SUB-014, MAT-012, MAT-016, SUB-025 | done |
 | [MAT-016](tickets/MAT-016.md) | Сохранить durable результат обработки цены | SET-010, CON-003, MAT-014, DEC-007 | done |
-| [MAT-005](tickets/MAT-005.md) | Восстановить обработку цены после частичного сбоя | MAT-004 | planned |
+| [MAT-005](tickets/MAT-005.md) | Восстановить обработку цены после частичного сбоя | MAT-004 | done |
 | [MAT-007](tickets/MAT-007.md) | Загрузить исходный снимок в проекцию matcher | MAT-001, SUB-016, DEC-004 | done |
 | [MAT-014](tickets/MAT-014.md) | Подготовить durable проекцию снимка для SQL-replay | MAT-001, MAT-007, SUB-022, DEC-007 | done |
 | [MAT-015](tickets/MAT-015.md) | Подготовить Kafka-источник изменений подписок | SET-009, CON-002, SUB-007, DEC-007 | done |
