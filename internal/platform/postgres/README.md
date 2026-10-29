@@ -50,10 +50,15 @@ GO_POSTGRES_CHECK_PORT=55437 python3 scripts/check_postgres.py
 
 Скрипт использует только фиксированный проект **binance-go-check**, порт
 loopback:55436, отдельную сеть и отдельный disposable volume. Он запускает
-функциональный профиль 1 vCPU/1 GiB из SET-003, объединяет `migrations/api/*.sql`
-и тестовую fixture во временный manifest и вызывает существующий `migrate.py`
-под `api_migration`. Затем передаёт только пароль `api_runtime` через окружение
-Go-процесса и запускает `go test -race -count=1 -v ./...`.
+функциональный профиль 1 vCPU/1 GiB из SET-003. Для каждого из API, market-data
+и matcher вызывает существующий `migrate.py` под собственной migration-ролью:
+`migrations/api` объединяется с `infra/postgres/fixtures/go`,
+`migrations/market_data` применяется без fixtures, `migrations/matcher` —
+с отдельным `infra/postgres/fixtures/go_matcher`. Manifest каждого владельца
+создаётся во временном каталоге; совпадение имён миграций считается ошибкой.
+Go получает runtime DSN через `DATABASE_URL`, `MARKET_DATA_DATABASE_URL` и
+`MATCHER_DATABASE_URL`. Пакеты запускаются с `-race -count=1 -v` последовательно:
+relay и storage market-data первыми, затем остальные с `-p=1`.
 Пароль захватывается без вывода и отсутствует в аргументах процессов.
 `sslmode=disable` используется только для локального loopback-стенда.
 
@@ -97,3 +102,24 @@ POSTGRES_TEST=1 DATABASE_URL='postgres://api_runtime@127.0.0.1:1/api?sslmode=dis
 Общая команда выше подхватит новые тесты. IAM-001 добавил `app.users`,
 репозиторий и конкурентную проверку email; контракт и воспроизведение —
 в [account/README](../../api/account/README.md).
+
+## Matcher
+
+В тестах matcher используйте `postgrestest.OpenWithDSN(t, "MATCHER_DATABASE_URL")`.
+Общий runner автоматически применяет будущие `migrations/matcher/*.sql` и
+отдельную fixture `app.matcher_connection_probe` (только bigint ID, максимальная
+тестовая версия). API fixtures и прикладные миграции в matcher не попадают.
+Проекция и checkpoint сюда не входят; их схема создаётся в MAT-001.
+
+`TestMatcherTransactions` открывает два независимых pool, проверяет runtime-роль
+и БД, невидимость незавершённой вставки, rollback без сохранения и видимость
+commit из другого pool. Дополнительно проверяет отсутствие CONNECT к трём чужим
+БД, отказ SQL-чтения `migration.history` с кодом 42501 и отсутствие API-таблиц.
+Без `POSTGRES_TEST` тест пропускается; при opt-in отсутствие/ошибка DSN,
+подключения или прав приводит к провалу. Например, без credentials:
+
+```sh
+POSTGRES_TEST=1 MATCHER_DATABASE_URL='postgres://matcher_runtime@127.0.0.1:1/matcher?sslmode=disable&connect_timeout=1' \
+  GOTOOLCHAIN=local go test -count=1 -run '^TestMatcherTransactions$' ./internal/platform/postgres
+# Ожидается FAIL, "cannot connect to PostgreSQL".
+```

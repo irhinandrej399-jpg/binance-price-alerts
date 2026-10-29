@@ -35,33 +35,30 @@ def main():
 
         try:
             run(compose + ['up', '-d', '--wait', '--wait-timeout', '120'])
-            with tempfile.TemporaryDirectory(prefix='binance-go-migrations-') as tmp:
-                directory = Path(tmp)
-                for source in (ROOT / 'migrations/api', ROOT / 'infra/postgres/fixtures/go'):
-                    for sql in source.glob('*.sql'):
-                        if (directory / sql.name).exists():
-                            raise RuntimeError('fixture migration name conflicts with application')
-                        shutil.copyfile(sql, directory / sql.name)
-                run([sys.executable, str(ROOT / 'scripts/migrate.py'), '--owner', 'api',
-                     '--project', PROJECT, '--directory', str(directory)])
-            run([sys.executable, str(ROOT / 'scripts/migrate.py'), '--owner', 'market_data',
-                 '--project', PROJECT])
-            market_password = run(compose + ['exec', '-T', 'postgres', 'sh', '-c',
-                                             'printf %s "$MARKET_DATA_RUNTIME_PASSWORD"'],
-                                  capture_output=True, text=True).stdout
-            if not market_password:
-                raise RuntimeError('test market-data password is missing')
-            env['MARKET_DATA_DATABASE_URL'] = (f'postgres://market_data_runtime:{quote(market_password, safe="")}@'
-                                               f'127.0.0.1:{port}/market_data?sslmode=disable&connect_timeout=5')
-            # Capture only the runtime password. Never print it or put it in argv.
-            result = run(compose + ['exec', '-T', 'postgres', 'sh', '-c',
-                                    'printf %s "$API_RUNTIME_PASSWORD"'],
-                         capture_output=True, text=True)
-            password = result.stdout
-            if not password:
-                raise RuntimeError('test runtime password is missing')
-            env['DATABASE_URL'] = (f'postgres://api_runtime:{quote(password, safe="")}@'
-                                   f'127.0.0.1:{port}/api?sslmode=disable&connect_timeout=5')
+            for owner, fixture in (('api', 'go'), ('market_data', None),
+                                   ('matcher', 'go_matcher')):
+                with tempfile.TemporaryDirectory(prefix=f'binance-go-{owner}-migrations-') as tmp:
+                    directory = Path(tmp)
+                    sources = [ROOT / 'migrations' / owner]
+                    if fixture:
+                        sources.append(ROOT / 'infra/postgres/fixtures' / fixture)
+                    for source in sources:
+                        for sql in source.glob('*.sql'):
+                            if (directory / sql.name).exists():
+                                raise RuntimeError('fixture migration name conflicts with application')
+                            shutil.copyfile(sql, directory / sql.name)
+                    run([sys.executable, str(ROOT / 'scripts/migrate.py'), '--owner', owner,
+                         '--project', PROJECT, '--directory', str(directory)])
+                # Capture only this owner's runtime password. Never print it or
+                # put it in argv; the shell expands the variable in the container.
+                password = run(compose + ['exec', '-T', 'postgres', 'sh', '-c',
+                                           f'printf %s "${owner.upper()}_RUNTIME_PASSWORD"'],
+                               capture_output=True, text=True).stdout
+                if not password:
+                    raise RuntimeError(f'test {owner} runtime password is missing')
+                variable = 'DATABASE_URL' if owner == 'api' else f'{owner.upper()}_DATABASE_URL'
+                env[variable] = (f'postgres://{owner}_runtime:{quote(password, safe="")}@'
+                                 f'127.0.0.1:{port}/{owner}?sslmode=disable&connect_timeout=5')
             env['POSTGRES_TEST'] = '1'
             # Relay claims the entire fixed shard. Run its recovery scenario on
             # the fresh outbox before other packages create unpublished work.
