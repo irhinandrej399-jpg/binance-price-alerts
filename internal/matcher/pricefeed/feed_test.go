@@ -29,3 +29,24 @@ func TestDirectClientOptions(t *testing.T) {
 		t.Fatal("direct feed must never join or auto-commit to a group")
 	}
 }
+
+func TestTryNextDrainsAndFailureWins(t *testing.T) {
+	s := &Source{regs: make(map[string]*Registration)}
+	r := &Registration{source: s, changed: make(chan struct{}), terminated: make(chan struct{})}
+	s.regs["BTCUSDT"] = r
+	if _, ok, err := r.TryNext(); ok || err != nil {
+		t.Fatalf("empty: %v %v", ok, err)
+	}
+	r.queue = []queued{{Position{"prices", 0, 42}, "BTCUSDT", fixture()}}
+	s.buffered = 1
+	u, ok, err := r.TryNext()
+	if err != nil || !ok || u.Position.Offset != 42 || u.Envelope.EventID != "original-event" || s.buffered != 0 {
+		t.Fatalf("drain: %+v %v %v", u, ok, err)
+	}
+	r.queue = []queued{{payload: fixture()}}
+	s.buffered = 1
+	r.Close()
+	if _, ok, err = r.TryNext(); ok || !errors.Is(err, ErrClosed) {
+		t.Fatalf("failure: %v %v", ok, err)
+	}
+}

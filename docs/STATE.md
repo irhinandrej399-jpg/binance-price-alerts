@@ -4,9 +4,10 @@
 
 ## Активная работа
 
-- Активный тикет: нет. Следующий по ORDER — MAT-012 после повторной проверки готовности; его предпосылка MAT-013 завершена.
-- Незавершённая реализация: нет. Durable проекция и индекс matcher готовы; их runtime-связь, snapshot/replay bootstrap и подключение цен выполняются отдельно.
-- Последний завершённый тикет: [MAT-013](backlog/tickets/MAT-013.md). [Источник цен matcher](../internal/matcher/pricefeed/README.md): read_committed назначенных партиций, LSO-барьер регистрации до Latest, исходные идентичность/позиция и bounded очередь. Ошибки контракта/позиции, отзыв и переполнение требуют нового bootstrap. Kafka race-прогон и общие Go-проверки прошли; disposable ресурсы удалены. Latest/слияние ревизий, durable checkpoint, consumer group и runtime отдельно.
+- Активный тикет: нет. Следующий по ORDER — MAT-007 после сессионной проверки готовности.
+- Незавершённая реализация: нет. Durable проекция, индекс и подключение цен matcher готовы; их runtime-связь и snapshot/replay bootstrap выполняются отдельно.
+- Последний завершённый тикет: [MAT-012](backlog/tickets/MAT-012.md). [Подключение последней цены](../internal/matcher/priceconnection/README.md): Register до Latest, слияние по generation/sequence, Current/Next и отзыв готовности через Done/Err. Snapshot/update/replay, временный true, reconnect, отмена и реальный Latest RPC проверены с race detector; Kafka TryNext и общие vet/build прошли. Durable ack/кандидаты, snapshot/replay проекции, consumer group и runtime отдельно.
+- [MAT-013](backlog/tickets/MAT-013.md). [Источник цен matcher](../internal/matcher/pricefeed/README.md): read_committed назначенных партиций, LSO-барьер регистрации до Latest, исходные идентичность/позиция и bounded очередь. Ошибки контракта/позиции, отзыв и переполнение требуют нового bootstrap. Kafka race-прогон и общие Go-проверки прошли; disposable ресурсы удалены. Latest/слияние ревизий готовы в MAT-012; durable checkpoint, consumer group и runtime отдельно.
 - [MAT-002](backlog/tickets/MAT-002.md). [Индекс порогов](../internal/matcher/thresholdindex/README.md): точные включённые диапазоны по паре/направлению, AVL без полного перебора, замена/удаление ID. Границы, одинаковые пороги, случайный oracle, баланс и конкурентность проверены; benchmark распределённого/горячего набора выполнен. Связь с durable проекцией/последними ценами и runtime отдельно.
 - [MAT-001](backlog/tickets/MAT-001.md). [Durable проекция matcher](../internal/matcher/projection/README.md): версионированный after-image/workflow и terminal tombstone, C/NextOffset одной транзакцией до ack. Миграция matcher 001; rollback, потеря ack/restart, конкурентные дубли и uint64 проверены на disposable PostgreSQL с race detector; volume удалён. Kafka polling, bootstrap, индекс, цены и runtime отдельно.
 - [SET-010](backlog/tickets/SET-010.md): PostgreSQL harness matcher, отдельные миграции/fixture, runtime DSN и изоляция прав готовы.
@@ -68,20 +69,20 @@
 
 [DEC-009](decisions/DEC-009.md) принят 27 октября: REST/JSON для внешнего API, gRPC/Protobuf для прямых внутренних вызовов, Kafka для событий. Карточки интерфейсов уточнены; генерация готова в SET-007, Latest-котировки — в MKT-006; остальные прикладные сетевые адаптеры ещё не реализованы.
 
-DEC-001–009 приняты. DEC-004 пересматривает прежнюю гарантию уведомления по снимку создания и terminal-срабатывание до доставки. SUB-019/020 и relay SUB-009 завершены; planned-предпосылки MAT-012 и NTF-014 включены в очередь.
+DEC-001–009 приняты. DEC-004 пересматривает прежнюю гарантию уведомления по снимку создания и terminal-срабатывание до доставки. SUB-019/020 и relay SUB-009 завершены; MAT-012 завершена, planned-предпосылка NTF-014 включена в очередь.
 
 Выбраны PostgreSQL и Kafka/KRaft, полный профиль стенда закреплён DEC-008. SQL-replay готов в SUB-022, cleaner Kafka — OPS-014, ограничители — OPS-015/016. Численные стоимости операций требуют проверки на будущих схемах; скорость cleaner пока считается нулевой. Telegram-политика и freshness согласованы, но не реализованы. Наличие каталога из четырёх сервисов не означает готовность этих решений.
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [MAT-012](backlog/tickets/MAT-012.md): согласовать регистрацию обновлений, Latest и ценовую готовность. Предпосылка MAT-013 готова: Register до Latest, Done/Err наблюдать во время bootstrap/live. Повторить сессионную проверку; snapshot/replay подписок, consumer group и runtime остаются отдельными задачами.
+По очереди следующий — [MAT-007](backlog/tickets/MAT-007.md): загрузить исходный снимок в отдельное durable поколение проекции matcher. Проверить готовность схемы/интерфейсов; частичный снимок не должен заменять рабочее поколение. Ценовой адаптер MAT-012 готов, подключение всей проекции и runtime остаются отдельными задачами.
 
 `python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Идти по этой очереди; разделы каталога и номера ID сами по себе порядок не задают.
 
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show MAT-012` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show MAT-007` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

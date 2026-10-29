@@ -1,6 +1,6 @@
 # Источник цен matcher (MAT-013)
 
-`pricefeed` — ephemeral вход Kafka для будущего MAT-012. Использует закреплённый
+`pricefeed` — ephemeral вход Kafka для [MAT-012](../priceconnection/README.md). Использует закреплённый
 franz-go v1.22.2 и `priceobserved.Decode`. Durable обработка/offset commit,
 арбитраж ревизий, Latest, consumer group и runtime выполняются отдельно.
 
@@ -41,10 +41,11 @@ committed события зарегистрированной пары сохр�
 Незарегистрированные пары не образуют очередь. Регистрация не обещает
 исторический replay до своей границы.
 
-Чтение — исключительно read_committed, без control records. Update сохраняет
+Чтение — исключительно read_committed, без control records. `TryNext` неблокирующе
+снимает уже накопленную запись (false/nil при пустой очереди); при ошибке источника накопленная работа не выдаётся. Update сохраняет
 ключ, envelope/event_id, generation/sequence, точную цену и транспортную позицию.
 Дубли выдаются отдельно с прежним event_id и своей Kafka-позицией. Kafka offset
-не является C журнала подписок. Next и Register **не подтверждают durable работу**.
+не является C журнала подписок. Next, TryNext и Register **не подтверждают durable работу**.
 У direct consumer нет group и механизма auto-commit; опция DisableAutoCommit
 в этой версии клиента запрещена без группы. Клиент закрыт внутри адаптера,
 методов Commit/SetOffsets в прикладном интерфейсе нет.

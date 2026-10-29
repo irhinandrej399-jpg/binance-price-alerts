@@ -255,16 +255,9 @@ func (r *Registration) Next(ctx context.Context) (Update, error) {
 			return Update{}, err
 		}
 		if len(r.queue) > 0 {
-			q := r.queue[0]
-			r.queue[0] = queued{}
-			r.queue = r.queue[1:]
-			s.buffered--
+			u, err := r.popLocked()
 			s.mu.Unlock()
-			meta, quote, err := priceobserved.Decode(q.payload)
-			if err != nil {
-				return Update{}, ErrContract
-			} // validated before queueing
-			return Update{q.position, q.key, meta, quote}, nil
+			return u, err
 		}
 		changed := r.changed
 		s.mu.Unlock()
@@ -274,6 +267,34 @@ func (r *Registration) Next(ctx context.Context) (Update, error) {
 		case <-changed:
 		}
 	}
+}
+
+// TryNext removes one already buffered update without waiting. Failure takes
+// priority over buffered work, just as in Next. It never acknowledges offsets.
+func (r *Registration) TryNext() (Update, bool, error) {
+	s := r.source
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if r.err != nil {
+		return Update{}, false, r.err
+	}
+	if len(r.queue) == 0 {
+		return Update{}, false, nil
+	}
+	u, err := r.popLocked()
+	return u, err == nil, err
+}
+
+func (r *Registration) popLocked() (Update, error) {
+	q := r.queue[0]
+	r.queue[0] = queued{}
+	r.queue = r.queue[1:]
+	r.source.buffered--
+	meta, quote, err := priceobserved.Decode(q.payload)
+	if err != nil {
+		return Update{}, ErrContract
+	} // validated before queueing
+	return Update{q.position, q.key, meta, quote}, nil
 }
 
 func (s *Source) failLocked(err error) {

@@ -83,9 +83,30 @@ func TestIntegrationRegistrationIdentityAndDuplicates(t *testing.T) {
 	cfg, p := integration(t, 0, 0)
 	s := source(t, cfg)
 	r := registration(t, s, 0)
-	for range 2 {
+	for i := range 2 {
 		sent := produce(t, p, cfg, fixture(), "BTCUSDT", true)
-		u := next(t, r)
+		var u Update
+		if i == 0 {
+			u = next(t, r)
+		} else {
+			ctx := bounded(t, 8*time.Second)
+			for {
+				var ok bool
+				var err error
+				u, ok, err = r.TryNext()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if ok {
+					break
+				}
+				select {
+				case <-ctx.Done():
+					t.Fatal(ctx.Err())
+				case <-time.After(time.Millisecond):
+				}
+			}
+		}
 		if u.Envelope.EventID != "original-event" || u.Quote.Revision.Generation != 2 || u.Quote.Revision.Sequence != 17 || u.Quote.SourceID != "9007199254740993" || u.Quote.Price.String() != "123.456789012345678901" || u.Key != "BTCUSDT" || u.Position != (Position{cfg.Topic, 0, sent.Offset}) || u.Position.Offset < r.Start().Offset {
 			t.Fatalf("identity changed: %+v", u)
 		}
