@@ -4,9 +4,10 @@
 
 ## Активная работа
 
-- Активный тикет: нет. MAT-002 завершён; следующий по ORDER — MAT-012 после сессионной проверки.
+- Активный тикет: нет. Следующий по ORDER — MAT-012 после повторной проверки готовности; его предпосылка MAT-013 завершена.
 - Незавершённая реализация: нет. Durable проекция и индекс matcher готовы; их runtime-связь, snapshot/replay bootstrap и подключение цен выполняются отдельно.
-- Последний завершённый тикет: [MAT-002](backlog/tickets/MAT-002.md). [Индекс порогов](../internal/matcher/thresholdindex/README.md): точные включённые диапазоны по паре/направлению, AVL без полного перебора, замена/удаление ID. Границы, одинаковые пороги, случайный oracle, баланс и конкурентность проверены; benchmark распределённого/горячего набора выполнен. Связь с durable проекцией/последними ценами и runtime отдельно.
+- Последний завершённый тикет: [MAT-013](backlog/tickets/MAT-013.md). [Источник цен matcher](../internal/matcher/pricefeed/README.md): read_committed назначенных партиций, LSO-барьер регистрации до Latest, исходные идентичность/позиция и bounded очередь. Ошибки контракта/позиции, отзыв и переполнение требуют нового bootstrap. Kafka race-прогон и общие Go-проверки прошли; disposable ресурсы удалены. Latest/слияние ревизий, durable checkpoint, consumer group и runtime отдельно.
+- [MAT-002](backlog/tickets/MAT-002.md). [Индекс порогов](../internal/matcher/thresholdindex/README.md): точные включённые диапазоны по паре/направлению, AVL без полного перебора, замена/удаление ID. Границы, одинаковые пороги, случайный oracle, баланс и конкурентность проверены; benchmark распределённого/горячего набора выполнен. Связь с durable проекцией/последними ценами и runtime отдельно.
 - [MAT-001](backlog/tickets/MAT-001.md). [Durable проекция matcher](../internal/matcher/projection/README.md): версионированный after-image/workflow и terminal tombstone, C/NextOffset одной транзакцией до ack. Миграция matcher 001; rollback, потеря ack/restart, конкурентные дубли и uint64 проверены на disposable PostgreSQL с race detector; volume удалён. Kafka polling, bootstrap, индекс, цены и runtime отдельно.
 - [SET-010](backlog/tickets/SET-010.md): PostgreSQL harness matcher, отдельные миграции/fixture, runtime DSN и изоляция прав готовы.
 - [SUB-022](backlog/tickets/SUB-022.md). [Защищённый SQL-replay](../internal/api/replayrpc/README.md): unary handoff/pages/ack/abandon, mTLS matcher, прежний durable pin без окна, целые транзакции C/H, монотонный SQL-progress. Потеря ответов, конкурентные commit/ack, размер, expiry, права и SQL-отмена проверены на disposable PostgreSQL с race detector; volume удалён. Runtime, проекция matcher, cleaner и нагрузка отдельно.
@@ -73,7 +74,7 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [MAT-012](backlog/tickets/MAT-012.md): подключить подписку к последней цене. MAT-001/002 завершены, durable проекция/checkpoint и индекс готовы; перед началом проверить все зависимости и сессионный размер. Snapshot/replay bootstrap и runtime выполняются отдельно.
+По очереди следующий — [MAT-012](backlog/tickets/MAT-012.md): согласовать регистрацию обновлений, Latest и ценовую готовность. Предпосылка MAT-013 готова: Register до Latest, Done/Err наблюдать во время bootstrap/live. Повторить сессионную проверку; snapshot/replay подписок, consumer group и runtime остаются отдельными задачами.
 
 `python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Идти по этой очереди; разделы каталога и номера ID сами по себе порядок не задают.
 

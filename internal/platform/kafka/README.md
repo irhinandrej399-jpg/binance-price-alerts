@@ -74,6 +74,10 @@ bash infra/kafka/verify-go.sh
 
 Прикладной producer PriceObserved — [marketdata/publish](../../marketdata/publish/README.md).
 Та же команда запускает его race-сценарии на отдельном prices topic стенда.
+Она также проверяет [источник цен matcher](../../matcher/pricefeed/README.md).
+Для него runner создаёт отдельный префикс topics `KAFKA_PRICEFEED_TEST_PREFIX`
+в том же disposable проекте: повреждённые consumer fixtures изолированы от
+producer-проверок. Закрытый opt-in broker отдельно обязан провалить pricefeed-тест.
 `KAFKA_RUN_POSTGRES=1 bash infra/kafka/verify-go.sh` дополнительно запускает
 готовый PostgreSQL runner и [relay подписок](../../api/relay/README.md) против
 обоих disposable стендов; он проверяет SQL-ack и повторы целых пакетов C.
