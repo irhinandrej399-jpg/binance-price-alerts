@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -56,6 +58,17 @@ func TestMatcherSnapshotReplayLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pins.Abandon(context.Background(), matcherURI, snap.ID)
+	ownPartition := pricefeed.PairPartition("BTCUSDT")
+	foreignPair := ""
+	for _, pair := range []string{"ETHUSDT", "SOLUSDT", "BNBUSDT"} {
+		if pricefeed.PairPartition(pair) != ownPartition {
+			foreignPair = pair
+			break
+		}
+	}
+	if foreignPair == "" {
+		t.Fatal("no foreign pair")
+	}
 	var last uint64
 	appendChanges := func(ids []string, versions []uint64, states []domain.State) [][]byte {
 		t.Helper()
@@ -72,6 +85,12 @@ func TestMatcherSnapshotReplayLive(t *testing.T) {
 			es[i].Change.SubscriptionID = id
 			es[i].Change.SubscriptionVersion = versions[i]
 			es[i].Change.Threshold = &p
+			if strings.HasPrefix(id, "foreign-") {
+				es[i].Change.Pair = foreignPair
+			}
+			if states[i] == domain.PendingDelivery {
+				es[i].Change.Workflow = &changed.Workflow{TriggerID: "foreign-workflow", Version: 1}
+			}
 		}
 		before, err := journal.Current(ctx, tx)
 		if err != nil {
@@ -99,7 +118,9 @@ func TestMatcherSnapshotReplayLive(t *testing.T) {
 	}
 	// The create commits while the snapshot is being loaded. It is absent from S.
 	var created [][]byte
-	source := frozenLiveSnapshot{page: &pb.SnapshotPageResponse{SnapshotId: snap.ID, BoundaryC: snap.C, ExpiresAt: snap.ExpiresAt.Format(time.RFC3339Nano)}, during: func() { created = appendChanges([]string{"live-cancel"}, []uint64{1}, []domain.State{domain.Active}) }}
+	source := frozenLiveSnapshot{page: &pb.SnapshotPageResponse{SnapshotId: snap.ID, BoundaryC: snap.C, ExpiresAt: snap.ExpiresAt.Format(time.RFC3339Nano), Subscriptions: []*pb.SnapshotSubscription{{SubscriptionId: "00000000-0000-4000-8000-000000000019", OwnerId: "a4444444-4444-4444-8444-444444444444", Version: 1, Pair: foreignPair, Threshold: "100", Direction: "up", State: "active", Activation: "latest_price", CreationPrice: "99", CreationTradeTime: time.Now().UTC().Format(time.RFC3339Nano)}}}, during: func() {
+		created = appendChanges([]string{"live-cancel", "foreign-active", "foreign-terminal", "foreign-workflow"}, []uint64{1, 1, 1, 1}, []domain.State{domain.Active, domain.Active, domain.Active, domain.PendingDelivery})
+	}}
 	if _, err = snapshotload.New(matcherPool, source).Load(ctx, &pb.BuildSnapshotRequest{RequestId: t.Name(), TtlMillis: 60000, PageSize: 1000}); err != nil {
 		t.Fatal(err)
 	}
@@ -162,8 +183,11 @@ func TestMatcherSnapshotReplayLive(t *testing.T) {
 	var connectionMu sync.Mutex
 	// MAT-012 folds 99 -> 101 -> 99 during Latest before activation.
 	quotes := func(c context.Context, pair string) (live.QuoteConnection, error) {
+		if pair != "BTCUSDT" {
+			return nil, pricefeed.ErrConfig
+		}
 		priceRegLocal := newLivePrices()
-		q, e := priceconnection.Connect(c, pair, 0, func(context.Context, string, int32) (priceconnection.Registration, error) { return priceRegLocal, nil }, liveLatest(func(context.Context, string) (*mpb.LatestResponse, error) {
+		q, e := priceconnection.Connect(c, pair, ownPartition, func(context.Context, string, int32) (priceconnection.Registration, error) { return priceRegLocal, nil }, liveLatest(func(context.Context, string) (*mpb.LatestResponse, error) {
 			priceRegLocal.push(2, "101")
 			priceRegLocal.push(3, "99")
 			return &mpb.LatestResponse{Freshness: mpb.Freshness_FRESHNESS_STALE, Quote: &mpb.Quote{Pair: pair, Price: "99", SourceId: "1", Revision: &mpb.Revision{StreamId: "live", Generation: 1, Sequence: 1}, TradeTime: time.Now().Add(-time.Hour).UTC().Format(time.RFC3339Nano), ReceivedAt: time.Now().UTC().Format(time.RFC3339Nano), StreamState: "live"}}, nil
@@ -185,7 +209,7 @@ func TestMatcherSnapshotReplayLive(t *testing.T) {
 		}
 		return r, e
 	}
-	coordinator, err := live.New(store, client, register, quotes, live.Config{SnapshotID: snap.ID, ReplayTTL: time.Minute, PageSize: 1, HeadInterval: 20 * time.Millisecond})
+	coordinator, err := live.New(store, client, register, quotes, live.Config{PricePartitions: []int32{ownPartition}, SnapshotID: snap.ID, ReplayTTL: time.Minute, PageSize: 1, HeadInterval: 20 * time.Millisecond})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,6 +233,16 @@ func TestMatcherSnapshotReplayLive(t *testing.T) {
 		for {
 			s, e := coordinator.Current("BTCUSDT")
 			if e == nil && s.C >= c && len(s.Candidates) == n && s.Quote.Revision.Sequence >= seq {
+				pairs, pe := coordinator.ActivePairs()
+				if pe != nil {
+					continue
+				}
+				if !slices.Equal(pairs, []string{"BTCUSDT"}) {
+					t.Fatal("wrong active pairs", pairs)
+				}
+				if _, fe := coordinator.Current(foreignPair); !errors.Is(fe, live.ErrNotReady) {
+					t.Fatal("foreign view", fe)
+				}
 				return s
 			}
 			select {
@@ -233,7 +267,7 @@ func TestMatcherSnapshotReplayLive(t *testing.T) {
 	// A Kafka duplicate of the original create cannot resurrect the cancelled row.
 	send(created)
 	// SQL-only commit closes publication lag even when Kafka stays empty.
-	appendChanges([]string{"live-sql-only"}, []uint64{1}, []domain.State{domain.Active})
+	appendChanges([]string{"live-sql-only", "foreign-active", "foreign-terminal", "foreign-new"}, []uint64{1, 2, 2, 1}, []domain.State{domain.Active, domain.Active, domain.Cancelled, domain.Active})
 	sample(last, 0, 3)
 	activePrices.push(4, "101")
 	s := sample(last, 2, 4)
@@ -289,7 +323,7 @@ func TestMatcherSnapshotReplayLive(t *testing.T) {
 		send = f.push
 		return restartedLiveFeed{liveFeed: f, position: *pos}, nil
 	}
-	coordinator, err = live.NewResume(reader, client, resumeRegister, quotes, live.Config{ReplayTTL: time.Minute, PageSize: 1, HeadInterval: 20 * time.Millisecond})
+	coordinator, err = live.NewResume(reader, client, resumeRegister, quotes, live.Config{PricePartitions: []int32{ownPartition}, ReplayTTL: time.Minute, PageSize: 1, HeadInterval: 20 * time.Millisecond})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,6 +334,24 @@ func TestMatcherSnapshotReplayLive(t *testing.T) {
 	connectionMu.Unlock()
 	activePrices.push(4, "101")
 	sample(last, 4, 4)
+	snapshotImage, e := reader.ReadImage(ctx, "00000000-0000-4000-8000-000000000019")
+	if e != nil || snapshotImage.Snapshot == nil || snapshotImage.Snapshot.Pair != foreignPair {
+		t.Fatal(snapshotImage, e)
+	}
+	// Full after-images, tombstones and unfinished workflows survive restart,
+	// even though none of these pairs has a price connection on this owner.
+	for _, id := range []string{"foreign-active", "foreign-terminal", "foreign-new", "foreign-workflow"} {
+		im, e := reader.ReadImage(ctx, id)
+		if e != nil || im.Change == nil || im.Change.Pair != foreignPair {
+			t.Fatal(id, im, e)
+		}
+		if id == "foreign-terminal" && im.Change.State != domain.Cancelled {
+			t.Fatal(im)
+		}
+		if id == "foreign-workflow" && (im.Change.Workflow == nil || im.Change.Workflow.TriggerID != "foreign-workflow") {
+			t.Fatal(im)
+		}
+	}
 	// A durable duplicate after restart still cannot resurrect the cancelled row.
 	send(created)
 	sample(last, 4, 4)
@@ -322,6 +374,9 @@ func TestMatcherSnapshotReplayLive(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 emptyReady:
+	if pairs, err := coordinator.ActivePairs(); err != nil || len(pairs) != 0 {
+		t.Fatal("foreign pairs blocked empty readiness", pairs, err)
+	}
 	if _, err := coordinator.Current("BTCUSDT"); err == nil {
 		t.Fatal("removed pair still exposed")
 	}

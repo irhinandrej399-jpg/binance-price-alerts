@@ -20,7 +20,8 @@ type ResumeStore interface {
 // NewResume restores an explicitly selected stable projection ID. SnapshotID
 // must be empty: SQL supplies its origin. register(nil) means no Kafka prefix
 // has ever committed (register at LSO); otherwise register exactly at *position.
-// Ownership is still the caller's responsibility, as with New.
+// Config.PricePartitions restricts the restored view, as with New. Caller must
+// bind Run to the assignment lifetime and enforce transport/SQL ownership.
 func NewResume(store ResumeStore, replay Replay, register func(context.Context, *changefeed.Position) (Registration, error), connect func(context.Context, string) (QuoteConnection, error), cfg Config) (*Coordinator, error) {
 	if store == nil || register == nil || cfg.SnapshotID != "" {
 		return nil, ErrConfig

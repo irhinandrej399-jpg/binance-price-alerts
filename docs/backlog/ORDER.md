@@ -95,51 +95,52 @@
 83. [MAT-005](tickets/MAT-005.md) — Восстановить обработку цены после частичного сбоя.
 84. [MAT-017](tickets/MAT-017.md) — Защитить SQL-записи matcher fencing token.
 85. [MAT-018](tickets/MAT-018.md) — Подготовить групповой источник цен matcher.
-86. [MAT-010](tickets/MAT-010.md) — Назначить партиции двум работающим matcher; интеграция готовых SQL fencing и consumer group.
-87. [MAT-011](tickets/MAT-011.md) — Передать партицию после отказа matcher.
-88. [NTF-001](tickets/NTF-001.md) — Создать durable задание из срабатывания.
-89. [NTF-002](tickets/NTF-002.md) — Сформировать текст Telegram-уведомления.
-90. [NTF-003](tickets/NTF-003.md) — Вызвать Telegram sendMessage.
-91. [NTF-004](tickets/NTF-004.md) — Ограничить отправку по боту.
-92. [NTF-005](tickets/NTF-005.md) — Ограничить отправку в отдельный чат.
-93. [NTF-006](tickets/NTF-006.md) — Назначить повтор по retry_after и временной ошибке.
-94. [NTF-007](tickets/NTF-007.md) — Обработать неоднозначный timeout отправки.
-95. [NTF-008](tickets/NTF-008.md) — Завершить задание при постоянной ошибке.
-96. [NTF-009](tickets/NTF-009.md) — Выдать worker задание с ограниченной арендой.
-97. [NTF-010](tickets/NTF-010.md) — Сохранить успешную доставку.
-98. [NTF-014](tickets/NTF-014.md) — Надёжно передать исход попытки владельцу подписки.
-99. [NTF-015](tickets/NTF-015.md) — Возобновить задание после восстановления Telegram.
-100. [NTF-012](tickets/NTF-012.md) — Выполнить одну попытку обработки готового задания.
-101. [NTF-013](tickets/NTF-013.md) — Запустить ограниченный цикл notification worker.
-102. [OPS-015](tickets/OPS-015.md) — Остановить новый приём API при исчерпании бюджета.
-103. [OPS-016](tickets/OPS-016.md) — Остановить приём рынка при исчерпании бюджета.
-104. [OPS-001](tickets/OPS-001.md) — Добавить health и readiness API.
-105. [OPS-002](tickets/OPS-002.md) — Измерять задержку от цены до trigger.
-106. [OPS-003](tickets/OPS-003.md) — Измерять состояние очереди доставки.
-107. [OPS-004](tickets/OPS-004.md) — Корректно остановить API.
-108. [OPS-012](tickets/OPS-012.md) — Ограничить размер тела публичного запроса.
-109. [OPS-013](tickets/OPS-013.md) — Ограничить частоту входа и регистрации между репликами.
-110. [OPS-006](tickets/OPS-006.md) — Добавить health и readiness market-data.
-111. [OPS-007](tickets/OPS-007.md) — Добавить health и readiness matcher.
-112. [OPS-008](tickets/OPS-008.md) — Добавить health и readiness notifications.
-113. [OPS-009](tickets/OPS-009.md) — Корректно остановить market-data.
-114. [OPS-010](tickets/OPS-010.md) — Корректно остановить matcher.
-115. [OPS-011](tickets/OPS-011.md) — Корректно остановить notification worker.
-116. [OPS-014](tickets/OPS-014.md) — Удалить безопасный префикс журнала Kafka.
-117. [E2E-003](tickets/E2E-003.md) — Поднять управляемый fake Binance для стенда.
-118. [E2E-004](tickets/E2E-004.md) — Поднять управляемый fake Telegram для стенда.
-119. [E2E-002](tickets/E2E-002.md) — Запустить четыре процесса в одном локальном стенде.
-120. [E2E-001](tickets/E2E-001.md) — Проверить один полный пользовательский сценарий.
-121. [LOAD-001](tickets/LOAD-001.md) — Сгенерировать воспроизводимые данные нагрузки.
-122. [LOAD-002](tickets/LOAD-002.md) — Создать источник цен для нагрузочного стенда.
-123. [LOAD-009](tickets/LOAD-009.md) — Собрать команду воспроизводимого нагрузочного прогона.
-124. [LOAD-003](tickets/LOAD-003.md) — Измерить p99 на миллионе подписок.
-125. [LOAD-004](tickets/LOAD-004.md) — Проверить burst 10000 срабатываний/с.
-126. [LOAD-010](tickets/LOAD-010.md) — Измерить обычный профиль на двух matcher.
-127. [LOAD-011](tickets/LOAD-011.md) — Измерить обычный профиль на четырёх matcher.
-128. [LOAD-012](tickets/LOAD-012.md) — Измерить горячую пару на четырёх matcher.
-129. [LOAD-013](tickets/LOAD-013.md) — Сравнить готовые отчёты масштабирования.
-130. [LOAD-006](tickets/LOAD-006.md) — Проверить восстановление брокера под нагрузкой.
-131. [LOAD-007](tickets/LOAD-007.md) — Проверить восстановление matcher под нагрузкой.
-132. [LOAD-008](tickets/LOAD-008.md) — Проверить восстановление notifications под нагрузкой.
-133. [SUB-024](tickets/SUB-024.md) — Исследовать нестабильный expiry в SQL snapshot RPC тестах.
+86. [MAT-019](tickets/MAT-019.md) — Ограничить live-подключения назначенными ценовыми партициями.
+87. [MAT-010](tickets/MAT-010.md) — Назначить партиции двум работающим matcher; интеграция готовых SQL fencing и consumer group.
+88. [MAT-011](tickets/MAT-011.md) — Передать партицию после отказа matcher.
+89. [NTF-001](tickets/NTF-001.md) — Создать durable задание из срабатывания.
+90. [NTF-002](tickets/NTF-002.md) — Сформировать текст Telegram-уведомления.
+91. [NTF-003](tickets/NTF-003.md) — Вызвать Telegram sendMessage.
+92. [NTF-004](tickets/NTF-004.md) — Ограничить отправку по боту.
+93. [NTF-005](tickets/NTF-005.md) — Ограничить отправку в отдельный чат.
+94. [NTF-006](tickets/NTF-006.md) — Назначить повтор по retry_after и временной ошибке.
+95. [NTF-007](tickets/NTF-007.md) — Обработать неоднозначный timeout отправки.
+96. [NTF-008](tickets/NTF-008.md) — Завершить задание при постоянной ошибке.
+97. [NTF-009](tickets/NTF-009.md) — Выдать worker задание с ограниченной арендой.
+98. [NTF-010](tickets/NTF-010.md) — Сохранить успешную доставку.
+99. [NTF-014](tickets/NTF-014.md) — Надёжно передать исход попытки владельцу подписки.
+100. [NTF-015](tickets/NTF-015.md) — Возобновить задание после восстановления Telegram.
+101. [NTF-012](tickets/NTF-012.md) — Выполнить одну попытку обработки готового задания.
+102. [NTF-013](tickets/NTF-013.md) — Запустить ограниченный цикл notification worker.
+103. [OPS-015](tickets/OPS-015.md) — Остановить новый приём API при исчерпании бюджета.
+104. [OPS-016](tickets/OPS-016.md) — Остановить приём рынка при исчерпании бюджета.
+105. [OPS-001](tickets/OPS-001.md) — Добавить health и readiness API.
+106. [OPS-002](tickets/OPS-002.md) — Измерять задержку от цены до trigger.
+107. [OPS-003](tickets/OPS-003.md) — Измерять состояние очереди доставки.
+108. [OPS-004](tickets/OPS-004.md) — Корректно остановить API.
+109. [OPS-012](tickets/OPS-012.md) — Ограничить размер тела публичного запроса.
+110. [OPS-013](tickets/OPS-013.md) — Ограничить частоту входа и регистрации между репликами.
+111. [OPS-006](tickets/OPS-006.md) — Добавить health и readiness market-data.
+112. [OPS-007](tickets/OPS-007.md) — Добавить health и readiness matcher.
+113. [OPS-008](tickets/OPS-008.md) — Добавить health и readiness notifications.
+114. [OPS-009](tickets/OPS-009.md) — Корректно остановить market-data.
+115. [OPS-010](tickets/OPS-010.md) — Корректно остановить matcher.
+116. [OPS-011](tickets/OPS-011.md) — Корректно остановить notification worker.
+117. [OPS-014](tickets/OPS-014.md) — Удалить безопасный префикс журнала Kafka.
+118. [E2E-003](tickets/E2E-003.md) — Поднять управляемый fake Binance для стенда.
+119. [E2E-004](tickets/E2E-004.md) — Поднять управляемый fake Telegram для стенда.
+120. [E2E-002](tickets/E2E-002.md) — Запустить четыре процесса в одном локальном стенде.
+121. [E2E-001](tickets/E2E-001.md) — Проверить один полный пользовательский сценарий.
+122. [LOAD-001](tickets/LOAD-001.md) — Сгенерировать воспроизводимые данные нагрузки.
+123. [LOAD-002](tickets/LOAD-002.md) — Создать источник цен для нагрузочного стенда.
+124. [LOAD-009](tickets/LOAD-009.md) — Собрать команду воспроизводимого нагрузочного прогона.
+125. [LOAD-003](tickets/LOAD-003.md) — Измерить p99 на миллионе подписок.
+126. [LOAD-004](tickets/LOAD-004.md) — Проверить burst 10000 срабатываний/с.
+127. [LOAD-010](tickets/LOAD-010.md) — Измерить обычный профиль на двух matcher.
+128. [LOAD-011](tickets/LOAD-011.md) — Измерить обычный профиль на четырёх matcher.
+129. [LOAD-012](tickets/LOAD-012.md) — Измерить горячую пару на четырёх matcher.
+130. [LOAD-013](tickets/LOAD-013.md) — Сравнить готовые отчёты масштабирования.
+131. [LOAD-006](tickets/LOAD-006.md) — Проверить восстановление брокера под нагрузкой.
+132. [LOAD-007](tickets/LOAD-007.md) — Проверить восстановление matcher под нагрузкой.
+133. [LOAD-008](tickets/LOAD-008.md) — Проверить восстановление notifications под нагрузкой.
+134. [SUB-024](tickets/SUB-024.md) — Исследовать нестабильный expiry в SQL snapshot RPC тестах.

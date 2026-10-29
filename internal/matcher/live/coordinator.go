@@ -5,6 +5,7 @@ package live
 import (
 	"context"
 	"errors"
+	"sort"
 	"sync"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	pb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/api/v1"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/changefeed"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/priceconnection"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/pricefeed"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/projection"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/thresholdindex"
 )
@@ -58,11 +60,12 @@ type QuoteConnection interface {
 	Close()
 }
 type Config struct {
-	SnapshotID   string // completed MAT-007 generation; use a new projection ID
-	ReplayTTL    time.Duration
-	HeadInterval time.Duration
-	PageSize     int32
-	Now          func() time.Time
+	PricePartitions []int32 // nil: unrestricted; empty: no price partitions
+	SnapshotID      string  // completed MAT-007 generation; use a new projection ID
+	ReplayTTL       time.Duration
+	HeadInterval    time.Duration
+	PageSize        int32
+	Now             func() time.Time
 }
 type Selection struct {
 	C          uint64
@@ -71,32 +74,45 @@ type Selection struct {
 }
 
 type Coordinator struct {
-	restore        func(context.Context) error
-	cfg            Config
-	store          Store
-	replay         Replay
-	register       func(context.Context) (Registration, error)
-	connect        func(context.Context, string) (QuoteConnection, error)
-	mu             sync.Mutex
-	started, ready bool
-	index          *thresholdindex.Index
-	entries        map[string]thresholdindex.Entry
-	pairRefs       map[string]int
-	quotes         map[string]QuoteConnection
-	quoteStops     map[string]context.CancelFunc
-	reg            Registration
-	c              uint64
-	expires        time.Time
-	changed        chan struct{}
-	ctx            context.Context
-	cancel         context.CancelCauseFunc
-	wg             sync.WaitGroup
+	restore         func(context.Context) error
+	cfg             Config
+	pricePartitions map[int32]bool
+	store           Store
+	replay          Replay
+	register        func(context.Context) (Registration, error)
+	connect         func(context.Context, string) (QuoteConnection, error)
+	mu              sync.Mutex
+	started, ready  bool
+	index           *thresholdindex.Index
+	entries         map[string]thresholdindex.Entry
+	pairRefs        map[string]int
+	quotes          map[string]QuoteConnection
+	quoteStops      map[string]context.CancelFunc
+	reg             Registration
+	c               uint64
+	expires         time.Time
+	changed         chan struct{}
+	ctx             context.Context
+	cancel          context.CancelCauseFunc
+	wg              sync.WaitGroup
 }
 
 func New(store Store, replay Replay, register func(context.Context) (Registration, error), connect func(context.Context, string) (QuoteConnection, error), cfg Config) (*Coordinator, error) {
 	if store == nil || replay == nil || register == nil || connect == nil || cfg.SnapshotID == "" || cfg.ReplayTTL < time.Millisecond || cfg.ReplayTTL > 24*time.Hour || cfg.HeadInterval < 0 || cfg.PageSize < 0 || cfg.PageSize > 1000 {
 		return nil, ErrConfig
 	}
+	var partitions map[int32]bool
+	if cfg.PricePartitions != nil {
+		partitions = make(map[int32]bool, len(cfg.PricePartitions))
+		for _, p := range cfg.PricePartitions {
+			if p < 0 || p >= 16 || partitions[p] {
+				return nil, ErrConfig
+			}
+			partitions[p] = true
+		}
+	}
+	// Only the private set retains the assignment; caller slices cannot mutate it.
+	cfg.PricePartitions = nil
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
@@ -106,7 +122,7 @@ func New(store Store, replay Replay, register func(context.Context) (Registratio
 	if cfg.PageSize == 0 {
 		cfg.PageSize = 100
 	}
-	return &Coordinator{cfg: cfg, store: store, replay: replay, register: register, connect: connect, changed: make(chan struct{}, 1)}, nil
+	return &Coordinator{cfg: cfg, pricePartitions: partitions, store: store, replay: replay, register: register, connect: connect, changed: make(chan struct{}, 1)}, nil
 }
 
 // Changed is a coalescing wakeup, not a queue of historical candidate batches.
@@ -124,7 +140,7 @@ func (c *Coordinator) signal() {
 func (c *Coordinator) Current(pair string) (Selection, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if !c.readyLocked() {
+	if !c.readyLocked() || !c.owns(pair) {
 		return Selection{}, ErrNotReady
 	}
 	q := c.quotes[pair]
@@ -139,6 +155,26 @@ func (c *Coordinator) Current(pair string) (Selection, error) {
 		return Selection{}, ErrProtocol
 	}
 	return Selection{C: c.c, Quote: quote, Candidates: c.index.Candidates(pair, *quote.Price)}, nil
+}
+
+// ActivePairs returns a sorted snapshot of active owned pairs at a ready view.
+// Like Current, callers must resample after Changed; it acknowledges no price.
+func (c *Coordinator) ActivePairs() ([]string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.readyLocked() {
+		return nil, ErrNotReady
+	}
+	pairs := make([]string, 0, len(c.quotes))
+	for pair := range c.quotes {
+		pairs = append(pairs, pair)
+	}
+	sort.Strings(pairs)
+	return pairs, nil
+}
+
+func (c *Coordinator) owns(pair string) bool {
+	return c.pricePartitions == nil || c.pricePartitions[pricefeed.PairPartition(pair)]
 }
 
 // Run is single-use, including after failure. It owns registration/connections
@@ -220,7 +256,7 @@ func (c *Coordinator) Run(parent context.Context) (result error) {
 		if err != nil {
 			return err
 		}
-		if active {
+		if active && c.owns(e.Pair) {
 			if err = idx.Put(e); err != nil {
 				return err
 			}
@@ -446,6 +482,9 @@ func entry(im projection.Image) (thresholdindex.Entry, bool, error) {
 	return e, state == "active", nil
 }
 func (c *Coordinator) ensureQuote(pair string) error {
+	if !c.owns(pair) {
+		return ErrConfig
+	}
 	if c.quotes[pair] != nil {
 		return nil
 	}
@@ -502,7 +541,7 @@ func (c *Coordinator) update(ctx context.Context, events [][]byte) error {
 		if err != nil {
 			return err
 		}
-		if active {
+		if active && c.owns(e.Pair) {
 			if err = c.ensureQuote(e.Pair); err != nil {
 				return err
 			}
@@ -513,7 +552,7 @@ func (c *Coordinator) update(ctx context.Context, events [][]byte) error {
 			c.pairRefs[old.Pair]--
 		}
 		delete(c.entries, id)
-		if active {
+		if active && c.owns(e.Pair) {
 			err = c.index.Put(e)
 			if err == nil {
 				c.entries[id] = e
