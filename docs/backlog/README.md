@@ -145,7 +145,7 @@
 | [MAT-005](tickets/MAT-005.md) | Восстановить обработку цены после частичного сбоя | MAT-004 | planned |
 | [MAT-007](tickets/MAT-007.md) | Загрузить исходный снимок в проекцию matcher | MAT-001, SUB-016, DEC-004 | done |
 | [MAT-014](tickets/MAT-014.md) | Подготовить durable проекцию снимка для SQL-replay | MAT-001, MAT-007, SUB-022, DEC-007 | done |
-| [MAT-015](tickets/MAT-015.md) | Подготовить Kafka-источник изменений подписок | SET-009, CON-002, SUB-007, DEC-007 | planned |
+| [MAT-015](tickets/MAT-015.md) | Подготовить Kafka-источник изменений подписок | SET-009, CON-002, SUB-007, DEC-007 | done |
 | [MAT-008](tickets/MAT-008.md) | Догнать изменения и переключить matcher в live | MAT-007, DEC-004, DEC-007, MAT-012, SUB-022, MAT-014, MAT-015 | planned |
 | [MAT-009](tickets/MAT-009.md) | Возобновить проекцию с сохранённого cursor | MAT-008 | planned |
 | [MAT-013](tickets/MAT-013.md) | Подготовить источник ценовых обновлений matcher | SET-009, CON-003, MKT-014, DEC-007 | done |

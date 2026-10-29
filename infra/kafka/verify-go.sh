@@ -23,6 +23,7 @@ trap 'exit 143' TERM
 "${compose[@]}" exec -T kafka timeout 90 bash -s -- "$prefix" < infra/kafka/init-topics.sh
 "${compose[@]}" exec -T kafka timeout 90 bash -s -- "${prefix}-feed" < infra/kafka/init-topics.sh
 export KAFKA_PRICEFEED_TEST_PREFIX="${prefix}-feed"
+export KAFKA_CHANGEFEED_TEST_PREFIX="${prefix}-feed"
 export KAFKA_INTEGRATION=1
 export KAFKA_TEST_BROKER="127.0.0.1:$KAFKA_PORT"
 export KAFKA_TEST_PREFIX="$prefix"
@@ -31,7 +32,7 @@ export KAFKA_TEST_PREFIX="$prefix"
 if [[ "${KAFKA_RUN_POSTGRES:-0}" == "1" ]]; then
   python3 scripts/check_postgres.py
 else
-  GOTOOLCHAIN=local go test -race -count=1 -v -timeout 120s ./internal/platform/kafka ./internal/testutil/kafkafault ./internal/marketdata/publish ./internal/matcher/pricefeed
+  GOTOOLCHAIN=local go test -race -count=1 -v -timeout 120s ./internal/platform/kafka ./internal/testutil/kafkafault ./internal/marketdata/publish ./internal/matcher/pricefeed ./internal/matcher/changefeed
 fi
 # Explicit opt-in against a closed port must fail, rather than skip the tests.
 closed_port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')
@@ -43,4 +44,8 @@ if KAFKA_TEST_BROKER="127.0.0.1:$closed_port" GOTOOLCHAIN=local go test -count=1
   echo 'FAIL: unavailable opt-in pricefeed broker passed' >&2
   exit 1
 fi
-printf 'PASS SET-009 / MAT-013: commit/abort/isolation, fencing, lost EndTxn response, stable retry identity, unavailable broker\n'
+if KAFKA_TEST_BROKER="127.0.0.1:$closed_port" GOTOOLCHAIN=local go test -count=1 -timeout 25s -run '^TestIntegrationWholeIdentityDuplicatesAndGap$' ./internal/matcher/changefeed; then
+  echo 'FAIL: unavailable opt-in changefeed broker passed' >&2
+  exit 1
+fi
+printf 'PASS SET-009 / MAT-013 / MAT-015: commit/abort/isolation, fencing, lost EndTxn response, stable retry identity, unavailable broker\n'
