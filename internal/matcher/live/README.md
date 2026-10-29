@@ -68,7 +68,7 @@ API и сохранить durable исход/явный superseded до подт
 координатор **не подтверждает цены**, не вызывает API кандидатов/Telegram и не
 гарантирует доставку одного ephemeral wakeup как durable работы. Нельзя запускать
 второй Next-reader поверх переданного Connection. Consumer group, SQL fencing,
-восстановление checkpoint и runtime относятся к MAT-009/010/011 и последующим
+runtime и владение относятся к MAT-010/011 и последующим
 задачам; Confirm MAT-015 не является broker OffsetCommit.
 
 ## Отказы и проверка
@@ -77,7 +77,7 @@ API и сохранить durable исход/явный superseded до подт
 отзывают view; Run освобождает регистрации и ждёт readers. Ошибки возвращаются
 без скрытых повторов и skip. `ErrPin`/RPC FailedPrecondition требуют нового
 снимка/request ID. После неопределённого commit нельзя продолжать из памяти;
-durable данные сохраняются изолированными, restart отдельно в MAT-009. Pin не
+durable данные сохраняются изолированными; MAT-009 восстанавливает их через NewResume. Pin не
 продлевается и не abandon-ится скрытно; явный AbandonReplay/очистка — у владельца,
 иначе он удерживает журнал до expiry.
 
@@ -99,3 +99,52 @@ SQL-only хвост, Kafka-дубль/gap, checkpoint/Confirm и idle потер
 PostgreSQL-прогон использует управляемый changefeed; без POSTGRES_TEST этот
 интеграционный сценарий пропускается. Существующие тесты MAT-015 отдельно
 проверяют broker/offset loss и повреждённые Kafka-пакеты.
+
+## Restart выбранного поколения — MAT-009
+
+`NewResume` получает `projection.New(pool, stableProjectionID)` и читает его
+`Recover` **до регистрации**. SnapshotID в Config должен быть пустым: origin
+восстанавливается из SQL вместе с C и Kafka topic/partition/NextOffset. Владелец
+передаёт тот же стабильный ID; выбор активного поколения в runtime ещё не подключён.
+Новая миграция не нужна. `Initialize` при restart не вызывается, проекция не
+сбрасывается. Истечение срока загрузки локального снимка само по себе не означает
+потери действующего replay-pin: его ресурс/срок проверяются через SUB-022.
+
+```go
+coordinator, err := live.NewResume(projection.New(pool, stableProjectionID), replayClient,
+    func(ctx context.Context, pos *changefeed.Position) (live.Registration, error) {
+        // changes — новый Source на каждую попытку запуска.
+        if pos == nil { return changes.Register(ctx) }
+        return changes.RegisterAt(ctx, *pos)
+    }, connectPrice, live.Config{ReplayTTL: time.Hour})
+// Проверить err; затем coordinator.Run(ownerCtx).
+```
+
+Если Kafka ещё не применялась, регистрации с LSO предшествует прежний SQL-handoff
+до H. Иначе регистрация начинается **точно** с SQL NextOffset, независимо от
+broker offset commit; topic/partition и возвращённый Start проверяются.
+RegisterAt не сбрасывает позицию. Новые Kafka-события до H становятся безопасными
+дублями, непрерывный префикс сохраняется транзакционно до Confirm.
+
+SQL-progress API может отставать от matcher C после падения до ack: выданные
+целые страницы повторяются, уже сохранённые версии не меняются, ack идёт после
+проверки durable C. API progress впереди matcher либо matcher C впереди API head
+не принимаются. После replay индекс полностью перестраивается через Walk;
+для активных пар заново выполняется MAT-012. Старые цены/кандидаты в памяти не
+восстанавливаются, durable workflow/tombstones остаются в проекции. Readiness
+появляется только после повторной проверки head/pin и живых подключений цен.
+
+`errors.Is(err, live.ErrBootstrap)` означает явную границу нового снимка:
+непригодный/отсутствующий checkpoint, потерянный/истёкший pin, недопустимая
+позиция или несогласованный replay. Исходная ошибка сохраняется в error chain.
+Владелец создаёт новый snapshot/request ID и отдельный projection ID через
+MAT-007/008. Координатор не создаёт снимок скрытно, не удаляет прежнее поколение,
+не делает reset на latest и не публикует старую view. Прочие SQL/RPC ошибки
+возвращаются без повторов; после неопределённого commit новая попытка снова
+читает SQL. Владение/fencing, broker OffsetCommit и durable кандидаты отдельно.
+
+Проверки MAT-009 используют существующий совместный runner: реальный restart
+после Kafka commit, точная позиция без broker commit, повтор/потеря ack, сбой до
+и после SQL-replay commit через второй pool, отзыв pin, новые цены после restart.
+Storage дополнительно проверяет rollback checkpoint после записи after-image,
+полные workflow, uint64 C и отказ cursor ниже границы origin.

@@ -104,3 +104,13 @@ GOCACHE=/tmp/binance-go-build bash infra/kafka/verify-go.sh
 с закрытым opt-in broker обязан FAIL; runner проверяет этот ожидаемый отказ.
 EXIT удаляет стенд/volume. Без KAFKA_INTEGRATION=1 реальные проверки явно SKIP;
 при opt-in отсутствие параметров и недоступность брокера — FAIL.
+
+## Восстановление SQL-позиции — MAT-009
+
+`RegisterAt(ctx, Position)` регистрирует тот же вход с абсолютного NextOffset,
+сохранённого вместе с проекцией в SQL. Broker committed offsets не читаются.
+Проверяются topic/partition=0, неотрицательный offset и наличие позиции между
+log-start и read_committed LSO; далее действует прежний NoResetOffset и контроль
+Done/Err. Позиция должна быть границей целой транзакции, полученной этим источником,
+а не произвольным offset. Ошибка не подменяется новой регистрацией с latest.
+Register/RegisterAt совместно допускают только одну успешную регистрацию на Source.

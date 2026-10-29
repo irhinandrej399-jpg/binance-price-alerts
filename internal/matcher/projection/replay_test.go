@@ -215,11 +215,12 @@ func TestReplayRollback(t *testing.T) {
 	if err := s.ApplyReplay(ctx, [][]byte{replayWire(1, 1, 8, "cancelled")}); err == nil {
 		t.Fatal("missing injected rollback")
 	}
-	cp, err := s.Checkpoint(ctx)
-	if err != nil || cp.C != 0 || cp.NextOffset != 0 {
-		t.Fatal(cp, err)
+	recovered := projection.New(postgrestest.OpenWithDSN(t, "MATCHER_DATABASE_URL"), t.Name())
+	recovery, err := recovered.Recover(ctx)
+	if err != nil || recovery.SnapshotID != id || recovery.Checkpoint.C != 0 || recovery.Checkpoint.NextOffset != 0 {
+		t.Fatal(recovery, err)
 	}
-	im, err := s.ReadImage(ctx, replaySub)
+	im, err := recovered.ReadImage(ctx, replaySub)
 	if err != nil || !proto.Equal(im.Snapshot, snapshotRow(1, "delivery_blocked")) {
 		t.Fatal(im, err)
 	}

@@ -190,7 +190,9 @@ func TestMatcherSnapshotReplayLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	stopped := make(chan error, 1)
-	go func() { stopped <- coordinator.Run(ctx) }()
+	runCtx, stopRun := context.WithCancel(ctx)
+	defer stopRun()
+	go func() { stopped <- coordinator.Run(runCtx) }()
 	t.Cleanup(func() {
 		cancel()
 		select {
@@ -260,6 +262,47 @@ func TestMatcherSnapshotReplayLive(t *testing.T) {
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
+
+	// Restart discards the ephemeral view and uses only the durable generation.
+	// The fresh price handshake returns 99, so the earlier 101 cannot trigger.
+	stopRun()
+	if e := <-stopped; e == nil {
+		t.Fatal("cancelled worker succeeded")
+	}
+	if coordinator.Ready() {
+		t.Fatal("old worker ready after restart")
+	}
+	resumeRegister := func(c context.Context, pos *changefeed.Position) (live.Registration, error) {
+		if pos == nil {
+			t.Fatal("lost durable transport identity")
+		}
+		if os.Getenv("KAFKA_INTEGRATION") == "1" {
+			src, e := changefeed.New(ctx, changefeed.Config{Brokers: []string{os.Getenv("KAFKA_TEST_BROKER")}, Topic: pos.Topic})
+			if e != nil {
+				return nil, e
+			}
+			t.Cleanup(src.Close)
+			return src.RegisterAt(c, *pos)
+		}
+		f := newLiveFeed()
+		f.next = pos.Offset
+		send = f.push
+		return restartedLiveFeed{liveFeed: f, position: *pos}, nil
+	}
+	coordinator, err = live.NewResume(reader, client, resumeRegister, quotes, live.Config{ReplayTTL: time.Minute, PageSize: 1, HeadInterval: 20 * time.Millisecond})
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() { stopped <- coordinator.Run(ctx) }()
+	sample(last, 0, 3)
+	connectionMu.Lock()
+	q, activePrices = connection, priceReg
+	connectionMu.Unlock()
+	activePrices.push(4, "101")
+	sample(last, 4, 4)
+	// A durable duplicate after restart still cannot resurrect the cancelled row.
+	send(created)
+	sample(last, 4, 4)
 
 	// Removing the last active subscription releases its price registration;
 	// a later create on the same pair must run a new MAT-012 handshake.
@@ -429,3 +472,11 @@ func (r *livePrices) push(seq uint64, value string) {
 	p, _ := price.Parse(value)
 	r.queue <- pricefeed.Update{Quote: priceobserved.Observed{SchemaVersion: 1, Pair: "BTCUSDT", Price: &p, SourceID: value, Revision: priceobserved.Revision{StreamID: "live", Generation: 1, Sequence: seq}, TradeTime: time.Now().Add(-time.Hour), ReceivedAt: time.Now(), StreamState: priceobserved.Live}}
 }
+
+// A controlled registration also has to start at the exact SQL checkpoint.
+type restartedLiveFeed struct {
+	*liveFeed
+	position changefeed.Position
+}
+
+func (r restartedLiveFeed) Start() changefeed.Position { return r.position }

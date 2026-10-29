@@ -102,3 +102,15 @@ immutable снимок остаётся в MAT-007. `Get` сохраняет и�
 SQL-replay → реальный Kafka batch, два pools, конкурентные повторы, uint64 C
 выше int64, полные protobuf/точные цены, rollback после after-image, пустой
 снимок, изоляция проекций и согласованность Walk при конкурентном commit.
+
+## Чтение restart-состояния — MAT-009
+
+`Recover(ctx)` возвращает `Recovery{SnapshotID, Checkpoint, Topic, Partition}` из
+одного SQL view checkpoint и origin поколения. Не создаёт и не сбрасывает строки.
+Нет полного snapshot-origin, C ниже исходной границы либо повреждена транспортная
+идентичность — `ErrRecovery`, требуется новый bootstrap. Прочие SQL/context ошибки
+передаются caller. До первого Kafka Handle Topic пуст и NextOffset=0; иначе это
+точная SQL-позиция для `changefeed.RegisterAt`. C и NextOffset не смешиваются.
+Срок загрузки снимка не проверяется: действительность replay-pin устанавливает
+`live.NewResume` через API. Идентификатор поколения выбирает внешний владелец;
+распределённое владение и активный указатель runtime этим методом не создаются.

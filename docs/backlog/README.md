@@ -147,7 +147,7 @@
 | [MAT-014](tickets/MAT-014.md) | Подготовить durable проекцию снимка для SQL-replay | MAT-001, MAT-007, SUB-022, DEC-007 | done |
 | [MAT-015](tickets/MAT-015.md) | Подготовить Kafka-источник изменений подписок | SET-009, CON-002, SUB-007, DEC-007 | done |
 | [MAT-008](tickets/MAT-008.md) | Догнать изменения и переключить matcher в live | MAT-002, MAT-007, DEC-004, DEC-007, MAT-012, SUB-022, MAT-014, MAT-015 | done |
-| [MAT-009](tickets/MAT-009.md) | Возобновить проекцию с сохранённого cursor | MAT-008 | planned |
+| [MAT-009](tickets/MAT-009.md) | Возобновить проекцию с сохранённого cursor | MAT-008 | done |
 | [MAT-013](tickets/MAT-013.md) | Подготовить источник ценовых обновлений matcher | SET-009, CON-003, MKT-014, DEC-007 | done |
 | [MAT-012](tickets/MAT-012.md) | Подключить подписку к последней цене | MAT-001, MAT-002, MKT-006, MKT-013, MKT-014, DEC-004, MAT-013 | done |
 | [MAT-010](tickets/MAT-010.md) | Назначить партиции двум работающим matcher | MAT-005, DEC-007 | planned |

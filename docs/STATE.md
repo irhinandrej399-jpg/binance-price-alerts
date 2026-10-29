@@ -4,9 +4,10 @@
 
 ## Активная работа
 
-- Активный тикет: нет. Следующий по ORDER — MAT-009 после сессионной проверки.
+- Активный тикет: нет. Следующий по ORDER — MAT-004 после сессионной проверки.
 - Незавершённая реализация: нет. Snapshot/storage, индекс, цены, Kafka и координатор нового поколения matcher готовы; restart, обработка кандидатов, владение и runtime отдельно.
-- Последний завершённый тикет: [MAT-008](backlog/tickets/MAT-008.md). [Координатор нового поколения](../internal/matcher/live/README.md): Kafka до H, SQL-replay/ack после durable commit, индекс и MAT-012 до live, периодический head и отзыв readiness. Create/cancel, Kafka-дубли/gap, SQL-only хвост, исчезнувший true/первая цена, release/reconnect пары и idle loss проверены на совместном disposable PostgreSQL/Kafka/mTLS с race detector; vet/build прошли, volumes удалены. Restart, durable кандидаты, группы/fencing и runtime отдельно.
+- Последний завершённый тикет: [MAT-009](backlog/tickets/MAT-009.md). [Restart поколения](../internal/matcher/live/README.md): Recover из SQL, точный Kafka RegisterAt, SQL-replay/ack, новый индекс и последние цены до readiness. Сбои до/после commit, повторы без ack/broker commit, workflow/tombstones, новая цена и потеря/expiry pin проверены на disposable PostgreSQL/Kafka/mTLS с race detector; vet/build прошли, volumes удалены. ErrBootstrap требует нового снимка/поколения. Runtime, выбор активного ID, группы/fencing и durable кандидаты отдельно.
+- [MAT-008](backlog/tickets/MAT-008.md). [Координатор нового поколения](../internal/matcher/live/README.md): Kafka до H, SQL-replay/ack после durable commit, индекс и MAT-012 до live, периодический head и отзыв readiness. Create/cancel, Kafka-дубли/gap, SQL-only хвост, исчезнувший true/первая цена, release/reconnect пары и idle loss проверены на совместном disposable PostgreSQL/Kafka/mTLS с race detector; vet/build прошли, volumes удалены. Restart готов в MAT-009; durable кандидаты, группы/fencing и runtime отдельно.
 - [MAT-015](backlog/tickets/MAT-015.md). [Kafka-источник изменений](../internal/matcher/changefeed/README.md): регистрация единственной партиции/LSO до H, read_committed целые пакеты после commit marker, исходные JSON/C/позиции и отдельный Confirm. Дубли/gap, open/abort/commit, границы/лимиты, 1 024×4 KiB, отмена/idle loss и OffsetOutOfRange проверены на disposable Kafka с race detector; общие race/vet/build прошли, volume удалён. SQL-replay/head/pin/readiness, группы и runtime отдельно.
 - [MAT-014](backlog/tickets/MAT-014.md). [Storage снимка/SQL-replay](../internal/matcher/projection/README.md): атомарная инициализация complete поколения на исходной C, replay без Kafka offsets и согласованный обход after-images. Миграция matcher 003; полные protobuf поля, uint64, rollback инициализации/replay, повторы через два pool, 1001 строка, изоляция и Kafka-дубли проверены на disposable PostgreSQL с race detector; общий прогон/vet/build прошли, volume удалён. Активация/pin/readiness и runtime отдельно.
 - [MAT-007](backlog/tickets/MAT-007.md). [Загрузчик снимка](../internal/matcher/snapshotload/README.md): полные immutable after-images в отдельном durable поколении, атомарная страница/completion, одна C/expiry и идемпотентный повтор с начала. Страницы, пустой снимок, обрыв, отмена, конкурентность, rollback и реальный RPC-клиент проверены на disposable PostgreSQL с race detector; vet/build прошли, тестовые ресурсы удалены. Live checkpoint не меняется; readiness требует replay и последних цен.
@@ -79,14 +80,14 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [MAT-009](backlog/tickets/MAT-009.md): восстановление из durable checkpoint и pin либо явный новый bootstrap. Перед реализацией проверить интерфейсы `projection.Checkpoint/Walk`, SUB-022 и [MAT-008](../internal/matcher/live/README.md). MAT-008 обслуживает новое отдельное поколение, однократный Run и ephemeral view; он не реализует restart или durable указатель активного поколения. SQL C, API progress/issued, Kafka NextOffset и ценовая ревизия — разные шкалы. Потеря pin требует нового snapshot, readiness требует действующих регистраций и актуальных цен.
+По очереди следующий — [MAT-004](backlog/tickets/MAT-004.md): обработать цену и запросить фиксацию кандидатов. Перед реализацией проверить зависимости, live.Current/Changed, канонический API и durable результат обработки цены. MAT-008/009 дают согласованную ephemeral view; она не подтверждает цены и не сохраняет кандидатов. Restart использует stable projection ID, Recover и RegisterAt, восстанавливает индекс и подключает цены заново. При ErrBootstrap нужен новый snapshot/request ID и отдельное поколение. SQL C, API progress/issued, Kafka NextOffset и ценовая ревизия — разные шкалы; группы/fencing и runtime отдельно.
 
 `python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Идти по этой очереди; разделы каталога и номера ID сами по себе порядок не задают.
 
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show MAT-009` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show MAT-004` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

@@ -119,6 +119,20 @@ func New(parent context.Context, cfg Config) (*Source, error) {
 // Register can be called once. Its context owns registration validity, even on
 // an idle topic. Call before BeginReplay fixes H. No records are read before LSO.
 func (s *Source) Register(parent context.Context) (*Registration, error) {
+	return s.register(parent, nil)
+}
+
+// RegisterAt resumes the exact SQL NextOffset, never a broker group offset.
+// Missing/out-of-range positions fail explicitly; there is no reset to latest.
+// Use only a whole-transaction boundary produced by this source and stored with
+// the projection. As with Register, this must precede SQL BeginReplay/H.
+func (s *Source) RegisterAt(parent context.Context, position Position) (*Registration, error) {
+	if position.Topic != s.cfg.Topic || position.Partition != 0 || position.Offset < 0 {
+		return nil, ErrPosition
+	}
+	return s.register(parent, &position)
+}
+func (s *Source) register(parent context.Context, resume *Position) (*Registration, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed || s.reg != nil {
@@ -142,6 +156,16 @@ func (s *Source) Register(parent context.Context) (*Registration, error) {
 	offset, err := s.position(ctx)
 	if err != nil {
 		return nil, err
+	}
+	if resume != nil {
+		earliest, e := s.offsetAt(ctx, -2)
+		if e != nil {
+			return nil, e
+		}
+		if resume.Offset < earliest || resume.Offset > offset {
+			return nil, ErrPosition
+		}
+		offset = resume.Offset
 	}
 	if err = ctx.Err(); err != nil {
 		return nil, err
@@ -171,6 +195,9 @@ func (s *Source) singlePartition(parent context.Context) error {
 	return nil
 }
 func (s *Source) position(parent context.Context) (int64, error) {
+	return s.offsetAt(parent, -1)
+}
+func (s *Source) offsetAt(parent context.Context, timestamp int64) (int64, error) {
 	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
 	defer cancel()
 	req := kmsg.NewPtrListOffsetsRequest()
@@ -179,7 +206,7 @@ func (s *Source) position(parent context.Context) (int64, error) {
 	t.Topic = s.cfg.Topic
 	p := kmsg.NewListOffsetsRequestTopicPartition()
 	p.Partition = 0
-	p.Timestamp = -1
+	p.Timestamp = timestamp
 	t.Partitions = []kmsg.ListOffsetsRequestTopicPartition{p}
 	req.Topics = []kmsg.ListOffsetsRequestTopic{t}
 	resp, err := req.RequestWith(ctx, s.client)

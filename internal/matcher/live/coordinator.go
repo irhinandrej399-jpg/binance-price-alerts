@@ -1,4 +1,4 @@
-// Package live coordinates one fresh snapshot generation through SQL replay
+// Package live coordinates a fresh or restored snapshot generation through SQL replay
 // and Kafka acceleration. It owns no canonical subscription or delivery state.
 package live
 
@@ -71,6 +71,7 @@ type Selection struct {
 }
 
 type Coordinator struct {
+	restore        func(context.Context) error
 	cfg            Config
 	store          Store
 	replay         Replay
@@ -141,7 +142,7 @@ func (c *Coordinator) Current(pair string) (Selection, error) {
 }
 
 // Run is single-use, including after failure. It owns registration/connections
-// until return. Any error revokes the view; caller creates a new bootstrap.
+// until return. Any error revokes the view; caller restores SQL or bootstraps.
 // There are no hidden retries of uncertain writes, no group offsets or fencing.
 func (c *Coordinator) Run(parent context.Context) (result error) {
 	c.mu.Lock()
@@ -169,7 +170,15 @@ func (c *Coordinator) Run(parent context.Context) (result error) {
 		if err := context.Cause(c.ctx); result == nil && err != nil {
 			result = err
 		}
+		if c.restore != nil {
+			result = bootstrapError(result)
+		}
 	}()
+	if c.restore != nil {
+		if err := c.restore(c.ctx); err != nil {
+			return err
+		}
+	}
 	reg, err := c.register(c.ctx)
 	if err != nil {
 		return err
@@ -195,9 +204,12 @@ func (c *Coordinator) Run(parent context.Context) (result error) {
 		case <-c.ctx.Done():
 		}
 	}()
-	// Register before H; Initialize is idempotent but this is not a restart path.
-	if err = c.store.Initialize(c.ctx, c.cfg.SnapshotID); err != nil {
-		return err
+	// Register before H. A restart must not reinitialize or require the old
+	// snapshot's loading TTL; the API replay pin has its own lifetime.
+	if c.restore == nil {
+		if err = c.store.Initialize(c.ctx, c.cfg.SnapshotID); err != nil {
+			return err
+		}
 	}
 	if err = c.sync(c.ctx); err != nil {
 		return err
@@ -306,7 +318,7 @@ func (c *Coordinator) sync(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if state.Progress > cp.C {
+	if state.Progress > cp.C || cp.C > state.Head {
 		return ErrProtocol
 	}
 	after, target := state.Progress, state.Head
