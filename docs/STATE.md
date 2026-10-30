@@ -4,9 +4,10 @@
 
 ## Активная работа
 
-- Активная реализация: нет. NTF-001 завершён; следующий по ORDER — NTF-002 после новой сессионной проверки.
+- Активная реализация: нет. NTF-002 завершён; следующий по ORDER — NTF-003 после новой сессионной проверки.
 - Незавершённая реализация: нет. Group/fencing/live/handler и полный prices Prefix интегрированы; fault takeover проверен MAT-011, cmd/runtime отдельно.
-- Последний завершённый тикет: [NTF-001](backlog/tickets/NTF-001.md). [Приём delivery-requests](../internal/notifications/intake/README.md): read_committed consumer group, уникальный trigger_id и SQL checkpoint одной транзакцией до broker commit; restart из SQL, дубли без сброса состояния, invalid message без skip. Реальные PostgreSQL/Kafka/race, vet/build прошли, disposable ресурсы удалены. Runtime/worker/Telegram и нагрузка отдельно.
+- Последний завершённый тикет: [NTF-002](backlog/tickets/NTF-002.md). [Текст уведомления](../internal/notifications/message/README.md): чистый HTML formatter, точные цены, время/возраст и независимые предупреждения DEC-002. Caller передаёт котировку допуска попытки. Fixtures/race, общий race, vet/build прошли; Telegram-вызов и worker/runtime отдельно.
+- [NTF-001](backlog/tickets/NTF-001.md). [Приём delivery-requests](../internal/notifications/intake/README.md): read_committed consumer group, уникальный trigger_id и SQL checkpoint одной транзакцией до broker commit; restart из SQL, дубли без сброса состояния, invalid message без skip. Реальные PostgreSQL/Kafka/race, vet/build прошли, disposable ресурсы удалены. Runtime/worker/Telegram и нагрузка отдельно.
 - [MAT-011](backlog/tickets/MAT-011.md). [Fault takeover](../internal/matcher/replica/README.md): незавершённая цена/потерянный ответ API, поздний SQL старого token, условный cleanup и restart после SQL commit до Confirm. Реальные Kafka/PostgreSQL/mTLS, canonical trigger_id/один outbox и Pending до ready проверены полным runner с race detector; vet/build прошли, disposable ресурсы удалены. SIGKILL, сетевая потеря OffsetCommit, cmd/runtime и нагрузка не заявляются.
 - [MAT-010](backlog/tickets/MAT-010.md). [Replica](../internal/matcher/replica/README.md): реальные назначения → SQL tokens → полная view/Latest/Pending до readiness; устойчивые scope/work keys, полный prices Prefix всех пар и SQL Complete до broker Confirm. Две реплики/16 партиций, нормальный rebalance, commit/abort gaps, race, vet/build проверены. Failover проверен MAT-011; cmd/runtime отдельно.
 - [MAT-019](backlog/tickets/MAT-019.md). [Live-view](../internal/matcher/live/README.md): immutable PricePartitions в New/NewResume, только свои подключения/Current и ActivePairs под readiness, полные SQL after-images/workflow/tombstones и C/cursor. Совместный PostgreSQL/Kafka/race, vet/build и проверки бэклога прошли; disposable ресурсы удалены. Интеграция готова в MAT-010; failover отдельно.
@@ -90,16 +91,16 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [NTF-002](backlog/tickets/NTF-002.md), после новой сессионной проверки. NTF-001 завершён: `internal/notifications/intake` и миграция notifications 001 принимают AlertTriggered с уникальным trigger_id и сохраняют job/checkpoint атомарно до ack. Повтор после потери ack и ожидания условия не создаёт вторую работу и не сбрасывает её state.
+По очереди следующий — [NTF-003](backlog/tickets/NTF-003.md), после новой сессионной проверки. NTF-002 завершён: `internal/notifications/message.Format` формирует один русский HTML-текст с точными ценами и предупреждениями. Отправителю нужен `parse_mode=HTML`; worker передаёт фактическую цену/время/диагностику из действующего допуска API. Историческая цена AlertTriggered не разрешает отправку.
 
-SQL checkpoint авторитетен после рестарта: consumer игнорирует broker offset, восстанавливает каждую назначенную партицию и явно останавливается при недоступной позиции/невалидном сообщении. Вызовы API/Telegram, worker leases/попытки и runtime остаются последующим задачам. Полный совместный PostgreSQL/Kafka/race прогон прошёл; проверены concurrent insert, rollback/deferred commit, abort, SQL commit до ack, restart и реальный broker commit. Рабочие миграции не применялись, disposable volumes удалены. Нагрузка и fault/rebalance нескольких notifications не заявляются.
+Fixtures/race нового пакета, общий `go test -race ./...`, vet/build прошли. Для общих сетевых тестов разрешён loopback вне sandbox; SQL/Kafka opt-in без стенда пропущены. Telegram, worker/runtime и локализация не реализовывались, реальные сообщения не отправлялись.
 
 `python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Следующий тикет автоматически не начинается.
 
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show NTF-002` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show NTF-003` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.
