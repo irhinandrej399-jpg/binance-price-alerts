@@ -163,7 +163,7 @@
 
 | ID | Один результат | Зависимости | Статус |
 | --- | --- | --- | --- |
-| [NTF-001](tickets/NTF-001.md) | Создать durable задание из срабатывания | CON-004, SUB-009, SET-004, DEC-003 | planned |
+| [NTF-001](tickets/NTF-001.md) | Создать durable задание из срабатывания | CON-004, SUB-009, SET-004, DEC-003 | done |
 | [NTF-002](tickets/NTF-002.md) | Сформировать текст Telegram-уведомления | CON-004, DOM-001 | planned |
 | [NTF-003](tickets/NTF-003.md) | Вызвать Telegram sendMessage | NTF-002, IAM-008 | planned |
 | [NTF-004](tickets/NTF-004.md) | Ограничить отправку по боту | NTF-003, DEC-003 | planned |

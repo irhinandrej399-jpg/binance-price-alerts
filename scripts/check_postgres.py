@@ -36,7 +36,8 @@ def main():
         try:
             run(compose + ['up', '-d', '--wait', '--wait-timeout', '120'])
             for owner, fixture in (('api', 'go'), ('market_data', None),
-                                   ('matcher', 'go_matcher')):
+                                   ('matcher', 'go_matcher'),
+                                   ('notifications', 'go_notifications')):
                 with tempfile.TemporaryDirectory(prefix=f'binance-go-{owner}-migrations-') as tmp:
                     directory = Path(tmp)
                     sources = [ROOT / 'migrations' / owner]
