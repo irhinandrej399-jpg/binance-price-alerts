@@ -1,4 +1,4 @@
-# Работа реплики matcher — MAT-010
+# Работа реплики matcher — MAT-010/011
 
 `New(Config)` и однократный `Run(ctx)` связывают готовые Kafka group, fencing,
 полную live-view, priceconnection и pricehandler. Подключение в `cmd` отдельно.
@@ -78,8 +78,8 @@ Assignment.Confirm; следующая позиция обрабатываетс
 
 При eager rebalance прежняя view теряет readiness, закрывает подключения и
 завершает readers; новая сессия получает новые tokens и восстанавливается.
-Транспортные/SQL/RPC ошибки возвращаются, данные не сбрасываются. Fault takeover,
-запоздалый старый владелец и политика повторного запуска — MAT-011.
+Транспортные/SQL/RPC ошибки возвращаются, данные не сбрасываются. Caller запускает
+новый Run через New; автоматической политики повторного запуска здесь нет.
 
 ## Проверка
 
@@ -96,4 +96,40 @@ feed использует готовую deterministic fixture. Реальные
 порядок двух цен в каждой партиции через commit/abort gaps (aborted работы
 отсутствуют в SQL), все пары без подписок, запрет broker commit
 впереди SQL при задержанном API и сходимость всех broker/SQL prefixes. Отмена
-останавливает/join-ит workers. Нагрузочная квалификация и failover не заявлены.
+останавливает/join-ит workers. Нагрузочная квалификация не заявлена.
+
+## Отказ и передача — MAT-011
+
+`internal/api/replayrpc/matcher_failover_test.go`, `TestMatcherFaultTakeover`
+использует те же disposable PostgreSQL/Kafka и защищённый loopback fixture.
+Snapshot, replay и RequestDelivery обслуживают настоящие API RPC servers;
+workflow и delivery outbox фиксируются в БД API. Детерминированный источник
+subscription-changes только будит live-view, актуальность даёт SQL replay/head.
+
+Старая реплика останавливается посреди оценки цены: один из трёх кандидатов
+записан в matcher, следующий уже принят API, но ответ задержан. Отмена локального
+context завершает Kafka group независимо от задержанного ответа. Другая реплика
+получает более высокий SQL token, восстанавливает полную view/Latest и Pending,
+затем становится ready. Changed и transport reader могут принять цену в разном
+порядке; тест восстанавливает точный durable key и отдельно проверяет полный
+транспортный Prefix. Старый ответ выпускается только после готовности преемника.
+
+Проверяются отказы старому Accept/Record/Complete и записи полной проекции с
+новым context после reassignment, отсутствие ack, условный cleanup без отзыва
+преемника и тот же canonical trigger_id при позднем RPC. Для каждой подписки
+остаётся одна строка delivery outbox. Отзыв SQL token не заменяет idempotency
+API: уже отправленный RPC может завершиться после revoke.
+
+Вторая точка отказа вводится на существующей границе Store.Complete/ack: SQL
+сохраняет результат и Prefix, callback возвращает ошибку до отправки Confirm.
+Это проверка сбоя **до** broker commit, а не имитация потерянного сетевого ответа
+OffsetCommit. После нового token и NewResume SQL next имеет приоритет над
+отстающим broker offset и Bootstrap; следующая цена продолжает Prefix, broker
+догоняет SQL, Pending пуст и новые workflow не создаются.
+
+Адресное воспроизведение (включая race detector):
+
+`GOPATH=/tmp/binance-set009-go GOCACHE=/tmp/binance-set009-cache GOFLAGS='-run=^TestMatcherFaultTakeover$' KAFKA_RUN_POSTGRES=1 bash infra/kafka/verify-go.sh`
+
+Это управляемая отмена владельца и задержка уже завершённого RPC; SIGKILL процесса,
+сетевая потеря OffsetCommit, cmd/runtime и нагрузка этим тестом не заявляются.

@@ -157,7 +157,7 @@
 | [MAT-018](tickets/MAT-018.md) | Подготовить групповой источник цен matcher | MAT-013, SET-009, DEC-007 | done |
 | [MAT-019](tickets/MAT-019.md) | Ограничить live-подключения назначенными ценовыми партициями | MAT-009, MAT-018, DEC-007 | done |
 | [MAT-010](tickets/MAT-010.md) | Назначить партиции двум работающим matcher | MAT-005, DEC-007, MAT-017, MAT-018, MAT-019 | done |
-| [MAT-011](tickets/MAT-011.md) | Передать партицию после отказа matcher | MAT-010 | planned |
+| [MAT-011](tickets/MAT-011.md) | Передать партицию после отказа matcher | MAT-010 | done |
 
 ### Доставка
 
