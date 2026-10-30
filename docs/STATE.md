@@ -1,13 +1,14 @@
 # Текущее состояние проекта
 
-Обновлено: 29 октября 2026. Это краткая навигация для новой сессии. Статусы живут в карточках, результаты — в их журнале, решения — в ADR; фактические файлы и проверки подтверждают сводку.
+Обновлено: 30 октября 2026. Это краткая навигация для новой сессии. Статусы живут в карточках, результаты — в их журнале, решения — в ADR; фактические файлы и проверки подтверждают сводку.
 
 ## Активная работа
 
-- Активная реализация: нет. MAT-019 завершён; следующий по ORDER — MAT-010 после новой сессионной проверки.
-- Незавершённая реализация: нет. Ограниченная назначением live-view, handler/recovery, SQL fencing и Kafka group готовы; их интеграция — MAT-010, runtime отдельно.
-- Последний завершённый тикет: [MAT-019](backlog/tickets/MAT-019.md). [Live-view](../internal/matcher/live/README.md): immutable PricePartitions в New/NewResume, только свои подключения/Current и ActivePairs под readiness, полные SQL after-images/workflow/tombstones и C/cursor. Совместный PostgreSQL/Kafka/race, vet/build и проверки бэклога прошли; disposable ресурсы удалены. Интеграция — MAT-010.
-- [MAT-018](backlog/tickets/MAT-018.md). [Kafka group-источник](../internal/matcher/pricefeed/group.md): два клиента/16 партиций, Prepare с абсолютными caller cursors, единственный bounded dispatch всех пар и Register/LSO/Latest, отзыв/loss и явный FIFO Confirm. Реальная Kafka/race, общий race/vet/build и проверки бэклога прошли, disposable volume удалён. SQL tokens/Prefix и интеграция — MAT-010.
+- Активная реализация: нет. MAT-010 завершён; следующий по ORDER — MAT-011 после новой сессионной проверки.
+- Незавершённая реализация: нет. Group/fencing/live/handler и полный prices Prefix интегрированы; fault takeover — MAT-011, cmd/runtime отдельно.
+- Последний завершённый тикет: [MAT-010](backlog/tickets/MAT-010.md). [Replica](../internal/matcher/replica/README.md): реальные назначения → SQL tokens → полная view/Latest/Pending до readiness; устойчивые scope/work keys, полный prices Prefix всех пар и SQL Complete до broker Confirm. Две реплики/16 партиций, нормальный rebalance, commit/abort gaps, race, vet/build проверены. Failover — MAT-011; cmd/runtime отдельно.
+- [MAT-019](backlog/tickets/MAT-019.md). [Live-view](../internal/matcher/live/README.md): immutable PricePartitions в New/NewResume, только свои подключения/Current и ActivePairs под readiness, полные SQL after-images/workflow/tombstones и C/cursor. Совместный PostgreSQL/Kafka/race, vet/build и проверки бэклога прошли; disposable ресурсы удалены. Интеграция готова в MAT-010; failover отдельно.
+- [MAT-018](backlog/tickets/MAT-018.md). [Kafka group-источник](../internal/matcher/pricefeed/group.md): два клиента/16 партиций, Prepare с абсолютными caller cursors, единственный bounded dispatch всех пар и Register/LSO/Latest, отзыв/loss и явный FIFO Confirm. Реальная Kafka/race, общий race/vet/build и проверки бэклога прошли, disposable volume удалён. SQL tokens/Prefix и интеграция готовы в MAT-010.
 - [MAT-017](backlog/tickets/MAT-017.md). [SQL fencing](../internal/matcher/fencing/README.md): durable CAS/ledger назначения, постоянный pricework scope и полный набор tokens проекции. Accept/Record/Complete/Prefix и Initialize/replay/Handle проверяют полномочия до commit; legacy обход запрещён. PostgreSQL/race, vet/build и проверки бэклога прошли, disposable volume удалён. Kafka-владение подтверждает caller; группа/runtime отдельно.
 - [MAT-005](backlog/tickets/MAT-005.md). [Recover/Resume](../internal/matcher/pricehandler/README.md) восстанавливают Pending/Get через актуальную view, canonical исходы и terminal повтор ack. 37/100, lost API response, исчезнувшее условие, разные пары/Latest и 100 уникальных workflow через mTLS проверены на disposable PostgreSQL с race detector; vet/build прошли, volume удалён. Префикс доказывает транспортный владелец; runtime отдельно.
 - [MAT-004](backlog/tickets/MAT-004.md). [Handler цены](../internal/matcher/pricehandler/README.md) сохраняет набор owner/sub/version до SUB-014, durable исход/superseded и отдельный Prefix до ack; повторы и recovery workflow после закрытия пары безопасны. Полный PostgreSQL/race, mTLS SUB-014, vet/build прошли, disposable volume удалён. Восстановление Pending готово в MAT-005; consumer loop — отдельно.
@@ -87,22 +88,20 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [MAT-010](backlog/tickets/MAT-010.md), после новой сессионной проверки. MAT-019 завершён: New/NewResume принимают `Config.PricePartitions` (nil/all, explicit empty/none), `ActivePairs` выдаёт собственные active пары под readiness; `Run(Assignment.Context())` отзывает view при отмене. Полная SQL-проекция/C и subscription-changes cursor сохраняются, цены чужих пар не подключаются.
+По очереди следующий — [MAT-011](backlog/tickets/MAT-011.md), после новой сессионной проверки. [MAT-010](backlog/tickets/MAT-010.md) завершён: `replica.New(Config)/Run(ctx)` интегрирует реальные Group assignments, SQL fencing, New/NewResume полной view, MAT-012 и durable handler/recovery. `Ready` требует живого назначения/view, завершённого Pending и первой оценки текущих собственных пар.
 
-MAT-010 связывает [Kafka group MAT-018](../internal/matcher/pricefeed/group.md), [SQL fencing MAT-017](../internal/matcher/fencing/README.md), ограниченную view, handler и recovery. Prepare получает caller SQL/bootstrap next offsets; Assignment.Context/Done отзывает работу, полный поток доказывает SQL Prefix до Confirm, включая пары без подписок. Локальный Assignment.ID не заменяет SQL token. MAT-010 остаётся planned, его критерии интеграции не выполнены.
+Scope устойчив по Environment/Group/Topic/Partition, projection ID — по replica/набору назначения, work key Kafka — по физической Position, без PID/token. Prepare читает SQL Prefix, при отсутствии — явный caller Bootstrap; broker commits не выбирают старт. Новый набор выбирает отдельную полную projection ID, прежний набор восстанавливается через NewResume. Истёкший pin/непригодная Kafka позиция не сбрасываются скрытно; новая bootstrap-политика и cmd/runtime остаются у caller.
 
-[MAT-005](../internal/matcher/pricehandler/README.md) предоставляет Recover (Pending/Get → Handle без transport ack) и Resume по сохранённому ключу/паре/Position, включая terminal работу после потери ack. До продолжения caller восстанавливает live-проекцию и актуальную Latest; новая цена supersede-ит старую работу без исторических RPC. Полную текущую view runtime проверяет отдельно новым ключом, в том числе после superseded при новой подходящей цене. Маршрутизация повторной broker-доставки в ключ, доказательство Prefix и runtime ещё не подключены.
+MAT-011 должен проверить fault takeover посреди цены, потерю ответа/Confirm, поздние SQL/RPC старого владельца и итоговые canonical trigger_id. В MAT-010 выполнены нормальный eager rebalance и Pending до readiness; fault-проверки этим не подменяются. Использовать существующий совместный disposable runner и готовые API fixtures; новый harness не нужен.
 
-MAT-016 предоставляет Accept/Get/Pending/Record/Complete и независимый транспортный Prefix; его непрерывность доказывает caller. SQL C, API progress/issued, Kafka NextOffset subscription-changes и ценовая ревизия — разные шкалы. Начальная Latest не имеет Kafka offset.
+Полный prices Prefix охватывает и пары без подписок, допускает read_committed control/abort gaps и сохраняется через SQL Complete до Assignment.Confirm. Latest и оценки Changed не имеют Position. Полная проекция/C/subscription cursor, prices Prefix, price revision и SQL token — разные шкалы. Независимый нерегулярный expiry snapshot RPC записан в [SUB-024](backlog/tickets/SUB-024.md).
 
-Restart проекции готов в MAT-009; продолжение принятых кандидатов — MAT-005, группы/fencing и runtime отдельно. Независимая диагностика нерегулярного expiry snapshot RPC — [SUB-024](backlog/tickets/SUB-024.md), реализация в MAT-016 не включалась.
-
-`python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Идти по этой очереди; разделы каталога и номера ID сами по себе порядок не задают.
+`python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Следующий тикет автоматически не начинается.
 
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show MAT-010` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show MAT-011` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.
