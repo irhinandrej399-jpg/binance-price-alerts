@@ -1,4 +1,4 @@
-// Package jobs owns bounded local claims in the notifications database.
+// Package jobs owns bounded local claims and durable success evidence in the notifications database.
 package jobs
 
 import (
@@ -81,6 +81,13 @@ func (s *Store) Claim(ctx context.Context, triggerID string) (Lease, error) {
 	if err != nil {
 		return Lease{}, err
 	}
+	succeeded, err := hasSuccess(ctx, tx, triggerID)
+	if err != nil {
+		return Lease{}, err
+	}
+	if succeeded {
+		return Lease{}, ErrUnavailable
+	}
 	now, err := s.clock(ctx, tx)
 	if err != nil {
 		return Lease{}, err
@@ -156,6 +163,20 @@ func (s *Store) Park(ctx context.Context, l Lease, reason WaitReason, next time.
 	}
 	if id == nil || *id != l.ID || fence != l.Fence || expires == nil || !now.Before(*expires) || state != "leased" {
 		return ErrStale
+	}
+	succeeded, err := hasSuccess(ctx, tx, l.TriggerID)
+	if err != nil {
+		return err
+	}
+	if succeeded {
+		return ErrUnavailable
+	}
+	var attempted bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM app.delivery_attempts WHERE claim_id=$1)`, l.ID).Scan(&attempted); err != nil {
+		return err
+	}
+	if attempted {
+		return ErrConflict
 	}
 	if !next.After(now) {
 		return errors.New("park deadline must be in the future")

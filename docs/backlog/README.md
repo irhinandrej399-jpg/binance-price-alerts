@@ -172,7 +172,7 @@
 | [NTF-007](tickets/NTF-007.md) | Обработать неоднозначный timeout отправки | NTF-003, NTF-006, NTF-009, NTF-010 | planned |
 | [NTF-008](tickets/NTF-008.md) | Завершить задание при постоянной ошибке | NTF-001, NTF-003 | planned |
 | [NTF-009](tickets/NTF-009.md) | [Выдать worker задание с ограниченной арендой](../../internal/notifications/jobs/README.md) | NTF-001, NTF-006 | done |
-| [NTF-010](tickets/NTF-010.md) | Сохранить успешную доставку | NTF-003, NTF-009 | planned |
+| [NTF-010](tickets/NTF-010.md) | Сохранить успешную доставку | NTF-003, NTF-009 | done |
 | [NTF-014](tickets/NTF-014.md) | Надёжно передать исход попытки владельцу подписки | NTF-010, SUB-020, NTF-007, NTF-008 | planned |
 | [NTF-015](tickets/NTF-015.md) | Возобновить задание после восстановления Telegram | NTF-008, NTF-009, SUB-018, DEC-005 | planned |
 | [NTF-012](tickets/NTF-012.md) | Выполнить одну попытку обработки готового задания | NTF-004, NTF-005, NTF-006, NTF-007, NTF-008, NTF-009, NTF-010, SUB-018, NTF-014, NTF-002, NTF-015 | planned |

@@ -46,6 +46,11 @@ next_attempt_at и историю claim для NTF-009
 ([контракт](../internal/notifications/jobs/README.md)); API-допуски/HTTP-исходы
 этой миграцией не создаются.
 
+`notifications/005_delivery_success.sql` добавляет корреляцию известного API
+attempt ID с claim/trigger/fence, append-only свидетельство message_id и pending
+report успеха NTF-010. Состояние `succeeded` локальное; передачу результата API
+подключает NTF-014 ([контракт jobs](../internal/notifications/jobs/README.md)).
+
 Файлы — UTF-8 `001_description.sql`, `002_next_step.sql` и далее: положительный
 уникальный bigint в начале, описание из строчных латинских букв, цифр и `_`,
 начиная с буквы. Порядок числовой. Файлы с расширением `.sql` проверяются строго;

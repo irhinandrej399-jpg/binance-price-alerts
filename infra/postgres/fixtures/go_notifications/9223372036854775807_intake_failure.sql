@@ -30,3 +30,14 @@ END;
 $$;
 CREATE CONSTRAINT TRIGGER job_claim_commit_failure AFTER INSERT OR UPDATE ON app.delivery_claims
 DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION app.reject_job_claim_commit();
+
+CREATE FUNCTION app.reject_success_report() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.attempt_id = 'api-TestSuccessRollback' THEN
+        RAISE EXCEPTION 'injected success commit failure';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE CONSTRAINT TRIGGER success_commit_failure AFTER INSERT ON app.delivery_success_reports
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION app.reject_success_report();
