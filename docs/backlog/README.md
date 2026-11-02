@@ -167,7 +167,7 @@
 | [NTF-002](tickets/NTF-002.md) | Сформировать текст Telegram-уведомления | CON-004, DOM-001 | done |
 | [NTF-003](tickets/NTF-003.md) | Вызвать Telegram sendMessage | NTF-002, IAM-008 | done |
 | [NTF-004](tickets/NTF-004.md) | [Ограничить отправку по боту](../../internal/notifications/botlimit/README.md) | NTF-003, DEC-003 | done |
-| [NTF-005](tickets/NTF-005.md) | Ограничить отправку в отдельный чат | NTF-004 | planned |
+| [NTF-005](tickets/NTF-005.md) | [Ограничить отправку в отдельный чат](../../internal/notifications/chatlimit/README.md) | NTF-004 | done |
 | [NTF-006](tickets/NTF-006.md) | Назначить повтор по retry_after и временной ошибке | NTF-003, NTF-001 | planned |
 | [NTF-007](tickets/NTF-007.md) | Обработать неоднозначный timeout отправки | NTF-003, NTF-006 | planned |
 | [NTF-008](tickets/NTF-008.md) | Завершить задание при постоянной ошибке | NTF-001, NTF-003 | planned |
