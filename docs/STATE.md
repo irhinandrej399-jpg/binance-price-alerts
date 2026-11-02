@@ -4,9 +4,10 @@
 
 ## Активная работа
 
-- Активная реализация: нет. NTF-005 завершён; следующий по ORDER — NTF-006 после новой сессионной проверки.
+- Активная реализация: нет. NTF-006 завершён; следующий по ORDER — NTF-007 после новой сессионной проверки.
 - Незавершённая реализация: нет. Group/fencing/live/handler и полный prices Prefix интегрированы; fault takeover проверен MAT-011, cmd/runtime отдельно.
-- Последний завершённый тикет: [NTF-005](backlog/tickets/NTF-005.md). [Лимитер/планировщик чатов](../internal/notifications/chatlimit/README.md): общий durable допуск bot/chat, default 1 с; Next пропускает ожидающие/занятые чаты. Fake clock 15+1+1, два pool/конкуренты/restart, удерживаемая блокировка, реальный PostgreSQL/race, общий race, vet/build прошли; disposable ресурсы удалены. Worker/runtime, совместная отправка с botlimit и измерение HTTP-доставки отдельно.
+- Последний завершённый тикет: [NTF-006](backlog/tickets/NTF-006.md). [Политика повторов](../internal/notifications/retry/README.md): next_attempt_at для 429/5xx, bounded backoff с jitter, retry_after и предел ошибок; wait_condition без расхода бюджета. Fake clock/HTTP, общий race, vet/build прошли. Worker, durable расписание/исходы и новый API-допуск подключаются отдельно.
+- [NTF-005](backlog/tickets/NTF-005.md). [Лимитер/планировщик чатов](../internal/notifications/chatlimit/README.md): общий durable допуск bot/chat, default 1 с; Next пропускает ожидающие/занятые чаты. Fake clock 15+1+1, два pool/конкуренты/restart, удерживаемая блокировка, реальный PostgreSQL/race, общий race, vet/build прошли; disposable ресурсы удалены. Worker/runtime, совместная отправка с botlimit и измерение HTTP-доставки отдельно.
 - [NTF-004](backlog/tickets/NTF-004.md). [Общий лимитер бота](../internal/notifications/botlimit/README.md): PostgreSQL notifications, стабильный bot ID, конфигурируемый pacing без накопления квоты и сброса при рестарте. Два pool/fake clock/конкуренция, реальный PostgreSQL/race, общий race, vet/build прошли; disposable ресурсы удалены. Chat limiter готов в NTF-005; worker/runtime и измерение реальной доставки отдельно.
 - [NTF-003](backlog/tickets/NTF-003.md). [Telegram sender](../internal/notifications/telegram/README.md): одна HTML POST-попытка, timeout/message_id, отдельные 429/retry_after, 403, 5xx и неоднозначный исход. Fake HTTP/race, общий race, vet/build прошли. Повторы, limiter и worker/runtime отдельно; реальных сообщений не отправляли.
 - [NTF-002](backlog/tickets/NTF-002.md). [Текст уведомления](../internal/notifications/message/README.md): чистый HTML formatter, точные цены, время/возраст и независимые предупреждения DEC-002. Caller передаёт котировку допуска попытки. Fixtures/race, общий race, vet/build прошли; Telegram-вызов и worker/runtime отдельно.
@@ -94,16 +95,16 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [NTF-006](backlog/tickets/NTF-006.md), после новой сессионной проверки. NTF-005 завершён: `chatlimit.New` / `TryAcquire` / `Next` дают общий durable допуск чата, default 1 с, с пропуском ожидающих/занятых чатов без сна и будущих резерваций.
+По очереди следующий — [NTF-007](backlog/tickets/NTF-007.md), после новой сессионной проверки. NTF-006 завершён: `retry.New` / `Retry` / `WaitCondition` рассчитывают расписание и бюджет временных ошибок без сна; 429 учитывает retry_after даже выше локального cap.
 
-Fake clock 15+1+1, два PostgreSQL pool/8 конкурентов, restart, граница интервала и заблокированный чат проверены с race detector; общий race, vet/build прошли. Worker/runtime подключаются отдельно: оба лимитера используются совместно, grants не копятся, перед Send нужен актуальный API-допуск и проверка текущего chat. Реальные сообщения и нагрузочная производительность не проверялись.
+Fake clock/entropy, предел попыток, независимые проверки условия, переполнение и fake HTTP 429/503 проверены с race detector; общий race, vet/build прошли. Политика не сохраняет Plan: worker должен атомарно записать его с исходом и освободить lease. Каждому HTTP-повтору нужен новый API-допуск после обоих лимитеров. Unknown/timeout и ошибки канала обрабатываются отдельно. Реальные сообщения и нагрузка не проверялись.
 
 `python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Следующий тикет автоматически не начинается.
 
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show NTF-006` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show NTF-007` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.
