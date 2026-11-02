@@ -41,6 +41,11 @@ checkpoint каждой партиции delivery-requests, атомарный �
 ([контракт](../internal/notifications/intake/README.md)). Контракт market-data —
 [storage/README](../internal/marketdata/storage/README.md). Контракт хранилища — в [account/README](../internal/api/account/README.md).
 
+`notifications/004_job_leases.sql` добавляет ограниченные локальные lease/fence,
+next_attempt_at и историю claim для NTF-009
+([контракт](../internal/notifications/jobs/README.md)); API-допуски/HTTP-исходы
+этой миграцией не создаются.
+
 Файлы — UTF-8 `001_description.sql`, `002_next_step.sql` и далее: положительный
 уникальный bigint в начале, описание из строчных латинских букв, цифр и `_`,
 начиная с буквы. Порядок числовой. Файлы с расширением `.sql` проверяются строго;
