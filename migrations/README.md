@@ -95,3 +95,8 @@ MIGRATION_CHECK_PORT=55435 bash infra/postgres/verify-migrations.sh
 другого владельца, запрет COMMIT и неправильные версии. После успеха контейнер
 останавливается, volume сохраняется; при ошибке стенд остаётся для разбора.
 Обычный `unittest discover` пропускает эти тесты без `MIGRATION_TEST_PROJECT`.
+
+`notifications/006_delivery_uncertain.sql` — неизменяемое свидетельство возможной
+доставки, срок новой проверки и отдельный pending report `uncertain` по API
+attempt ID (NTF-007). Поздний success хранится отдельно и имеет приоритет;
+reporter NTF-014 читает оба вида отчётов. [Протокол восстановления](../internal/notifications/jobs/README.md).

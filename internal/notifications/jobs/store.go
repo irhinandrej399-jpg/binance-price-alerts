@@ -1,4 +1,4 @@
-// Package jobs owns bounded local claims and durable success evidence in the notifications database.
+// Package jobs owns bounded local claims and durable delivery evidence in the notifications database.
 package jobs
 
 import (
@@ -38,10 +38,11 @@ func New(pool *pgxpool.Pool, ttl time.Duration) (*Store, error) {
 // Lease is local ownership, never permission to call Telegram. ID is a durable
 // random claim identity; Fence increases per workflow and is never reset.
 type Lease struct {
-	TriggerID, ID string
-	Fence         int64
-	ExpiresAt     time.Time
-	Body          []byte
+	TriggerID, ID     string
+	Fence             int64
+	ExpiresAt         time.Time
+	Body              []byte
+	PossibleDuplicate bool
 }
 
 func (s *Store) clock(ctx context.Context, tx pgx.Tx) (time.Time, error) {
@@ -88,14 +89,25 @@ func (s *Store) Claim(ctx context.Context, triggerID string) (Lease, error) {
 	if succeeded {
 		return Lease{}, ErrUnavailable
 	}
+	err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM app.delivery_uncertainties u JOIN app.delivery_attempts a USING(attempt_id) WHERE a.trigger_id=$1)`, triggerID).Scan(&l.PossibleDuplicate)
+	if err != nil {
+		return Lease{}, err
+	}
 	now, err := s.clock(ctx, tx)
 	if err != nil {
 		return Lease{}, err
 	}
-	if (state != "pending" && state != "leased" && state != string(WaitCondition) && state != string(WaitLimiter)) ||
+	if (state != "pending" && state != "leased" && state != string(WaitCondition) && state != string(WaitLimiter) && !(state == "uncertain" && l.PossibleDuplicate)) ||
 		(next.InfinityModifier == 0 && now.Before(next.Time)) || next.InfinityModifier > 0 ||
 		(expires != nil && now.Before(*expires)) {
 		return Lease{}, ErrUnavailable
+	}
+	l.TriggerID = triggerID
+	if expires != nil {
+		l.ExpiresAt = *expires
+	}
+	if err = checkPreviousAttempt(ctx, tx, l, oldID, now); err != nil {
+		return Lease{}, err
 	}
 	if oldID != nil {
 		if _, err = tx.Exec(ctx, `UPDATE app.delivery_claims SET status='expired' WHERE claim_id=$1 AND status='claimed'`, *oldID); err != nil {

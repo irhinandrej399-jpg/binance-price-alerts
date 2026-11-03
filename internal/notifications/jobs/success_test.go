@@ -52,6 +52,9 @@ func TestLateSuccessPreservesNewLease(t *testing.T) {
 	if e = a.RegisterAttempt(ctx, old, "api-"+id); e != nil {
 		t.Fatal(e)
 	}
+	if e = a.SaveUncertain(ctx, old, "api-"+id, time.UnixMicro(clock.Load()).Add(time.Second)); e != nil {
+		t.Fatal(e)
+	}
 	clock.Add(int64(time.Second / time.Microsecond))
 	fresh, e := b.Claim(ctx, id)
 	if e != nil {
@@ -139,6 +142,9 @@ func TestConcurrentSuccesses(t *testing.T) {
 		t.Fatal(e)
 	}
 	if e = a.RegisterAttempt(ctx, old, "old-"+id); e != nil {
+		t.Fatal(e)
+	}
+	if e = a.SaveUncertain(ctx, old, "old-"+id, time.UnixMicro(clock.Load()).Add(time.Second)); e != nil {
 		t.Fatal(e)
 	}
 	clock.Add(int64(time.Second / time.Microsecond))
