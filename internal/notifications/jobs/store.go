@@ -43,6 +43,7 @@ type Lease struct {
 	ExpiresAt         time.Time
 	Body              []byte
 	PossibleDuplicate bool
+	Failures          uint32 // durable proven temporary errors; waits/unknowns do not reset it
 }
 
 func (s *Store) clock(ctx context.Context, tx pgx.Tx) (time.Time, error) {
@@ -104,13 +105,27 @@ func (s *Store) Claim(ctx context.Context, triggerID string) (Lease, error) {
 	if err != nil {
 		return Lease{}, err
 	}
+	l.Failures, err = failureCount(ctx, tx, triggerID)
+	if err != nil {
+		return Lease{}, err
+	}
 	now, err := s.clock(ctx, tx)
 	if err != nil {
 		return Lease{}, err
 	}
-	if (state != "pending" && state != "leased" && state != string(WaitCondition) && state != string(WaitLimiter) && !(state == "uncertain" && l.PossibleDuplicate)) ||
+	if (state != "pending" && state != "leased" && state != "retryable" && state != string(WaitCondition) && state != string(WaitLimiter) && !(state == "uncertain" && l.PossibleDuplicate)) ||
 		(next.InfinityModifier == 0 && now.Before(next.Time)) || next.InfinityModifier > 0 ||
 		(expires != nil && now.Before(*expires)) {
+		return Lease{}, ErrUnavailable
+	}
+	// A definitive refusal can arrive after uncertain released the same fence.
+	// Consult its schedule even when lease_id has already been cleared.
+	var retryNext *time.Time
+	err = tx.QueryRow(ctx, `SELECT r.next_attempt_at FROM app.delivery_retryables r JOIN app.delivery_attempts a USING(attempt_id) WHERE a.trigger_id=$1 AND a.fence=$2`, triggerID, l.Fence).Scan(&retryNext)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return Lease{}, err
+	}
+	if retryNext != nil && now.Before(*retryNext) {
 		return Lease{}, ErrUnavailable
 	}
 	l.TriggerID = triggerID

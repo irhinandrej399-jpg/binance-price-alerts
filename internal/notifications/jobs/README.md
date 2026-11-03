@@ -6,7 +6,7 @@
 Продления нет. Миграция — `notifications/004_job_leases.sql`.
 
 `Claim(ctx, triggerID)` получает выбранное scheduler задание, если оно pending,
-wait_condition, wait_limiter, durable uncertain либо leased с истёкшей арендой, и наступил
+wait_condition, wait_limiter, durable uncertain/retryable либо leased с истёкшей арендой, и наступил
 next_attempt_at. `FOR UPDATE SKIP LOCKED` не ждёт занятую строку. Неизвестное,
 занятое, отложенное или остановленное задание даёт `ErrUnavailable`; caller
 ограничивает частоту опроса и выбирает другие задания. Глобальное сканирование
@@ -151,7 +151,7 @@ Caller сначала восстанавливает запись uncertain с �
 старой попытки даже когда старый lease уже истёк. Crash до регистрации попытки
 не создаёт неопределённость: по контракту отправка до регистрации запрещена.
 Для следующих исходов NTF-008/014 проверка unresolved должна учитывать также
-их durable свидетельства; сейчас реализованы только success/uncertain.
+их durable свидетельства; реализованы success/uncertain/blocked/retryable.
 
 Исторический SaveUncertain не изменяет истёкший/чужой lease, отмену или успех.
 Историческое свидетельство сохраняется вместе с обязанностью отчёта; после
@@ -225,3 +225,81 @@ NTF-015 отдельно назначит durable проверки восста�
 API-допуск, оба лимитера и HTTP; NTF-014 передаст результаты. Миграция 007 не
 добавляет цену блокировки, не удаляет job, не меняет порог/слот и не реализует
 автоматическую перепривязку. Реальный Telegram не вызывается тестами.
+
+## Доказанный временный отказ (NTF-016)
+
+Миграция `notifications/008_delivery_retryable.sql` добавляет immutable
+`delivery_retryables` и отдельный `delivery_retryable_reports`. Ключ исхода —
+(attempt ID, retryable). Свидетельство хранит только безопасные kind
+`rate_limited`/`server`, retry_after_seconds, binding_version и первый сохранённый
+`retry.Plan` (failures/exhausted/next_attempt_at), без текста Telegram или token.
+Runtime имеет только SELECT/INSERT на свидетельство; ack меняется в report.
+
+`SaveRetryable(ctx, lease, attemptID, cause, policy, entropy, bindingVersion)`
+возвращает сохранённый `retry.Plan` только после commit. Принимает типизированный
+`telegram.Error` RateLimited/Server (в том числе wrapped), явно настроенную
+`*retry.Policy` и binding version из API-разрешения. План рассчитывается готовым
+NTF-006 **под job lock**, с SQL clock и числом durable retryable-свидетельств
+этого trigger_id, до вставки нового исхода. Таким образом, два исхода не могут
+рассчитать бюджет по одному прежнему значению. Это локальная SQL-операция без
+HTTP/API-вызовов. Entropy используется один раз; production defaults не заданы.
+
+Один commit сохраняет свидетельство, pending report, план и (только для живого
+совпадающего lease) state=retryable/next_attempt_at, завершение claim и очистку
+lease. Deadline округляется вверх до микросекунды, включая возвращённый Plan.
+Повтор с теми же kind/retry_after/version возвращает первый план даже после его
+срока или смены entropy/policy; ack, jitter и бюджет не меняются. Другие
+kind/retry_after/version дают ErrConflict. Чужая/незарегистрированная корреляция
+attempt/claim/trigger/fence даёт ErrStale. Неподдерживаемая ошибка, nil policy,
+отрицательные retry_after/version отвергаются. Ошибка расчёта Policy (например,
+непредставимый retry_after) возвращается явно без расписания: caller сохраняет
+диагностику, останавливает работу и не превращает её в разрешение HTTP.
+
+`Lease.Failures` — число durable доказанных временных ошибок workflow. Claim
+читает его заново из append-only свидетельств; неизвестность и парковки условия/
+лимитера его не увеличивают и не сбрасывают. Дубль intake не меняет свидетельства
+или расписание. Ретенция этих строк без отдельного согласованного переноса
+счётчика запрещена. Исторический retryable после expiry/takeover/отмены/успеха
+сохраняется для API и бюджета, но не изменяет ни одно поле текущей job/claim.
+Известный retryable исключает восстановление как uncertain; при восстановлении
+истёкшего lease Claim соблюдает его сохранённый срок. Поздний доказанный отказ
+после uncertain также удерживает расписание текущего fence, даже если lease уже
+был очищен. Наличие success любого attempt запрещает дальнейшие отправки,
+включая после позднего retryable. Уже выполняющийся внешний HTTP не отзывается.
+
+При `Plan.Exhausted` та же транзакция сохраняет готовые `delivery_blocks` и
+`delivery_blocked_reports` с attempts_exhausted/version. Живой lease завершается
+через существующий blocked-протокол. Историческое исчерпание останавливает Claim
+текущего fence без изменения истёкшей аренды. Между записью последней ошибки и
+блокировкой нет отдельного вызова или crash-окна. Retryable-report и blocked-report
+имеют отдельные ключи/ack; доставка API в любом порядке не должна понижать
+blocked или success. Текущему SUB-020 недостаёт применения blocked после первого
+retryable/uncertain той же попытки: исправление — SUB-026, предпосылка NTF-014. Повтор SaveBlocked с той же причиной/
+версией идемпотентен; другое доказанное постоянное утверждение той же попытки
+конфликтует с созданием retryable.
+
+Для NTF-014: читать `delivery_retryable_reports.pending` через join
+retryables → attempts → jobs, передавать SUB-020 `retryable` по тому же attempt ID,
+после успешного RPC подтверждать только этот report. При исчерпании также
+передавать отдельный `blocked` attempts_exhausted. Успех имеет приоритет.
+Для NTF-012: до HTTP RegisterAttempt, после 429/5xx SaveRetryable; при SQL-ошибке
+повторять тот же SaveRetryable, а не Send (commit мог состояться). После срока
+нужны оба лимитера и **новый** API-допуск по текущей цене с новым attempt ID.
+Claim и Plan никогда сами по себе не разрешают Send. Reporter/worker/runtime
+подключаются отдельно.
+
+SQL/race-тесты: 429/503 через loopback HTTP, два pool/20 конкурентных replay,
+restart/сохранение первого jitter и ack, durable бюджет через wait_condition,
+лимитер и uncertain, expiry recovery без UnresolvedAttempt, late refusal после
+takeover/cancel/success, поздний success, исчерпание живой/истёкшей аренды без
+отдельной блокирующей операции и deferred commit rollback всех записей.
+Lost response моделируется повтором committed операции через другой Store/pool;
+сетевой разрыв PostgreSQL после COMMIT отдельно не инъецируется. Intake-тест
+проверяет отсутствие сброса бюджета/плана при дубле. Команда — тот же полный
+`GOCACHE=/tmp/binance-go-build python3 scripts/check_postgres.py`.
+
+Известное ограничение SQL-прав ранее созданных таблиц 005–007: default privileges
+init.sh оставляют runtime UPDATE/DELETE, несмотря на append-only контракт методов.
+Исправление отдельной новой миграцией — [NTF-017](../../../docs/backlog/tickets/NTF-017.md).
+Новые таблицы 008 отзывают default-права явно; реальный SQL-тест подтверждает
+отсутствие UPDATE/DELETE у delivery_retryables.

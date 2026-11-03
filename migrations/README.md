@@ -106,3 +106,9 @@ job, immutable отказ зарегистрированной попытки и
 а также квитанция парковки уже заблокированного API-допуска без HTTP/attempt.
 Claim не возобновляет автоматическую отправку; восстановление канала — NTF-015.
 [Контракт](../internal/notifications/jobs/README.md).
+
+`notifications/008_delivery_retryable.sql` — immutable доказанный 429/5xx с первым
+сохранённым retry.Plan и отдельным pending report retryable (NTF-016). Бюджет
+считается по свидетельствам workflow, без сброса при intake/ожиданиях/unknown.
+Исчерпание атомарно использует blocks/reports миграции 007.
+[Контракт](../internal/notifications/jobs/README.md).

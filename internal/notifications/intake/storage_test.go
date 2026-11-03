@@ -11,6 +11,8 @@ import (
 
 	domain "github.com/irhinandrej399-jpg/binance-price-alerts/internal/domain/subscription"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/jobs"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/retry"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/telegram"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/postgrestest"
 )
 
@@ -155,6 +157,53 @@ func TestDuplicateCannotResetBlockedJob(t *testing.T) {
 	var n int
 	if e = p.QueryRow(ctx, `SELECT state,blocked_reason,blocked_binding_version,(SELECT count(*) FROM app.delivery_jobs WHERE trigger_id=$1) FROM app.delivery_jobs WHERE trigger_id=$1`, id).Scan(&state, &reason, &version, &n); e != nil || state != "blocked" || reason != "channel_unavailable" || version != 7 || n != 1 {
 		t.Fatal(state, reason, version, n, e)
+	}
+	if _, e = j.Claim(ctx, id); !errors.Is(e, jobs.ErrUnavailable) {
+		t.Fatal(e)
+	}
+}
+
+func TestDuplicateCannotResetRetryableBudget(t *testing.T) {
+	p := postgrestest.OpenWithDSN(t, "NOTIFICATIONS_DATABASE_URL")
+	ctx := bounded(t)
+	s := NewStore(p)
+	id := t.Name()
+	if _, e := s.Checkpoint(ctx, id, 0); e != nil {
+		t.Fatal(e)
+	}
+	if e := s.Accept(ctx, id, 0, 0, 0, []byte("sub-1"), wire(id)); e != nil {
+		t.Fatal(e)
+	}
+	j, e := jobs.New(p, time.Minute)
+	if e != nil {
+		t.Fatal(e)
+	}
+	l, e := j.Claim(ctx, id)
+	if e != nil {
+		t.Fatal(e)
+	}
+	attempt := "api-" + id
+	if e = j.RegisterAttempt(ctx, l, attempt); e != nil {
+		t.Fatal(e)
+	}
+	policy, e := retry.New(retry.Config{BaseDelay: time.Minute, MaxDelay: time.Minute, ConditionInterval: time.Second, MaxFailures: 3})
+	if e != nil {
+		t.Fatal(e)
+	}
+	plan, e := j.SaveRetryable(ctx, l, attempt, &telegram.Error{Kind: telegram.Server}, policy, 0, 3)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for i := int64(1); i <= 2; i++ {
+		if e = s.Accept(ctx, id, 0, i, i, []byte("sub-1"), wire(id)); e != nil {
+			t.Fatal(e)
+		}
+	}
+	var failures int
+	var next time.Time
+	var state string
+	if e = p.QueryRow(ctx, `SELECT state,next_attempt_at,(SELECT count(*) FROM app.delivery_retryables r JOIN app.delivery_attempts a USING(attempt_id) WHERE a.trigger_id=$1) FROM app.delivery_jobs WHERE trigger_id=$1`, id).Scan(&state, &next, &failures); e != nil || state != "retryable" || failures != 1 || !next.Equal(plan.NextAttemptAt) {
+		t.Fatal(state, next, failures, e)
 	}
 	if _, e = j.Claim(ctx, id); !errors.Is(e, jobs.ErrUnavailable) {
 		t.Fatal(e)
