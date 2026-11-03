@@ -89,6 +89,17 @@ func (s *Store) Claim(ctx context.Context, triggerID string) (Lease, error) {
 	if succeeded {
 		return Lease{}, ErrUnavailable
 	}
+	// A terminal refusal may follow uncertain after that operation released the
+	// lease. Stop this fence even with no oldID; older fences cannot stop a new
+	// channel cycle. Historical evidence never mutates newer ownership.
+	var blocked bool
+	err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM app.delivery_blocks b JOIN app.delivery_attempts a USING(attempt_id) WHERE a.trigger_id=$1 AND a.fence=$2)`, triggerID, l.Fence).Scan(&blocked)
+	if err != nil {
+		return Lease{}, err
+	}
+	if blocked {
+		return Lease{}, ErrUnavailable
+	}
 	err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM app.delivery_uncertainties u JOIN app.delivery_attempts a USING(attempt_id) WHERE a.trigger_id=$1)`, triggerID).Scan(&l.PossibleDuplicate)
 	if err != nil {
 		return Lease{}, err

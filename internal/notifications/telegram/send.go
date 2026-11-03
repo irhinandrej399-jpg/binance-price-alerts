@@ -34,6 +34,7 @@ type Error struct {
 	Code              int
 	RetryAfterSeconds int64
 	Timeout           bool
+	InvalidChat       bool // allowlisted chat-not-found refusal, no raw description retained
 }
 
 func (e *Error) Error() string { return "telegram sendMessage: " + string(e.Kind) }
@@ -106,9 +107,10 @@ func (c *Client) Send(ctx context.Context, chatID int64, text string) (int64, er
 		return 0, unknownError(readErr, resp.StatusCode)
 	}
 	var envelope struct {
-		OK     *bool `json:"ok"`
-		Code   int   `json:"error_code"`
-		Result struct {
+		OK          *bool  `json:"ok"`
+		Code        int    `json:"error_code"`
+		Description string `json:"description"`
+		Result      struct {
 			ID int64 `json:"message_id"`
 		} `json:"result"`
 		Parameters struct {
@@ -143,6 +145,7 @@ func (c *Client) Send(ctx context.Context, chatID int64, text string) (int64, er
 		e.Kind = Server
 	case code >= 400 && code <= 499:
 		e.Kind = Rejected
+		e.InvalidChat = valid && code == 400 && envelope.Description == "Bad Request: chat not found"
 	}
 	return 0, e
 }

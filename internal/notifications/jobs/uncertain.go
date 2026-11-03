@@ -48,7 +48,7 @@ func (s *Store) SaveUncertain(ctx context.Context, l Lease, attempt string, next
 		return ErrStale
 	}
 	var done bool
-	e = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM app.delivery_uncertainties WHERE attempt_id=$1) OR EXISTS(SELECT 1 FROM app.delivery_successes WHERE attempt_id=$1)`, attempt).Scan(&done)
+	e = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM app.delivery_uncertainties WHERE attempt_id=$1) OR EXISTS(SELECT 1 FROM app.delivery_successes WHERE attempt_id=$1) OR EXISTS(SELECT 1 FROM app.delivery_blocks WHERE attempt_id=$1)`, attempt).Scan(&done)
 	if e != nil {
 		return e
 	}
@@ -106,12 +106,16 @@ func checkPreviousAttempt(ctx context.Context, tx pgx.Tx, l Lease, oldID *string
 	}
 	var attempt string
 	var next *time.Time
-	e := tx.QueryRow(ctx, `SELECT a.attempt_id,u.next_attempt_at FROM app.delivery_attempts a LEFT JOIN app.delivery_uncertainties u USING(attempt_id) WHERE a.claim_id=$1`, *oldID).Scan(&attempt, &next)
+	var blocked bool
+	e := tx.QueryRow(ctx, `SELECT a.attempt_id,u.next_attempt_at,EXISTS(SELECT 1 FROM app.delivery_blocks b WHERE b.attempt_id=a.attempt_id) FROM app.delivery_attempts a LEFT JOIN app.delivery_uncertainties u USING(attempt_id) WHERE a.claim_id=$1`, *oldID).Scan(&attempt, &next, &blocked)
 	if errors.Is(e, pgx.ErrNoRows) {
 		return nil
 	}
 	if e != nil {
 		return e
+	}
+	if blocked {
+		return ErrUnavailable
 	}
 	if next == nil {
 		l.ID = *oldID

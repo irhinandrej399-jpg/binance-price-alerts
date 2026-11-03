@@ -4,9 +4,10 @@
 
 ## Активная работа
 
-- Активная реализация: нет. NTF-007 завершён; следующий — NTF-008 после нового поручения и сессионной проверки.
+- Активная реализация: нет. NTF-008 завершён; следующий — NTF-014 после нового поручения и сессионной проверки.
 - Незавершённая реализация: нет. Group/fencing/live/handler и полный prices Prefix интегрированы; fault takeover проверен MAT-011, cmd/runtime отдельно.
-- Последний завершённый тикет: [NTF-007](backlog/tickets/NTF-007.md). [Durable uncertain](../internal/notifications/jobs/README.md): свидетельство/pending report, расписание новой проверки, recovery зарегистрированной попытки до takeover, риск дубля и durable метрика. Fake HTTP disconnect/restart, 24 SQL/race-сценария jobs и полный PostgreSQL runner, vet/build прошли; disposable volume удалён. Reporter — NTF-014, новая цена/API-допуск — NTF-012, экспорт метрики — OPS-003.
+- Последний завершённый тикет: [NTF-008](backlog/tickets/NTF-008.md). [Durable blocked](../internal/notifications/jobs/README.md): безопасная причина/версия, pending report, парковка API-отказа без HTTP и остановка текущего fence. Повторы/restart/rollback, поздний отказ/успех и дубль intake проверены полным PostgreSQL/race runner; vet/build прошли, disposable volume удалён. Передача API — NTF-014, восстановление канала — NTF-015, worker — NTF-012.
+- [NTF-007](backlog/tickets/NTF-007.md). [Durable uncertain](../internal/notifications/jobs/README.md): свидетельство/pending report, расписание новой проверки, recovery зарегистрированной попытки до takeover, риск дубля и durable метрика. Fake HTTP disconnect/restart, 24 SQL/race-сценария jobs и полный PostgreSQL runner, vet/build прошли; disposable volume удалён. Reporter — NTF-014, новая цена/API-допуск — NTF-012, экспорт метрики — OPS-003.
 - [NTF-010](backlog/tickets/NTF-010.md). [Успех и pending report](../internal/notifications/jobs/README.md): API attempt/claim/fence, атомарное свидетельство message_id и обязанность сообщить API, поздний успех без изменения чужой аренды. Повторы, takeover, отмена и rollback проверены полным PostgreSQL/race runner; vet/build прошли, disposable volume удалён. Reporter — NTF-014, uncertain — NTF-007, worker — NTF-012.
 - [NTF-009](backlog/tickets/NTF-009.md). [Storage аренд](../internal/notifications/jobs/README.md): атомарный claim, SQL clock/срок, durable ID/fence/история, парковка без удержания lease. Два pool/20 worker, expiry/restart/stale, deferred rollback и overflow проверены полным PostgreSQL/race runner; vet/build прошли, disposable volume удалён. HTTP/API-исходы и runtime отдельно.
 - [NTF-006](backlog/tickets/NTF-006.md). [Политика повторов](../internal/notifications/retry/README.md): next_attempt_at для 429/5xx, bounded backoff с jitter, retry_after и предел ошибок; wait_condition без расхода бюджета. Fake clock/HTTP, общий race, vet/build прошли. Worker, durable расписание/исходы и новый API-допуск подключаются отдельно.
@@ -98,7 +99,9 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [NTF-008](backlog/tickets/NTF-008.md), после нового поручения и сессионной проверки (GPT-6.1 Sol · Medium). NTF-007 завершён: uncertain и success сохраняются раздельно с pending report. При новых исходах расширить checkPreviousAttempt; подтверждённый успех не понижать.
+По очереди следующий — [NTF-014](backlog/tickets/NTF-014.md), после нового поручения и сессионной проверки (GPT-6.1 Sol · High). Success/uncertain/blocked сохраняются раздельно с pending report. Reporter использует готовый SUB-020; каноническую binding version API берёт из собственного permission по attempt ID. Подтверждённый успех не понижать, ack при replay не сбрасывать.
+
+NTF-008 добавляет SaveBlocked/ParkBlocked и блок текущего fence даже после освобождения lease через uncertain. Для NTF-015 учитывать также durable blocks текущего fence при историческом исходе без изменения job metadata; новая версия канала не снимает permanent_failure/attempts_exhausted.
 
 NTF-006 рассчитывает retry Plan и бюджет доказанных ошибок; NTF-007 использует ConditionInterval для новой проверки после Unknown. Перед возможным HTTP-повтором нужны оба лимитера, новый API-допуск по текущей цене и новый attempt ID; trigger_id сохраняется. Полный worker/API и экспорт метрик подключаются отдельными задачами.
 
@@ -107,7 +110,7 @@ NTF-006 рассчитывает retry Plan и бюджет доказанных
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show NTF-008` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show NTF-014` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

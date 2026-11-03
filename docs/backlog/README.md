@@ -170,7 +170,7 @@
 | [NTF-005](tickets/NTF-005.md) | [Ограничить отправку в отдельный чат](../../internal/notifications/chatlimit/README.md) | NTF-004 | done |
 | [NTF-006](tickets/NTF-006.md) | Назначить повтор по retry_after и временной ошибке | NTF-003, NTF-001 | done |
 | [NTF-007](tickets/NTF-007.md) | Обработать неоднозначный timeout отправки | NTF-003, NTF-006, NTF-009, NTF-010 | done |
-| [NTF-008](tickets/NTF-008.md) | Завершить задание при постоянной ошибке | NTF-001, NTF-003 | planned |
+| [NTF-008](tickets/NTF-008.md) | Завершить задание при постоянной ошибке | NTF-001, NTF-003, NTF-006, NTF-009, NTF-010, NTF-007 | done |
 | [NTF-009](tickets/NTF-009.md) | [Выдать worker задание с ограниченной арендой](../../internal/notifications/jobs/README.md) | NTF-001, NTF-006 | done |
 | [NTF-010](tickets/NTF-010.md) | Сохранить успешную доставку | NTF-003, NTF-009 | done |
 | [NTF-014](tickets/NTF-014.md) | Надёжно передать исход попытки владельцу подписки | NTF-010, SUB-020, NTF-007, NTF-008 | planned |

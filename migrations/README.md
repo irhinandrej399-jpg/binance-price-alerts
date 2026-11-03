@@ -100,3 +100,9 @@ MIGRATION_CHECK_PORT=55435 bash infra/postgres/verify-migrations.sh
 доставки, срок новой проверки и отдельный pending report `uncertain` по API
 attempt ID (NTF-007). Поздний success хранится отдельно и имеет приоритет;
 reporter NTF-014 читает оба вида отчётов. [Протокол восстановления](../internal/notifications/jobs/README.md).
+
+`notifications/007_delivery_blocked.sql` — безопасные причина/версия блокировки
+job, immutable отказ зарегистрированной попытки и pending report `blocked`,
+а также квитанция парковки уже заблокированного API-допуска без HTTP/attempt.
+Claim не возобновляет автоматическую отправку; восстановление канала — NTF-015.
+[Контракт](../internal/notifications/jobs/README.md).
