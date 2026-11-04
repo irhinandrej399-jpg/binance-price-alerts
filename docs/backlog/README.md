@@ -203,7 +203,7 @@
 | [OPS-016](tickets/OPS-016.md) | Остановить приём рынка при исчерпании бюджета | MKT-017, MKT-014, DEC-008, OPS-018 | planned |
 | [OPS-018](tickets/OPS-018.md) | Квалифицировать таблицу стоимости и квоты durable приёма | OPS-022, DEC-008 | planned |
 | [OPS-019](tickets/OPS-019.md) | Собрать физические метрики PostgreSQL на disposable стенде | SET-006, DEC-008 | done |
-| [OPS-020](tickets/OPS-020.md) | Собрать физические метрики Kafka на disposable стенде | SET-009, DEC-008 | planned |
+| [OPS-020](tickets/OPS-020.md) | Собрать физические метрики Kafka на disposable стенде | SET-009, DEC-008 | done |
 | [OPS-021](tickets/OPS-021.md) | Измерить manifest продолжения API в matcher и notifications | OPS-019, OPS-020, SUB-009, SUB-020, NTF-013 | planned |
 | [OPS-022](tickets/OPS-022.md) | Измерить manifest источника market-data и свести покрытие затрат | OPS-019, OPS-020, OPS-021, MKT-014 | planned |
 
