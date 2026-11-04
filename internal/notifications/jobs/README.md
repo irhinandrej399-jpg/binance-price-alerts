@@ -9,8 +9,7 @@
 wait_condition, wait_limiter, durable uncertain/retryable либо leased с истёкшей арендой, и наступил
 next_attempt_at. `FOR UPDATE SKIP LOCKED` не ждёт занятую строку. Неизвестное,
 занятое, отложенное или остановленное задание даёт `ErrUnavailable`; caller
-ограничивает частоту опроса и выбирает другие задания. Глобальное сканирование
-очереди и fairness — задача worker/scheduler, здесь нет скрытого полного scan.
+ограничивает частоту опроса и выбирает другие задания. Выборка готова в `Discover` / [worker](../worker/README.md); Claim не сканирует очередь.
 
 В одной транзакции сохраняются новый случайный ID аренды, увеличенный bigint
 fence, срок и строка `app.delivery_claims`. Предыдущая истёкшая аренда получает
@@ -346,3 +345,14 @@ Handler NTF-012 после результата API:
 
 Порог/workflow/слот остаются в API; эта операция к ним не обращается и Telegram
 не вызывает. Старые отрицательные результаты/квитанции не откатывают новый fence.
+
+## Discovery (NTF-013)
+
+`Discover(ctx, after, limit)` возвращает до limit (1..1000) `Work` по
+возрастающему trigger_id > after. SQL clock совпадает с lease-протоколом.
+Пустая страница означает возврат cursor к началу после паузы. В выборке due
+jobs/checks, pending reports четырёх видов независимо от state и не назначенные
+current-fence channel blocks без живой аренды/успеха. `RecoveryFence > 0`
+требует ScheduleRecovery вместо Handle; это подсказка, а не владение.
+Claim/ScheduleRecovery повторно проверяют гонки. Worker/ограничения, deadlines
+и сохранение PendingWrite — [контракт цикла](../worker/README.md).

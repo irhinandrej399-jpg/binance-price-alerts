@@ -78,8 +78,9 @@ admission/claims/attempts до согласованной retention-полити
 terminal/success не требуют назначения от старого handler. SQL-ошибки возвращаются
 как PendingWrite. Scheduler обязан также находить не назначенные current-fence
 channel blocks после crash и pending reports всех jobs — точные запросы/условия
-в [jobs/README.md](../jobs/README.md). Это остаётся частью NTF-013 вместе с
-выбором due jobs, fairness, backoff, пределом параллелизма и остановкой процесса.
+в [jobs/README.md](../jobs/README.md). Выборка due jobs/reports/recovery, паузы,
+параллелизм и остановка новых вызовов готовы в [worker NTF-013](../worker/README.md);
+сигналы и остановка HTTP процесса проверяются отдельно в OPS-011.
 Context/deadline для всего вызова задаёт caller; API RPC имеют свои готовые
 бюджеты. Бесконечного loop, новых миграций и чтения чужих БД в handler нет.
 
