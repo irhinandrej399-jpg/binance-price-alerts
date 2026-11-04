@@ -22,6 +22,7 @@ import (
 const Budget = 3 * time.Second
 
 type Store interface {
+	PrepareRecipient(context.Context, sub.AdmissionCommand) (sub.RecipientResult, error)
 	PrepareAdmission(context.Context, sub.AdmissionCommand) (sub.AdmissionResult, error)
 	AdmitDelivery(context.Context, sub.AdmissionCommand) (sub.AdmissionResult, error)
 }
@@ -33,6 +34,10 @@ func (p *Postgres) PrepareAdmission(ctx context.Context, c sub.AdmissionCommand)
 }
 func (p *Postgres) AdmitDelivery(ctx context.Context, c sub.AdmissionCommand) (sub.AdmissionResult, error) {
 	return sub.AdmitDelivery(ctx, p.db, c)
+}
+
+func (p *Postgres) PrepareRecipient(ctx context.Context, c sub.AdmissionCommand) (sub.RecipientResult, error) {
+	return sub.PrepareRecipient(ctx, p.db, c)
 }
 
 type Server struct {
@@ -57,15 +62,21 @@ func NewServer(store Store, quotes sub.QuoteSource, ttl time.Duration, now func(
 
 // Install these credentials and policy together with the RPC registration.
 func ServerOptions(cert, key, clientCA []byte, notificationsURI string) ([]grpc.ServerOption, error) {
-	return serviceauth.ServerOptions(cert, key, clientCA, map[string][]string{notificationsURI: {pb.Admission_AdmitDelivery_FullMethodName}})
+	return serviceauth.ServerOptions(cert, key, clientCA, map[string][]string{notificationsURI: {pb.Admission_AdmitDelivery_FullMethodName, pb.Admission_PrepareRecipient_FullMethodName}})
 }
 func (s *Server) AdmitDelivery(ctx context.Context, req *pb.AdmitDeliveryRequest) (*pb.AdmitDeliveryResponse, error) {
 	if req == nil || !validID(req.OwnerId) || !validID(req.SubscriptionId) || !validID(req.WorkflowId) || strings.TrimSpace(req.RequestId) == "" || len(req.RequestId) > 200 {
 		return nil, status.Error(codes.InvalidArgument, "owner, subscription, workflow and bounded request ID required")
 	}
+	if r := req.ExpectedRecipient; r != nil && (r.BindingVersion < 0 || (r.ChatId != 0 && r.BindingVersion == 0)) {
+		return nil, status.Error(codes.InvalidArgument, "valid expected recipient required")
+	}
 	ctx, cancel := context.WithTimeout(ctx, Budget)
 	defer cancel()
 	c := sub.AdmissionCommand{OwnerID: req.OwnerId, SubscriptionID: req.SubscriptionId, WorkflowID: req.WorkflowId, RequestID: req.RequestId, PermitTTL: s.ttl}
+	if r := req.ExpectedRecipient; r != nil {
+		c.ExpectedRecipient = &sub.Recipient{ChatID: r.ChatId, BindingVersion: r.BindingVersion}
+	}
 	for {
 		r, err := s.store.PrepareAdmission(ctx, c)
 		if ctx.Err() != nil {
@@ -89,7 +100,7 @@ func (s *Server) AdmitDelivery(ctx context.Context, req *pb.AdmitDeliveryRequest
 		c.Quote = q
 		c.ExpectedBindingVersion = &need.BindingVersion
 		r, err = s.store.AdmitDelivery(ctx, c)
-		if errors.Is(err, sub.ErrAdmissionChanged) && ctx.Err() == nil {
+		if errors.Is(err, sub.ErrAdmissionChanged) && c.ExpectedRecipient == nil && ctx.Err() == nil {
 			continue
 		}
 		if err != nil || ctx.Err() != nil {
@@ -97,6 +108,28 @@ func (s *Server) AdmitDelivery(ctx context.Context, req *pb.AdmitDeliveryRequest
 		}
 		return response(r), nil
 	}
+}
+
+// PrepareRecipient is read-only: no request identity, price lookup or permission.
+func (s *Server) PrepareRecipient(ctx context.Context, req *pb.PrepareRecipientRequest) (*pb.PrepareRecipientResponse, error) {
+	if req == nil || !validID(req.OwnerId) || !validID(req.SubscriptionId) || !validID(req.WorkflowId) {
+		return nil, status.Error(codes.InvalidArgument, "owner, subscription and workflow required")
+	}
+	ctx, cancel := context.WithTimeout(ctx, Budget)
+	defer cancel()
+	r, err := s.store.PrepareRecipient(ctx, sub.AdmissionCommand{OwnerID: req.OwnerId, SubscriptionID: req.SubscriptionId, WorkflowID: req.WorkflowId})
+	if err != nil || ctx.Err() != nil {
+		return nil, rpcError(ctx, err)
+	}
+	out := &pb.PrepareRecipientResponse{Outcome: r.Outcome}
+	if r.Recipient != nil {
+		out.Recipient = &pb.Recipient{ChatId: r.Recipient.ChatID, BindingVersion: r.Recipient.BindingVersion}
+	}
+	if r.Blocked != nil {
+		out.BlockReason = string(r.Blocked.Reason)
+		out.BlockedBindingVersion = r.Blocked.BindingVersion
+	}
+	return out, nil
 }
 func validID(s string) bool { var id pgtype.UUID; return id.Scan(s) == nil && id.Valid }
 func rpcError(ctx context.Context, err error) error {
@@ -108,6 +141,9 @@ func rpcError(ctx context.Context, err error) error {
 	}
 	if status.Code(err) == codes.Canceled || status.Code(err) == codes.DeadlineExceeded {
 		return status.Error(status.Code(err), "dependency interrupted")
+	}
+	if errors.Is(err, sub.ErrAdmissionChanged) {
+		return status.Error(codes.Aborted, "recipient changed; prepare and rate limit again with a new request ID")
 	}
 	if errors.Is(err, sub.ErrNotFound) {
 		return status.Error(codes.NotFound, "subscription not found")
@@ -136,8 +172,21 @@ type Client struct{ rpc pb.AdmissionClient }
 
 // NewClient uses a caller-owned mTLS connection, caps deadlines and adds no retry.
 func NewClient(conn grpc.ClientConnInterface) *Client { return &Client{pb.NewAdmissionClient(conn)} }
-func (c *Client) AdmitDelivery(ctx context.Context, owner, id, workflow, request string) (*pb.AdmitDeliveryResponse, error) {
+func (c *Client) AdmitDelivery(ctx context.Context, owner, id, workflow, request string, expected ...*pb.Recipient) (*pb.AdmitDeliveryResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, Budget)
 	defer cancel()
-	return c.rpc.AdmitDelivery(ctx, &pb.AdmitDeliveryRequest{OwnerId: owner, SubscriptionId: id, WorkflowId: workflow, RequestId: request})
+	if len(expected) > 1 || (len(expected) == 1 && expected[0] == nil) {
+		return nil, status.Error(codes.InvalidArgument, "one expected recipient required")
+	}
+	var recipient *pb.Recipient
+	if len(expected) == 1 {
+		recipient = expected[0]
+	}
+	return c.rpc.AdmitDelivery(ctx, &pb.AdmitDeliveryRequest{OwnerId: owner, SubscriptionId: id, WorkflowId: workflow, RequestId: request, ExpectedRecipient: recipient})
+}
+
+func (c *Client) PrepareRecipient(ctx context.Context, owner, id, workflow string) (*pb.PrepareRecipientResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, Budget)
+	defer cancel()
+	return c.rpc.PrepareRecipient(ctx, &pb.PrepareRecipientRequest{OwnerId: owner, SubscriptionId: id, WorkflowId: workflow})
 }

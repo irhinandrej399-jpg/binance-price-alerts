@@ -1,4 +1,4 @@
-# Допуск попытки доставки — SUB-018
+# Подготовка адресата и допуск попытки — SUB-018 / SUB-027
 
 `proto/api/v1/admission.proto`: unary `/api.v1.Admission/AdmitDelivery`.
 `NewPostgres(pool)` компонует готовую атомарную операцию SUB-017;
@@ -16,7 +16,9 @@ gRPC-сервере, он должен собрать единую полити�
 
 Запрос содержит owner/subscription/workflow/request ID. Только API читает свои
 таблицы и проверяет соответствие workflow; сервисные credentials не заменяют
-эту проверку. В запросе нет котировки события, chat, TTL или порога.
+эту проверку. В запросе нет котировки события, TTL или порога. Необязательный
+`expected_recipient` содержит только условие chat/version после лимитеров;
+источник адреса отправки — каноническая привязка API.
 
 1. `PrepareAdmission` под user/subscription locks восстанавливает сохранённый
    ответ или сохраняет terminal/busy/blocked без чтения market-data. Новая цена
@@ -27,7 +29,10 @@ gRPC-сервере, он должен собрать единую полити�
    отправку. Возраст вычисляется по исходному времени сделки, не времени чтения.
 3. `AdmitDelivery` повторно проверяет состояние, workflow, текущую попытку и
    привязку. Изменившаяся версия канала требует новой подготовки и новой цены
-   в пределах того же deadline/request ID. Отмена до допуска запрещает попытку.
+   в пределах того же deadline/request ID для прежнего caller без CAS.
+   При заданном expected_recipient изменение требует нового цикла лимитеров
+   у caller (Aborted), внутреннего повтора на другой chat нет. Отмена до допуска
+   запрещает попытку.
    Сетевого I/O под SQL locks нет.
 
 Доменные ответы: `admitted`, `wait_condition`, `attempt_busy`, `terminal`,
@@ -56,3 +61,49 @@ workflow — FailedPrecondition; неправильная форма запро�
 PostgreSQL, обе mTLS-связи API/market-data, гонки и потеря ответа после commit.
 Сохранение исходов готово в SUB-019, защищённый RPC —
 [SUB-020](../resultrpc/README.md). Runtime, Telegram worker и лимитеры — отдельно.
+
+SUB-027 добавляет `/api.v1.Admission/PrepareRecipient`, доступный тому же
+точному mTLS URI notifications. Запрос — owner/subscription/workflow, без
+request ID. `Client.PrepareRecipient` и сервер ограничены тем же бюджетом 3 с.
+Под user → subscription locks проверяется канонический workflow и читается
+привязка. После выхода транзакция откатывается без записей: нет admission row,
+attempt/fence, sending, journal, изменения слота или цены. Результат подготовки
+никогда не разрешает HTTP и не резервирует лимитеры.
+
+- `recipient_ready`: chat/version для обоих лимитеров. При blocked старой
+  версии канала новая привязка возвращается без изменения состояния; цену и
+  возобновление проверит финальный admission. Другие причины не снимаются.
+- `missing_channel`: нет привязки, возвращаются причина channel_unavailable и
+  текущая версия в blocked_binding_version, recipient отсутствует.
+- `blocked`: причина/версия прежней блокировки, адресат не выдаётся.
+- `terminal`: отменённая/доставленная подписка, адресат не выдаётся.
+
+Рабочий цикл: PrepareRecipient → оба лимитера для полученного chat →
+`Client.AdmitDelivery(ctx, owner, subscription, workflow, newRequestID,
+prepared.Recipient)` → один немедленный HTTP по AttemptPermission.
+При ожидании лимитера оба допуска теряются; после ожидания новая подготовка,
+оба лимитера и новый admission request ID. Сравнение и выдача permit идут под
+теми же бизнес-блокировками. Даже смена chat при прежней версии не даёт permit
+на непролимитированный chat. `Aborted` не сохраняет команду и требует нового
+цикла/ID. Ошибки чтения/timeout не означают отсутствие канала.
+
+Для сохранения канонического blocked после `missing_channel` caller может
+вызвать admission с новым request ID без лимитеров, задав expected_recipient
+с chat_id=0 и
+binding_version=blocked_binding_version (нулевой chat означает отсутствие).
+Новая команда с таким guard никогда не выдаёт permit: если канал появился, API вернёт
+Aborted до чтения цены. Если канала по-прежнему нет, API сохраняет blocked.
+Из blocked/terminal нельзя выводить разрешение на HTTP.
+
+Поле expected_recipient additive: отсутствие сохраняет старый протокол SUB-018,
+но notifications handler обязан передавать его после лимитеров. Подготовка
+не доказывает, что caller действительно прошёл лимитеры; это обязанность
+notifications. Старый сервер игнорирует новое поле, поэтому API с поддержкой
+SUB-027 должен быть развёрнут до использующего его worker; неизвестный
+PrepareRecipient RPC останавливает отправку.
+
+Исторический replay уже сохранённого request ID имеет приоритет над CAS,
+возвращает исходные chat/цену/срок даже при другой привязке и не становится
+свежим допуском. После неоднозначного commit надо повторить исходный request ID
+и исходный CAS; новую подготовку нельзя использовать для замены неизвестного
+результата. Новый цикл/адресат получает новый ID.

@@ -751,3 +751,45 @@ func TestAdmissionPreparationAndBindingCAS(t *testing.T) {
 		t.Fatal(busy, e)
 	}
 }
+
+func TestPreparedRecipientBinding(t *testing.T) {
+	pool := postgrestest.Open(t)
+	ctx := context.Background()
+	v, c := admissionFixture(t, pool, 991150)
+	prepared, err := store.PrepareRecipient(ctx, pool, c)
+	if err != nil || prepared.Recipient == nil || prepared.Outcome != "recipient_ready" {
+		t.Fatal(prepared, err)
+	}
+	var n int
+	if err = pool.QueryRow(ctx, `SELECT count(*) FROM app.delivery_admissions WHERE subscription_id=$1`, v.ID).Scan(&n); err != nil || n != 0 {
+		t.Fatal(n, err)
+	}
+	c.ExpectedRecipient = prepared.Recipient
+	if _, err = pool.Exec(ctx, `UPDATE app.users SET telegram_chat_id=789,telegram_version=2 WHERE id=$1`, v.OwnerID); err != nil {
+		t.Fatal(err)
+	}
+	if r, err := store.PrepareAdmission(ctx, pool, c); !errors.Is(err, store.ErrAdmissionChanged) || r.Attempt != nil {
+		t.Fatal(r, err)
+	}
+	if r, err := store.AdmitDelivery(ctx, pool, c); !errors.Is(err, store.ErrAdmissionChanged) || r.Attempt != nil {
+		t.Fatal(r, err)
+	}
+	prepared, err = store.PrepareRecipient(ctx, pool, c)
+	if err != nil || prepared.Recipient.ChatID != 789 {
+		t.Fatal(prepared, err)
+	}
+	c.RequestID = "new-chat"
+	c.ExpectedRecipient = prepared.Recipient
+	first, err := store.AdmitDelivery(ctx, pool, c)
+	if err != nil || first.Attempt == nil || first.Attempt.ChatID != 789 {
+		t.Fatal(first, err)
+	}
+	if _, err = pool.Exec(ctx, `UPDATE app.users SET telegram_chat_id=790,telegram_version=3 WHERE id=$1`, v.OwnerID); err != nil {
+		t.Fatal(err)
+	}
+	replay, err := store.AdmitDelivery(ctx, pool, c)
+	if err != nil || !reflect.DeepEqual(first, replay) {
+		t.Fatal(replay, err)
+	}
+	assertQuota(t, pool, v.OwnerID, 1)
+}

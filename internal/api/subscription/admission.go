@@ -51,7 +51,8 @@ type AdmissionCommand struct {
 	OwnerID, SubscriptionID, WorkflowID, RequestID string
 	Quote                                          priceobserved.Observed
 	PermitTTL                                      time.Duration
-	ExpectedBindingVersion                         *int64 // Optional binding CAS for a prepared price read.
+	ExpectedRecipient                              *Recipient // Optional recipient CAS after rate limiting.
+	ExpectedBindingVersion                         *int64     // Optional binding CAS for a prepared price read.
 }
 
 // AttemptPermission authorizes one immediate HTTP attempt after rate limiting.
@@ -160,6 +161,8 @@ func admitDelivery(ctx context.Context, db Beginner, c AdmissionCommand, prepare
 			result.Outcome = AdmissionBlocked
 			result.Record.State = domain.DeliveryBlocked
 			result.Record.Blocked = &Blocked{Reason: domain.ChannelUnavailable, BindingVersion: binding}
+		case c.ExpectedRecipient != nil && (*chat != c.ExpectedRecipient.ChatID || binding != c.ExpectedRecipient.BindingVersion):
+			return AdmissionResult{}, ErrAdmissionChanged
 		case prepare:
 			return AdmissionResult{}, &AdmissionQuoteRequired{Record: r, BindingVersion: binding}
 		case c.ExpectedBindingVersion != nil && binding != *c.ExpectedBindingVersion:

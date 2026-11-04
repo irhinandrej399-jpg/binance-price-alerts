@@ -615,3 +615,21 @@ SUB-025: все писатели SubscriptionChanged используют payloa
 `Record.OwnerID` (включая общий appendWorkflowChange для admission/result).
 Journal/outbox/SQL-replay сохраняют исходные байты и ID. Совместимость v1 и
 порядок обновления окружения — в [контракте SubscriptionChanged](../../contracts/subscriptionchanged/README.md#владелец-и-совместимость--sub-025).
+
+
+SUB-027: `PrepareRecipient(ctx, db, AdmissionCommand)` проверяет
+owner/subscription/workflow под user → subscription locks и возвращает
+`RecipientResult` без записей/попытки/цены/изменения квоты. Это отдельная
+операция от `PrepareAdmission` (внутренняя подготовка чтения цены, способная
+сохранить quote-independent ответ). Outcome recipient_ready содержит Recipient
+chat/version; missing_channel — отсутствие и текущую версию причины;
+blocked/terminal не разрешают отправку. Новая версия снимает только запрет
+channel_unavailable при финальном допуске с текущей ценой.
+
+`AdmissionCommand.ExpectedRecipient` — optional CAS по chat/version после
+лимитеров. Проверяется в PrepareAdmission и AdmitDelivery до новой цены/permit,
+под теми же блокировками; несовпадение ErrAdmissionChanged без записи.
+ChatID=0 — guard отсутствующего канала для сохранения blocked; появление chat
+требует нового цикла подготовки/лимитеров. Replay сохранённого RequestID имеет
+приоритет: исторический ответ не переоценивается и не продлевает разрешение.
+Контракт caller и совместимость — в admissionrpc/README.md. Новых миграций нет.

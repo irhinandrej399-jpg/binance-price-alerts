@@ -191,3 +191,7 @@ func TestInvalidRequestsAndConfig(t *testing.T) {
 		}
 	}
 }
+
+func (s *store) PrepareRecipient(ctx context.Context, c sub.AdmissionCommand) (sub.RecipientResult, error) {
+	return sub.RecipientResult{Outcome: "recipient_ready", Recipient: &sub.Recipient{ChatID: 123, BindingVersion: 1}}, s.readErr
+}

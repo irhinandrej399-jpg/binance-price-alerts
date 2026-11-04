@@ -19,13 +19,15 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Admission_AdmitDelivery_FullMethodName = "/api.v1.Admission/AdmitDelivery"
+	Admission_PrepareRecipient_FullMethodName = "/api.v1.Admission/PrepareRecipient"
+	Admission_AdmitDelivery_FullMethodName    = "/api.v1.Admission/AdmitDelivery"
 )
 
 // AdmissionClient is the client API for Admission service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AdmissionClient interface {
+	PrepareRecipient(ctx context.Context, in *PrepareRecipientRequest, opts ...grpc.CallOption) (*PrepareRecipientResponse, error)
 	AdmitDelivery(ctx context.Context, in *AdmitDeliveryRequest, opts ...grpc.CallOption) (*AdmitDeliveryResponse, error)
 }
 
@@ -35,6 +37,16 @@ type admissionClient struct {
 
 func NewAdmissionClient(cc grpc.ClientConnInterface) AdmissionClient {
 	return &admissionClient{cc}
+}
+
+func (c *admissionClient) PrepareRecipient(ctx context.Context, in *PrepareRecipientRequest, opts ...grpc.CallOption) (*PrepareRecipientResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareRecipientResponse)
+	err := c.cc.Invoke(ctx, Admission_PrepareRecipient_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *admissionClient) AdmitDelivery(ctx context.Context, in *AdmitDeliveryRequest, opts ...grpc.CallOption) (*AdmitDeliveryResponse, error) {
@@ -51,6 +63,7 @@ func (c *admissionClient) AdmitDelivery(ctx context.Context, in *AdmitDeliveryRe
 // All implementations must embed UnimplementedAdmissionServer
 // for forward compatibility.
 type AdmissionServer interface {
+	PrepareRecipient(context.Context, *PrepareRecipientRequest) (*PrepareRecipientResponse, error)
 	AdmitDelivery(context.Context, *AdmitDeliveryRequest) (*AdmitDeliveryResponse, error)
 	mustEmbedUnimplementedAdmissionServer()
 }
@@ -62,6 +75,9 @@ type AdmissionServer interface {
 // pointer dereference when methods are called.
 type UnimplementedAdmissionServer struct{}
 
+func (UnimplementedAdmissionServer) PrepareRecipient(context.Context, *PrepareRecipientRequest) (*PrepareRecipientResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PrepareRecipient not implemented")
+}
 func (UnimplementedAdmissionServer) AdmitDelivery(context.Context, *AdmitDeliveryRequest) (*AdmitDeliveryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdmitDelivery not implemented")
 }
@@ -84,6 +100,24 @@ func RegisterAdmissionServer(s grpc.ServiceRegistrar, srv AdmissionServer) {
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&Admission_ServiceDesc, srv)
+}
+
+func _Admission_PrepareRecipient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareRecipientRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AdmissionServer).PrepareRecipient(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Admission_PrepareRecipient_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AdmissionServer).PrepareRecipient(ctx, req.(*PrepareRecipientRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Admission_AdmitDelivery_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -111,6 +145,10 @@ var Admission_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "api.v1.Admission",
 	HandlerType: (*AdmissionServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "PrepareRecipient",
+			Handler:    _Admission_PrepareRecipient_Handler,
+		},
 		{
 			MethodName: "AdmitDelivery",
 			Handler:    _Admission_AdmitDelivery_Handler,

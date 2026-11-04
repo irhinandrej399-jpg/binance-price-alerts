@@ -4,15 +4,17 @@ option go_package = "github.com/irhinandrej399-jpg/binance-price-alerts/internal
 import "marketdata/v1/latest.proto";
 
 service Admission {
+  rpc PrepareRecipient(PrepareRecipientRequest) returns (PrepareRecipientResponse);
   rpc AdmitDelivery(AdmitDeliveryRequest) returns (AdmitDeliveryResponse);
 }
 // Only notifications service credentials authorize this command. API validates
-// the owner/subscription/workflow tuple. No event price or recipient is accepted.
+// the owner/subscription/workflow tuple. No event price is accepted.
 message AdmitDeliveryRequest {
   string owner_id = 1;
   string subscription_id = 2;
   string workflow_id = 3;
   string request_id = 4; // Stable across timeout; new ID for each new check.
+  Recipient expected_recipient = 5; // Optional CAS, never an authoritative address.
 }
 message AttemptPermission {
   string attempt_id = 1;
@@ -31,4 +33,21 @@ message AdmitDeliveryResponse {
   string block_reason = 6;
   int64 blocked_binding_version = 7;
   AttemptPermission attempt = 8; // Only admitted. One immediate HTTP call.
+}
+
+// A snapshot for rate limiting only; never authorizes a Telegram call.
+message Recipient {
+  int64 chat_id = 1; // Zero guards a missing channel; never a send address.
+  int64 binding_version = 2;
+}
+message PrepareRecipientRequest {
+  string owner_id = 1;
+  string subscription_id = 2;
+  string workflow_id = 3;
+}
+message PrepareRecipientResponse {
+  string outcome = 1; // recipient_ready, missing_channel, blocked, terminal.
+  Recipient recipient = 2; // Only recipient_ready.
+  string block_reason = 3; // Also channel_unavailable for missing_channel.
+  int64 blocked_binding_version = 4; // Current version for missing_channel.
 }

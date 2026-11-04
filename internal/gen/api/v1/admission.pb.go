@@ -23,15 +23,16 @@ const (
 )
 
 // Only notifications service credentials authorize this command. API validates
-// the owner/subscription/workflow tuple. No event price or recipient is accepted.
+// the owner/subscription/workflow tuple. No event price is accepted.
 type AdmitDeliveryRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	OwnerId        string                 `protobuf:"bytes,1,opt,name=owner_id,json=ownerId,proto3" json:"owner_id,omitempty"`
-	SubscriptionId string                 `protobuf:"bytes,2,opt,name=subscription_id,json=subscriptionId,proto3" json:"subscription_id,omitempty"`
-	WorkflowId     string                 `protobuf:"bytes,3,opt,name=workflow_id,json=workflowId,proto3" json:"workflow_id,omitempty"`
-	RequestId      string                 `protobuf:"bytes,4,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"` // Stable across timeout; new ID for each new check.
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	OwnerId           string                 `protobuf:"bytes,1,opt,name=owner_id,json=ownerId,proto3" json:"owner_id,omitempty"`
+	SubscriptionId    string                 `protobuf:"bytes,2,opt,name=subscription_id,json=subscriptionId,proto3" json:"subscription_id,omitempty"`
+	WorkflowId        string                 `protobuf:"bytes,3,opt,name=workflow_id,json=workflowId,proto3" json:"workflow_id,omitempty"`
+	RequestId         string                 `protobuf:"bytes,4,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`                         // Stable across timeout; new ID for each new check.
+	ExpectedRecipient *Recipient             `protobuf:"bytes,5,opt,name=expected_recipient,json=expectedRecipient,proto3" json:"expected_recipient,omitempty"` // Optional CAS, never an authoritative address.
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *AdmitDeliveryRequest) Reset() {
@@ -90,6 +91,13 @@ func (x *AdmitDeliveryRequest) GetRequestId() string {
 		return x.RequestId
 	}
 	return ""
+}
+
+func (x *AdmitDeliveryRequest) GetExpectedRecipient() *Recipient {
+	if x != nil {
+		return x.ExpectedRecipient
+	}
+	return nil
 }
 
 type AttemptPermission struct {
@@ -276,18 +284,200 @@ func (x *AdmitDeliveryResponse) GetAttempt() *AttemptPermission {
 	return nil
 }
 
+// A snapshot for rate limiting only; never authorizes a Telegram call.
+type Recipient struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ChatId         int64                  `protobuf:"varint,1,opt,name=chat_id,json=chatId,proto3" json:"chat_id,omitempty"` // Zero guards a missing channel; never a send address.
+	BindingVersion int64                  `protobuf:"varint,2,opt,name=binding_version,json=bindingVersion,proto3" json:"binding_version,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *Recipient) Reset() {
+	*x = Recipient{}
+	mi := &file_api_v1_admission_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Recipient) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Recipient) ProtoMessage() {}
+
+func (x *Recipient) ProtoReflect() protoreflect.Message {
+	mi := &file_api_v1_admission_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Recipient.ProtoReflect.Descriptor instead.
+func (*Recipient) Descriptor() ([]byte, []int) {
+	return file_api_v1_admission_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *Recipient) GetChatId() int64 {
+	if x != nil {
+		return x.ChatId
+	}
+	return 0
+}
+
+func (x *Recipient) GetBindingVersion() int64 {
+	if x != nil {
+		return x.BindingVersion
+	}
+	return 0
+}
+
+type PrepareRecipientRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	OwnerId        string                 `protobuf:"bytes,1,opt,name=owner_id,json=ownerId,proto3" json:"owner_id,omitempty"`
+	SubscriptionId string                 `protobuf:"bytes,2,opt,name=subscription_id,json=subscriptionId,proto3" json:"subscription_id,omitempty"`
+	WorkflowId     string                 `protobuf:"bytes,3,opt,name=workflow_id,json=workflowId,proto3" json:"workflow_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *PrepareRecipientRequest) Reset() {
+	*x = PrepareRecipientRequest{}
+	mi := &file_api_v1_admission_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PrepareRecipientRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PrepareRecipientRequest) ProtoMessage() {}
+
+func (x *PrepareRecipientRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_v1_admission_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PrepareRecipientRequest.ProtoReflect.Descriptor instead.
+func (*PrepareRecipientRequest) Descriptor() ([]byte, []int) {
+	return file_api_v1_admission_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *PrepareRecipientRequest) GetOwnerId() string {
+	if x != nil {
+		return x.OwnerId
+	}
+	return ""
+}
+
+func (x *PrepareRecipientRequest) GetSubscriptionId() string {
+	if x != nil {
+		return x.SubscriptionId
+	}
+	return ""
+}
+
+func (x *PrepareRecipientRequest) GetWorkflowId() string {
+	if x != nil {
+		return x.WorkflowId
+	}
+	return ""
+}
+
+type PrepareRecipientResponse struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	Outcome               string                 `protobuf:"bytes,1,opt,name=outcome,proto3" json:"outcome,omitempty"`                                                             // recipient_ready, missing_channel, blocked, terminal.
+	Recipient             *Recipient             `protobuf:"bytes,2,opt,name=recipient,proto3" json:"recipient,omitempty"`                                                         // Only recipient_ready.
+	BlockReason           string                 `protobuf:"bytes,3,opt,name=block_reason,json=blockReason,proto3" json:"block_reason,omitempty"`                                  // Also channel_unavailable for missing_channel.
+	BlockedBindingVersion int64                  `protobuf:"varint,4,opt,name=blocked_binding_version,json=blockedBindingVersion,proto3" json:"blocked_binding_version,omitempty"` // Current version for missing_channel.
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *PrepareRecipientResponse) Reset() {
+	*x = PrepareRecipientResponse{}
+	mi := &file_api_v1_admission_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PrepareRecipientResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PrepareRecipientResponse) ProtoMessage() {}
+
+func (x *PrepareRecipientResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_v1_admission_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PrepareRecipientResponse.ProtoReflect.Descriptor instead.
+func (*PrepareRecipientResponse) Descriptor() ([]byte, []int) {
+	return file_api_v1_admission_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *PrepareRecipientResponse) GetOutcome() string {
+	if x != nil {
+		return x.Outcome
+	}
+	return ""
+}
+
+func (x *PrepareRecipientResponse) GetRecipient() *Recipient {
+	if x != nil {
+		return x.Recipient
+	}
+	return nil
+}
+
+func (x *PrepareRecipientResponse) GetBlockReason() string {
+	if x != nil {
+		return x.BlockReason
+	}
+	return ""
+}
+
+func (x *PrepareRecipientResponse) GetBlockedBindingVersion() int64 {
+	if x != nil {
+		return x.BlockedBindingVersion
+	}
+	return 0
+}
+
 var File_api_v1_admission_proto protoreflect.FileDescriptor
 
 const file_api_v1_admission_proto_rawDesc = "" +
 	"\n" +
-	"\x16api/v1/admission.proto\x12\x06api.v1\x1a\x1amarketdata/v1/latest.proto\"\x9a\x01\n" +
+	"\x16api/v1/admission.proto\x12\x06api.v1\x1a\x1amarketdata/v1/latest.proto\"\xdc\x01\n" +
 	"\x14AdmitDeliveryRequest\x12\x19\n" +
 	"\bowner_id\x18\x01 \x01(\tR\aownerId\x12'\n" +
 	"\x0fsubscription_id\x18\x02 \x01(\tR\x0esubscriptionId\x12\x1f\n" +
 	"\vworkflow_id\x18\x03 \x01(\tR\n" +
 	"workflowId\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x04 \x01(\tR\trequestId\"\xd5\x01\n" +
+	"request_id\x18\x04 \x01(\tR\trequestId\x12@\n" +
+	"\x12expected_recipient\x18\x05 \x01(\v2\x11.api.v1.RecipientR\x11expectedRecipient\"\xd5\x01\n" +
 	"\x11AttemptPermission\x12\x1d\n" +
 	"\n" +
 	"attempt_id\x18\x01 \x01(\tR\tattemptId\x12\x14\n" +
@@ -306,8 +496,22 @@ const file_api_v1_admission_proto_rawDesc = "" +
 	"workflowId\x12!\n" +
 	"\fblock_reason\x18\x06 \x01(\tR\vblockReason\x126\n" +
 	"\x17blocked_binding_version\x18\a \x01(\x03R\x15blockedBindingVersion\x123\n" +
-	"\aattempt\x18\b \x01(\v2\x19.api.v1.AttemptPermissionR\aattempt2Y\n" +
-	"\tAdmission\x12L\n" +
+	"\aattempt\x18\b \x01(\v2\x19.api.v1.AttemptPermissionR\aattempt\"M\n" +
+	"\tRecipient\x12\x17\n" +
+	"\achat_id\x18\x01 \x01(\x03R\x06chatId\x12'\n" +
+	"\x0fbinding_version\x18\x02 \x01(\x03R\x0ebindingVersion\"~\n" +
+	"\x17PrepareRecipientRequest\x12\x19\n" +
+	"\bowner_id\x18\x01 \x01(\tR\aownerId\x12'\n" +
+	"\x0fsubscription_id\x18\x02 \x01(\tR\x0esubscriptionId\x12\x1f\n" +
+	"\vworkflow_id\x18\x03 \x01(\tR\n" +
+	"workflowId\"\xc0\x01\n" +
+	"\x18PrepareRecipientResponse\x12\x18\n" +
+	"\aoutcome\x18\x01 \x01(\tR\aoutcome\x12/\n" +
+	"\trecipient\x18\x02 \x01(\v2\x11.api.v1.RecipientR\trecipient\x12!\n" +
+	"\fblock_reason\x18\x03 \x01(\tR\vblockReason\x126\n" +
+	"\x17blocked_binding_version\x18\x04 \x01(\x03R\x15blockedBindingVersion2\xb0\x01\n" +
+	"\tAdmission\x12U\n" +
+	"\x10PrepareRecipient\x12\x1f.api.v1.PrepareRecipientRequest\x1a .api.v1.PrepareRecipientResponse\x12L\n" +
 	"\rAdmitDelivery\x12\x1c.api.v1.AdmitDeliveryRequest\x1a\x1d.api.v1.AdmitDeliveryResponseBNZLgithub.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/api/v1;apiv1b\x06proto3"
 
 var (
@@ -322,23 +526,30 @@ func file_api_v1_admission_proto_rawDescGZIP() []byte {
 	return file_api_v1_admission_proto_rawDescData
 }
 
-var file_api_v1_admission_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_api_v1_admission_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_api_v1_admission_proto_goTypes = []any{
-	(*AdmitDeliveryRequest)(nil),  // 0: api.v1.AdmitDeliveryRequest
-	(*AttemptPermission)(nil),     // 1: api.v1.AttemptPermission
-	(*AdmitDeliveryResponse)(nil), // 2: api.v1.AdmitDeliveryResponse
-	(*v1.Quote)(nil),              // 3: marketdata.v1.Quote
+	(*AdmitDeliveryRequest)(nil),     // 0: api.v1.AdmitDeliveryRequest
+	(*AttemptPermission)(nil),        // 1: api.v1.AttemptPermission
+	(*AdmitDeliveryResponse)(nil),    // 2: api.v1.AdmitDeliveryResponse
+	(*Recipient)(nil),                // 3: api.v1.Recipient
+	(*PrepareRecipientRequest)(nil),  // 4: api.v1.PrepareRecipientRequest
+	(*PrepareRecipientResponse)(nil), // 5: api.v1.PrepareRecipientResponse
+	(*v1.Quote)(nil),                 // 6: marketdata.v1.Quote
 }
 var file_api_v1_admission_proto_depIdxs = []int32{
-	3, // 0: api.v1.AttemptPermission.quote:type_name -> marketdata.v1.Quote
-	1, // 1: api.v1.AdmitDeliveryResponse.attempt:type_name -> api.v1.AttemptPermission
-	0, // 2: api.v1.Admission.AdmitDelivery:input_type -> api.v1.AdmitDeliveryRequest
-	2, // 3: api.v1.Admission.AdmitDelivery:output_type -> api.v1.AdmitDeliveryResponse
-	3, // [3:4] is the sub-list for method output_type
-	2, // [2:3] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	3, // 0: api.v1.AdmitDeliveryRequest.expected_recipient:type_name -> api.v1.Recipient
+	6, // 1: api.v1.AttemptPermission.quote:type_name -> marketdata.v1.Quote
+	1, // 2: api.v1.AdmitDeliveryResponse.attempt:type_name -> api.v1.AttemptPermission
+	3, // 3: api.v1.PrepareRecipientResponse.recipient:type_name -> api.v1.Recipient
+	4, // 4: api.v1.Admission.PrepareRecipient:input_type -> api.v1.PrepareRecipientRequest
+	0, // 5: api.v1.Admission.AdmitDelivery:input_type -> api.v1.AdmitDeliveryRequest
+	5, // 6: api.v1.Admission.PrepareRecipient:output_type -> api.v1.PrepareRecipientResponse
+	2, // 7: api.v1.Admission.AdmitDelivery:output_type -> api.v1.AdmitDeliveryResponse
+	6, // [6:8] is the sub-list for method output_type
+	4, // [4:6] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_api_v1_admission_proto_init() }
@@ -352,7 +563,7 @@ func file_api_v1_admission_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_v1_admission_proto_rawDesc), len(file_api_v1_admission_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
