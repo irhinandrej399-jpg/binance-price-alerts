@@ -4,9 +4,10 @@
 
 ## Активная работа
 
-- Активная реализация: нет. SUB-026 завершён; следующий по ORDER — NTF-014 после нового поручения и проверки.
+- Активная реализация: нет. NTF-014 завершён; следующий по ORDER — NTF-015 после нового поручения и проверки.
 - Незавершённая реализация: нет. Group/fencing/live/handler и полный prices Prefix интегрированы; fault takeover проверен MAT-011, cmd/runtime отдельно.
-- Последний завершённый тикет: [SUB-026](backlog/tickets/SUB-026.md). [Арбитраж результатов API](../internal/api/subscription/README.md): blocked после retryable/uncertain той же последней попытки применяется в pending_delivery при прежнем fence. SQL Red подтверждён; порядки/concurrent replay, stale/отмена/success, rollback и потерянный ответ commit проверены полным PostgreSQL/race runner, vet/build прошли; disposable volume удалён. RPC/схема прежние, reporter — NTF-014.
+- Последний завершённый тикет: [NTF-014](backlog/tickets/NTF-014.md). [Durable reporter](../internal/notifications/report/README.md): ограниченный проход четырёх pending outcome по исходному attempt, RPC до отдельного ack, повтор после потерянного commit-ответа без Telegram/мутации job. Реальные notifications/API БД, mTLS, restart, independent ack, late success/cancel и concurrent replay прошли полным PostgreSQL/race runner; vet/build прошли, disposable volume удалён. Scheduler/worker/runtime отдельно.
+- [SUB-026](backlog/tickets/SUB-026.md). [Арбитраж результатов API](../internal/api/subscription/README.md): blocked после retryable/uncertain той же последней попытки применяется в pending_delivery при прежнем fence. SQL Red подтверждён; порядки/concurrent replay, stale/отмена/success, rollback и потерянный ответ commit проверены полным PostgreSQL/race runner, vet/build прошли; disposable volume удалён. RPC/схема прежние, reporter — NTF-014.
 - [NTF-016](backlog/tickets/NTF-016.md). [Durable retryable](../internal/notifications/jobs/README.md): первый retry.Plan, бюджет и pending report под job lock, сохранение ack/jitter при replay; Exhausted атомарно сохраняет blocked/report. Полный PostgreSQL/race, vet/build прошли; disposable volume удалён. API-арбитраж перед reporter исправлен в SUB-026; права старых SQL-свидетельств — NTF-017.
 - [NTF-008](backlog/tickets/NTF-008.md). [Durable blocked](../internal/notifications/jobs/README.md): безопасная причина/версия, pending report, парковка API-отказа без HTTP и остановка текущего fence. Повторы/restart/rollback, поздний отказ/успех и дубль intake проверены полным PostgreSQL/race runner; vet/build прошли, disposable volume удалён. Передача API — NTF-014, восстановление канала — NTF-015, worker — NTF-012.
 - [NTF-007](backlog/tickets/NTF-007.md). [Durable uncertain](../internal/notifications/jobs/README.md): свидетельство/pending report, расписание новой проверки, recovery зарегистрированной попытки до takeover, риск дубля и durable метрика. Fake HTTP disconnect/restart, 24 SQL/race-сценария jobs и полный PostgreSQL runner, vet/build прошли; disposable volume удалён. Reporter — NTF-014, новая цена/API-допуск — NTF-012, экспорт метрики — OPS-003.
@@ -95,13 +96,13 @@
 
 [DEC-009](decisions/DEC-009.md) принят 27 октября: REST/JSON для внешнего API, gRPC/Protobuf для прямых внутренних вызовов, Kafka для событий. Карточки интерфейсов уточнены; генерация готова в SET-007, Latest-котировки — в MKT-006; остальные прикладные сетевые адаптеры ещё не реализованы.
 
-DEC-001–009 приняты. DEC-004 пересматривает прежнюю гарантию уведомления по снимку создания и terminal-срабатывание до доставки. SUB-019/020 и relay SUB-009 завершены; MAT-012 завершена, planned-предпосылка NTF-014 включена в очередь.
+DEC-001–009 приняты. DEC-004 пересматривает прежнюю гарантию уведомления по снимку создания и terminal-срабатывание до доставки. SUB-019/020 и relay SUB-009 завершены; MAT-012 завершена, durable reporter NTF-014 завершён.
 
 Выбраны PostgreSQL и Kafka/KRaft, полный профиль стенда закреплён DEC-008. SQL-replay готов в SUB-022, cleaner Kafka — OPS-014, ограничители — OPS-015/016. Численные стоимости операций требуют проверки на будущих схемах; скорость cleaner пока считается нулевой. Telegram-политика и freshness согласованы, но не реализованы. Наличие каталога из четырёх сервисов не означает готовность этих решений.
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [NTF-014](backlog/tickets/NTF-014.md), после нового поручения и сессионной проверки (GPT-6.1 Sol · High). SUB-026 исправил API-арбитраж промежуточного исхода и позднего blocked; NTF-016 завершил storage-предпосылку retryable/report/план. Reporter ещё planned.
+По очереди следующий — [NTF-015](backlog/tickets/NTF-015.md), после нового поручения и сессионной проверки. NTF-014 завершил передачу четырёх исходов API. Будущий worker выбирает также pending reports terminal/stopped jobs; Reconcile ограничен workflow/limit, ошибки повторяются с backoff, Telegram не вызывается. SUB-026 сохраняет blocked после промежуточного исхода, API берёт binding version исходного permit.
 
 NTF-016 сохраняет первый retry.Plan и durable бюджет ошибок без сброса при intake/wait/unknown. Исчерпание атомарно использует blocked-протокол, без crash-окна. Success имеет приоритет, новый Claim не разрешает HTTP. Неподходящие default-права UPDATE/DELETE на старые таблицы исходов выделены отдельно в [NTF-017](backlog/tickets/NTF-017.md); новые таблицы 008 явно закрыты. Reporter использует готовый SUB-020 с исправлением SUB-026; API берёт каноническую binding version из собственного permission по attempt ID.
 
@@ -114,7 +115,7 @@ NTF-006 рассчитывает retry Plan и бюджет доказанных
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show NTF-014` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show NTF-015` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

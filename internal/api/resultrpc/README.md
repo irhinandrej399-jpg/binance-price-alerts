@@ -45,7 +45,9 @@ Timeout/Unavailable не доказывает отсутствие commit. Notif
 исход и повторяет **тот же результат с тем же attempt**, пока не получит
 подтверждение; ошибка этого RPC сама по себе не требует нового sendMessage.
 При конфликте результата или неверной идентичности нужно разбирать сохранённое задание,
-а не создавать новую попытку. Хранилище обязанности notifications — NTF-014.
+а не создавать новую попытку. Обязанность notifications сохраняют методы jobs;
+готовый [reporter NTF-014](../../notifications/report/README.md) передаёт четыре
+категории и подтверждает только соответствующий pending report.
 
 Проверки: `go test -race ./internal/api/resultrpc -count=1` (нужен loopback);
 `python3 scripts/check_postgres.py` — реальный disposable PostgreSQL, mTLS,

@@ -176,7 +176,7 @@
 | [NTF-010](tickets/NTF-010.md) | Сохранить успешную доставку | NTF-003, NTF-009 | done |
 | [NTF-016](tickets/NTF-016.md) | Сохранить временный отказ и обязанность отчёта | NTF-006, NTF-009, NTF-010, NTF-007, NTF-008 | done |
 | [NTF-017](tickets/NTF-017.md) | Закрыть изменение исторических свидетельств ролью notifications | NTF-008, NTF-016 | planned |
-| [NTF-014](tickets/NTF-014.md) | Надёжно передать исход попытки владельцу подписки | NTF-010, SUB-020, NTF-007, NTF-008, NTF-016, SUB-026 | planned |
+| [NTF-014](tickets/NTF-014.md) | Надёжно передать исход попытки владельцу подписки | NTF-010, SUB-020, NTF-007, NTF-008, NTF-016, SUB-026 | done |
 | [NTF-015](tickets/NTF-015.md) | Возобновить задание после восстановления Telegram | NTF-008, NTF-009, SUB-018, DEC-005 | planned |
 | [NTF-012](tickets/NTF-012.md) | Выполнить одну попытку обработки готового задания | NTF-004, NTF-005, NTF-006, NTF-007, NTF-008, NTF-009, NTF-010, SUB-018, NTF-014, NTF-002, NTF-015 | planned |
 | [NTF-013](tickets/NTF-013.md) | Запустить ограниченный цикл notification worker | NTF-012 | planned |
