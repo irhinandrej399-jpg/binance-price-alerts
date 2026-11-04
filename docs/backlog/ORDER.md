@@ -115,36 +115,41 @@
 103. [SUB-027](tickets/SUB-027.md) — Подготовить адресата до лимитеров и проверить его при допуске.
 104. [NTF-012](tickets/NTF-012.md) — Выполнить одну попытку обработки готового задания.
 105. [NTF-013](tickets/NTF-013.md) — Запустить ограниченный цикл notification worker.
-106. [OPS-015](tickets/OPS-015.md) — Остановить новый приём API при исчерпании бюджета.
-107. [OPS-016](tickets/OPS-016.md) — Остановить приём рынка при исчерпании бюджета.
-108. [OPS-001](tickets/OPS-001.md) — Добавить health и readiness API.
-109. [OPS-002](tickets/OPS-002.md) — Измерять задержку от цены до trigger.
-110. [OPS-003](tickets/OPS-003.md) — Измерять состояние очереди доставки.
-111. [OPS-004](tickets/OPS-004.md) — Корректно остановить API.
-112. [OPS-012](tickets/OPS-012.md) — Ограничить размер тела публичного запроса.
-113. [OPS-013](tickets/OPS-013.md) — Ограничить частоту входа и регистрации между репликами.
-114. [OPS-006](tickets/OPS-006.md) — Добавить health и readiness market-data.
-115. [OPS-007](tickets/OPS-007.md) — Добавить health и readiness matcher.
-116. [OPS-008](tickets/OPS-008.md) — Добавить health и readiness notifications.
-117. [OPS-009](tickets/OPS-009.md) — Корректно остановить market-data.
-118. [OPS-010](tickets/OPS-010.md) — Корректно остановить matcher.
-119. [OPS-011](tickets/OPS-011.md) — Корректно остановить notification worker.
-120. [OPS-014](tickets/OPS-014.md) — Удалить безопасный префикс журнала Kafka.
-121. [E2E-003](tickets/E2E-003.md) — Поднять управляемый fake Binance для стенда.
-122. [E2E-004](tickets/E2E-004.md) — Поднять управляемый fake Telegram для стенда.
-123. [E2E-002](tickets/E2E-002.md) — Запустить четыре процесса в одном локальном стенде.
-124. [E2E-001](tickets/E2E-001.md) — Проверить один полный пользовательский сценарий.
-125. [LOAD-001](tickets/LOAD-001.md) — Сгенерировать воспроизводимые данные нагрузки.
-126. [LOAD-002](tickets/LOAD-002.md) — Создать источник цен для нагрузочного стенда.
-127. [LOAD-009](tickets/LOAD-009.md) — Собрать команду воспроизводимого нагрузочного прогона.
-128. [LOAD-003](tickets/LOAD-003.md) — Измерить p99 на миллионе подписок.
-129. [LOAD-004](tickets/LOAD-004.md) — Проверить burst 10000 срабатываний/с.
-130. [LOAD-010](tickets/LOAD-010.md) — Измерить обычный профиль на двух matcher.
-131. [LOAD-011](tickets/LOAD-011.md) — Измерить обычный профиль на четырёх matcher.
-132. [LOAD-012](tickets/LOAD-012.md) — Измерить горячую пару на четырёх matcher.
-133. [LOAD-013](tickets/LOAD-013.md) — Сравнить готовые отчёты масштабирования.
-134. [LOAD-006](tickets/LOAD-006.md) — Проверить восстановление брокера под нагрузкой.
-135. [LOAD-007](tickets/LOAD-007.md) — Проверить восстановление matcher под нагрузкой.
-136. [LOAD-008](tickets/LOAD-008.md) — Проверить восстановление notifications под нагрузкой.
-137. [SUB-024](tickets/SUB-024.md) — Исследовать нестабильный expiry в SQL snapshot RPC тестах.
-138. [NTF-017](tickets/NTF-017.md) — Закрыть изменение исторических свидетельств ролью notifications.
+106. [OPS-019](tickets/OPS-019.md) — Собрать физические метрики PostgreSQL на disposable стенде.
+107. [OPS-020](tickets/OPS-020.md) — Собрать физические метрики Kafka на disposable стенде.
+108. [OPS-021](tickets/OPS-021.md) — Измерить manifest продолжения API в matcher и notifications.
+109. [OPS-022](tickets/OPS-022.md) — Измерить manifest источника market-data и свести покрытие затрат.
+110. [OPS-018](tickets/OPS-018.md) — Квалифицировать таблицу стоимости и квоты durable приёма.
+111. [OPS-015](tickets/OPS-015.md) — Остановить новый приём API при исчерпании бюджета.
+112. [OPS-016](tickets/OPS-016.md) — Остановить приём рынка при исчерпании бюджета.
+113. [OPS-001](tickets/OPS-001.md) — Добавить health и readiness API.
+114. [OPS-002](tickets/OPS-002.md) — Измерять задержку от цены до trigger.
+115. [OPS-003](tickets/OPS-003.md) — Измерять состояние очереди доставки.
+116. [OPS-004](tickets/OPS-004.md) — Корректно остановить API.
+117. [OPS-012](tickets/OPS-012.md) — Ограничить размер тела публичного запроса.
+118. [OPS-013](tickets/OPS-013.md) — Ограничить частоту входа и регистрации между репликами.
+119. [OPS-006](tickets/OPS-006.md) — Добавить health и readiness market-data.
+120. [OPS-007](tickets/OPS-007.md) — Добавить health и readiness matcher.
+121. [OPS-008](tickets/OPS-008.md) — Добавить health и readiness notifications.
+122. [OPS-009](tickets/OPS-009.md) — Корректно остановить market-data.
+123. [OPS-010](tickets/OPS-010.md) — Корректно остановить matcher.
+124. [OPS-011](tickets/OPS-011.md) — Корректно остановить notification worker.
+125. [OPS-014](tickets/OPS-014.md) — Удалить безопасный префикс журнала Kafka.
+126. [E2E-003](tickets/E2E-003.md) — Поднять управляемый fake Binance для стенда.
+127. [E2E-004](tickets/E2E-004.md) — Поднять управляемый fake Telegram для стенда.
+128. [E2E-002](tickets/E2E-002.md) — Запустить четыре процесса в одном локальном стенде.
+129. [E2E-001](tickets/E2E-001.md) — Проверить один полный пользовательский сценарий.
+130. [LOAD-001](tickets/LOAD-001.md) — Сгенерировать воспроизводимые данные нагрузки.
+131. [LOAD-002](tickets/LOAD-002.md) — Создать источник цен для нагрузочного стенда.
+132. [LOAD-009](tickets/LOAD-009.md) — Собрать команду воспроизводимого нагрузочного прогона.
+133. [LOAD-003](tickets/LOAD-003.md) — Измерить p99 на миллионе подписок.
+134. [LOAD-004](tickets/LOAD-004.md) — Проверить burst 10000 срабатываний/с.
+135. [LOAD-010](tickets/LOAD-010.md) — Измерить обычный профиль на двух matcher.
+136. [LOAD-011](tickets/LOAD-011.md) — Измерить обычный профиль на четырёх matcher.
+137. [LOAD-012](tickets/LOAD-012.md) — Измерить горячую пару на четырёх matcher.
+138. [LOAD-013](tickets/LOAD-013.md) — Сравнить готовые отчёты масштабирования.
+139. [LOAD-006](tickets/LOAD-006.md) — Проверить восстановление брокера под нагрузкой.
+140. [LOAD-007](tickets/LOAD-007.md) — Проверить восстановление matcher под нагрузкой.
+141. [LOAD-008](tickets/LOAD-008.md) — Проверить восстановление notifications под нагрузкой.
+142. [SUB-024](tickets/SUB-024.md) — Исследовать нестабильный expiry в SQL snapshot RPC тестах.
+143. [NTF-017](tickets/NTF-017.md) — Закрыть изменение исторических свидетельств ролью notifications.

@@ -139,3 +139,11 @@ manifest digest закреплён в compose (multi-platform, включая am
 [официальный образ, PGDATA и init](https://hub.docker.com/_/postgres).
 Digest получен `docker pull postgres:18.6-bookworm`. Обновление версии/digest —
 явное изменение профиля с повторной проверкой, не автоматический pull нового тега.
+
+## Измерение физических затрат
+
+Изолированный collector с отдельными disposable volumes, сырыми снимками
+relation forks/WAL/temp/IO и checkpoint-протоколом:
+[measure/README.md](measure/README.md). Контрольные результаты —
+[OPS-019](../../docs/measurements/OPS-019/README.md).
+Функциональный `check_postgres.py` измерения не заменяет.

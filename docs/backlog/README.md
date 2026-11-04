@@ -1,6 +1,6 @@
 # Бэклог Binance Price Alerts
 
-Создан 25 октября 2026. После уточнения ADR и зависимостей: активных карточек — **138**, из них **9 карточек решений** и **129 задач реализации/проверки**; отдельно **12 контейнеров split**, не выдаваемых на одну сессию. Приложение ещё не реализовано.
+Создан 25 октября 2026. После уточнения ADR и зависимостей: активных карточек — **143**, из них **9 карточек решений** и **134 задачи реализации/проверки**; отдельно **13 контейнеров split**, не выдаваемых на одну сессию. Приложение ещё не реализовано.
 
 Карточки хранятся здесь как Markdown в локальном Git-репозитории. После завершения тикета агент создаёт commit по [правилам Git](../GIT.md). Это исходный план первой очереди; готовность карточки к исполнению проверяется отдельно.
 
@@ -199,8 +199,13 @@
 | [OPS-012](tickets/OPS-012.md) | Ограничить размер тела публичного запроса | IAM-003, IAM-004, SUB-003 | planned |
 | [OPS-013](tickets/OPS-013.md) | Ограничить частоту входа и регистрации между репликами | IAM-003, IAM-004, DEC-003, DEC-006 | planned |
 | [OPS-014](tickets/OPS-014.md) | Удалить безопасный префикс журнала Kafka | SET-005, SUB-022, MAT-011, NTF-001, DEC-007 | planned |
-| [OPS-015](tickets/OPS-015.md) | Остановить новый приём API при исчерпании бюджета | SUB-003, SUB-005, SUB-020, SUB-007, SUB-009, DEC-008 | planned |
-| [OPS-016](tickets/OPS-016.md) | Остановить приём рынка при исчерпании бюджета | MKT-017, MKT-014, DEC-008 | planned |
+| [OPS-015](tickets/OPS-015.md) | Остановить новый приём API при исчерпании бюджета | SUB-003, SUB-005, SUB-020, SUB-007, SUB-009, DEC-008, OPS-018 | planned |
+| [OPS-016](tickets/OPS-016.md) | Остановить приём рынка при исчерпании бюджета | MKT-017, MKT-014, DEC-008, OPS-018 | planned |
+| [OPS-018](tickets/OPS-018.md) | Квалифицировать таблицу стоимости и квоты durable приёма | OPS-022, DEC-008 | planned |
+| [OPS-019](tickets/OPS-019.md) | Собрать физические метрики PostgreSQL на disposable стенде | SET-006, DEC-008 | done |
+| [OPS-020](tickets/OPS-020.md) | Собрать физические метрики Kafka на disposable стенде | SET-009, DEC-008 | planned |
+| [OPS-021](tickets/OPS-021.md) | Измерить manifest продолжения API в matcher и notifications | OPS-019, OPS-020, SUB-009, SUB-020, NTF-013 | planned |
+| [OPS-022](tickets/OPS-022.md) | Измерить manifest источника market-data и свести покрытие затрат | OPS-019, OPS-020, OPS-021, MKT-014 | planned |
 
 ### Сквозная проверка
 
@@ -244,3 +249,4 @@
 | [NTF-011](tickets/NTF-011.md) | [NTF-012](tickets/NTF-012.md), [NTF-013](tickets/NTF-013.md) | split |
 | [OPS-005](tickets/OPS-005.md) | [OPS-012](tickets/OPS-012.md), [OPS-013](tickets/OPS-013.md) | split |
 | [LOAD-005](tickets/LOAD-005.md) | [LOAD-010](tickets/LOAD-010.md), [LOAD-011](tickets/LOAD-011.md), [LOAD-012](tickets/LOAD-012.md), [LOAD-013](tickets/LOAD-013.md) | split |
+| [OPS-017](tickets/OPS-017.md) | [OPS-019](tickets/OPS-019.md), [OPS-020](tickets/OPS-020.md), [OPS-021](tickets/OPS-021.md), [OPS-022](tickets/OPS-022.md) | split |

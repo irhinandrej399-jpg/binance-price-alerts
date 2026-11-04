@@ -1,0 +1,70 @@
+{
+  "format_version": 1,
+  "project": "binance-pg-measure-38fc198cf386",
+  "status": "failed",
+  "rows": 1000,
+  "source_commit": "a75f61ff58690718f61ba455726fe440cbeba384",
+  "source_dirty": true,
+  "commands": [
+    [
+      "docker",
+      "compose",
+      "-p",
+      "binance-pg-measure-38fc198cf386",
+      "-f",
+      "/Users/andrey/Desktop/Binance/infra/postgres/compose.yaml",
+      "-f",
+      "/var/folders/xc/2mfv79815f37g7lxmgt3bvnc0000gn/T/pg-measure-0htbuqzx/override.yaml",
+      "up",
+      "-d",
+      "--wait",
+      "--wait-timeout",
+      "120"
+    ],
+    [
+      "docker",
+      "compose",
+      "-p",
+      "binance-pg-measure-38fc198cf386",
+      "-f",
+      "/Users/andrey/Desktop/Binance/infra/postgres/compose.yaml",
+      "-f",
+      "/var/folders/xc/2mfv79815f37g7lxmgt3bvnc0000gn/T/pg-measure-0htbuqzx/override.yaml",
+      "down",
+      "--volumes",
+      "--remove-orphans"
+    ],
+    [
+      "docker",
+      "container",
+      "ls",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-pg-measure-38fc198cf386"
+    ],
+    [
+      "docker",
+      "volume",
+      "ls",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-pg-measure-38fc198cf386"
+    ],
+    [
+      "docker",
+      "network",
+      "ls",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-pg-measure-38fc198cf386"
+    ]
+  ],
+  "phases": {},
+  "override": "services:\n  postgres:\n    env_file: !override [\"<ephemeral-secret-file>\"]\n    ports: !override [\"127.0.0.1::5432\"]\n    command: [postgres, -c, fsync=on, -c, synchronous_commit=on, -c, full_page_writes=on, -c, track_io_timing=on, -c, track_wal_io_timing=on]\n",
+  "error": "injected failure after startup",
+  "cleanup": {
+    "container": [],
+    "volume": [],
+    "network": []
+  }
+}

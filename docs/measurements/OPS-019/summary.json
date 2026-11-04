@@ -1,0 +1,67 @@
+{
+  "status": "verified-controls-not-qualified",
+  "experiments": [
+    {
+      "run": "run-1000-a",
+      "rows": 1000,
+      "empty": {
+        "wal_insert_bytes": 264,
+        "api_relation_bytes": 0,
+        "api_database_bytes": 0,
+        "wal_segment_file_bytes": 0,
+        "client_wal_fsyncs": 0,
+        "client_wal_fsync_ms": 0.0
+      },
+      "adapter": {
+        "wal_insert_bytes": 453504,
+        "api_relation_bytes": 286720,
+        "api_database_bytes": 286720,
+        "wal_segment_file_bytes": 0,
+        "client_wal_fsyncs": 1000,
+        "client_wal_fsync_ms": 78.052
+      }
+    },
+    {
+      "run": "run-1000-b",
+      "rows": 1000,
+      "empty": {
+        "wal_insert_bytes": 264,
+        "api_relation_bytes": 0,
+        "api_database_bytes": 0,
+        "wal_segment_file_bytes": 0,
+        "client_wal_fsyncs": 0,
+        "client_wal_fsync_ms": 0.0
+      },
+      "adapter": {
+        "wal_insert_bytes": 453528,
+        "api_relation_bytes": 286720,
+        "api_database_bytes": 286720,
+        "wal_segment_file_bytes": 0,
+        "client_wal_fsyncs": 1000,
+        "client_wal_fsync_ms": 79.529
+      }
+    },
+    {
+      "run": "run-2000",
+      "rows": 2000,
+      "empty": {
+        "wal_insert_bytes": 264,
+        "api_relation_bytes": 0,
+        "api_database_bytes": 0,
+        "wal_segment_file_bytes": 0,
+        "client_wal_fsyncs": 0,
+        "client_wal_fsync_ms": 0.0
+      },
+      "adapter": {
+        "wal_insert_bytes": 900856,
+        "api_relation_bytes": 516096,
+        "api_database_bytes": 516096,
+        "wal_segment_file_bytes": 0,
+        "client_wal_fsyncs": 2000,
+        "client_wal_fsync_ms": 125.40700000000001
+      }
+    }
+  ],
+  "repeat_wal_spread_bytes": 24,
+  "failure_cleanup": "verified"
+}
