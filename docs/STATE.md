@@ -4,9 +4,9 @@
 
 ## Активная работа
 
-- Активная реализация: нет. SUB-027 завершён; следующий по ORDER — NTF-012 после нового поручения и проверки.
+- Активная реализация: нет. NTF-012 завершён; следующий по ORDER — NTF-013 после нового поручения и проверки.
 - Незавершённая реализация: нет. Group/fencing/live/handler и полный prices Prefix интегрированы; fault takeover проверен MAT-011, cmd/runtime отдельно.
-- Последний завершённый тикет: [SUB-027](backlog/tickets/SUB-027.md). [Подготовка адресата и CAS](../internal/api/admissionrpc/README.md): read-only PrepareRecipient до лимитеров, проверка chat/version в admission под бизнес-блокировками; смена адресата требует нового цикла без permit. Исторический replay сохранён, missing-channel guard исключает отправку при появлении канала. Полный PostgreSQL/race, mTLS, proto-check, vet/build прошли; disposable volume удалён. Worker/runtime — NTF-012/013.
+- Последний завершённый тикет: [NTF-012](backlog/tickets/NTF-012.md). [Одна попытка доставки](../internal/notifications/handler/README.md): claim → prepare recipient → оба лимитера → CAS admission → один HTTP → durable исход/reporter; ожидания освобождают lease. Disconnect/false/true, потеря ответа API, crash регистрации, 429, постоянный отказ и recovery канала проверены полным PostgreSQL/race runner; vet/build прошли, disposable volume удалён. PendingWrite повторяет сохранение без HTTP; worker/discovery/runtime — NTF-013.
 - [NTF-015](backlog/tickets/NTF-015.md). [Проверка канала](../internal/notifications/jobs/README.md): ScheduleRecovery сохраняет первый next_check_at/причину/версию текущего fence; claim срока получает новую аренду того же job. Рестарт/replay, повтор парковки/backoff, старые исходы, terminal/success, crash/takeover, rollback и бюджет проверены полным PostgreSQL/race runner; vet/build прошли, disposable volume удалён. Миграция notifications 009; handler/worker discovery — NTF-012/013.
 - [NTF-014](backlog/tickets/NTF-014.md). [Durable reporter](../internal/notifications/report/README.md): ограниченный проход четырёх pending outcome по исходному attempt, RPC до отдельного ack, повтор после потерянного commit-ответа без Telegram/мутации job. Реальные notifications/API БД, mTLS, restart, independent ack, late success/cancel и concurrent replay прошли полным PostgreSQL/race runner; vet/build прошли, disposable volume удалён. Scheduler/worker/runtime отдельно.
 - [SUB-026](backlog/tickets/SUB-026.md). [Арбитраж результатов API](../internal/api/subscription/README.md): blocked после retryable/uncertain той же последней попытки применяется в pending_delivery при прежнем fence. SQL Red подтверждён; порядки/concurrent replay, stale/отмена/success, rollback и потерянный ответ commit проверены полным PostgreSQL/race runner, vet/build прошли; disposable volume удалён. RPC/схема прежние, reporter — NTF-014.
@@ -104,7 +104,9 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [NTF-012](backlog/tickets/NTF-012.md), после нового поручения и сессионной проверки. SUB-027 закрыл недостающий протокол адресата: PrepareRecipient → оба лимитера → AdmitDelivery с expected_recipient; Aborted требует нового цикла/ID, неоднозначный commit — replay исходного ID/CAS. Для missing_channel есть guard chat_id=0, который сохраняет blocked либо отказывает при появлении канала без permit. Контракт — admissionrpc/README.md; старый вызов без CAS не использовать для нового worker. NTF-015 завершил ScheduleRecovery; claim срока не даёт права на HTTP, scheduler обнаруживает не назначенные current-fence blocks после crash. NTF-014 завершил передачу четырёх исходов API. Будущий worker выбирает также pending reports terminal/stopped jobs; Reconcile ограничен workflow/limit, ошибки повторяются с backoff, Telegram не вызывается. SUB-026 сохраняет blocked после промежуточного исхода, API берёт binding version исходного permit.
+По очереди следующий — [NTF-013](backlog/tickets/NTF-013.md), после нового поручения и сессионной проверки. NTF-012 подготовил `handler.New(Config)` / `Handle(ctx, triggerID)`; контракт и восстановление — handler/README.md. Worker задаёт предел параллелизма, deadline, backoff и явно настроенные Policy/RecoveryInterval/ReportLimit. PendingWrite.Retry сохраняет известный исход с новым ограниченным context, без повторной отправки; не заменять его новым Handle того же workflow до записи. После crash зарегистрированная попытка восстанавливается как uncertain, риск внешнего дубля сохраняется.
+
+Scheduler должен выбирать также pending reports terminal/stopped jobs (Handle передаёт их перед Claim) и не назначенные current-fence channel blocks после crash между сохранением и ScheduleRecovery. Discovery/условия — jobs/README.md; сканирование очереди и процесс в NTF-012 не реализовывались. SUB-027 обеспечивает CAS адресата; старый admission без CAS для отправки не использовать.
 
 NTF-016 сохраняет первый retry.Plan и durable бюджет ошибок без сброса при intake/wait/unknown. Исчерпание атомарно использует blocked-протокол, без crash-окна. Success имеет приоритет, новый Claim не разрешает HTTP. Неподходящие default-права UPDATE/DELETE на старые таблицы исходов выделены отдельно в [NTF-017](backlog/tickets/NTF-017.md); новые таблицы 008 явно закрыты. Reporter использует готовый SUB-020 с исправлением SUB-026; API берёт каноническую binding version из собственного permission по attempt ID.
 
@@ -117,7 +119,7 @@ NTF-006 рассчитывает retry Plan и бюджет доказанных
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show NTF-012` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show NTF-013` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.
