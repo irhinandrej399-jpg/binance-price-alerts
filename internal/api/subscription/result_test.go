@@ -507,3 +507,239 @@ func TestDeliveryResultRejects(t *testing.T) {
 		}
 	}
 }
+
+func TestDeliveryResultBlockedArbitration(t *testing.T) {
+	pool := postgrestest.Open(t)
+	ctx := context.Background()
+	for i, interim := range []store.DeliveryOutcome{store.DeliveryRetryable, store.DeliveryUncertain} {
+		for j, order := range []string{"interim-first", "blocked-first", "concurrent"} {
+			t.Run(string(interim)+"/"+order, func(t *testing.T) {
+				v, c := admissionFixture(t, pool, 992100+i*10+j)
+				a, err := store.AdmitDelivery(ctx, pool, c)
+				if err != nil {
+					t.Fatal(err)
+				}
+				before, err := journal.Current(ctx, pool)
+				if err != nil {
+					t.Fatal(err)
+				}
+				blocked := resultCommand(v, a, store.DeliveryFailed)
+				blocked.Reason = domain.AttemptsExhausted
+				pending := resultCommand(v, a, interim)
+				if order == "concurrent" {
+					start, errs := make(chan struct{}), make(chan error, 20)
+					for n := 0; n < 20; n++ {
+						cmd := pending
+						if n%2 == 0 {
+							cmd = blocked
+						}
+						go func(cmd store.DeliveryResultCommand) {
+							<-start
+							_, err := store.SaveDeliveryResult(ctx, pool, cmd)
+							errs <- err
+						}(cmd)
+					}
+					close(start)
+					for n := 0; n < 20; n++ {
+						if err := <-errs; err != nil {
+							t.Fatal(err)
+						}
+					}
+				} else {
+					commands := []store.DeliveryResultCommand{pending, blocked}
+					if order == "blocked-first" {
+						commands[0], commands[1] = commands[1], commands[0]
+					}
+					for _, cmd := range commands {
+						if _, err := store.SaveDeliveryResult(ctx, pool, cmd); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+				r, err := store.New(pool).ByID(ctx, v.OwnerID, v.ID)
+				if err != nil || r.State != domain.DeliveryBlocked || r.Blocked == nil || r.Blocked.Reason != domain.AttemptsExhausted || r.Blocked.BindingVersion != a.Attempt.BindingVersion {
+					t.Fatalf("expected exhausted blocked, got %+v: %v", r, err)
+				}
+				entries, err := journal.ReadAfter(ctx, pool, before, 10)
+				if err != nil || len(entries) < 1 || len(entries) > 2 || entries[len(entries)-1].Change.State != domain.DeliveryBlocked || r.Version != a.Record.Version+int64(len(entries)) {
+					t.Fatal(entries, r, err)
+				}
+				var audit int
+				if err := pool.QueryRow(ctx, `SELECT count(*) FROM app.delivery_results WHERE attempt_id=$1`, a.Attempt.ID).Scan(&audit); err != nil || audit != 2 {
+					t.Fatal(audit, err)
+				}
+				pos, err := journal.Current(ctx, pool)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, cmd := range []store.DeliveryResultCommand{pending, blocked} {
+					replay, err := store.SaveDeliveryResult(ctx, pool, cmd)
+					if err != nil || !reflect.DeepEqual(replay, r) {
+						t.Fatal(replay, err)
+					}
+				}
+				if after, err := journal.Current(ctx, pool); err != nil || after != pos {
+					t.Fatal(after, err)
+				}
+				// The other intermediate category is a new audit observation, but
+				// cannot downgrade blocked or create a new canonical version.
+				other := store.DeliveryUncertain
+				if interim == other {
+					other = store.DeliveryRetryable
+				}
+				unchanged, err := store.SaveDeliveryResult(ctx, pool, resultCommand(v, a, other))
+				if err != nil || !reflect.DeepEqual(unchanged, r) {
+					t.Fatal(unchanged, err)
+				}
+				if after, err := journal.Current(ctx, pool); err != nil || after != pos {
+					t.Fatal(after, err)
+				}
+				assertQuota(t, pool, v.OwnerID, 1)
+				// Success dominates both negative observations and releases only once.
+				success, err := store.SaveDeliveryResult(ctx, pool, resultCommand(v, a, store.DeliverySucceeded))
+				if err != nil || success.State != domain.Delivered || success.Version != r.Version+1 {
+					t.Fatal(success, err)
+				}
+				assertQuota(t, pool, v.OwnerID, 0)
+			})
+		}
+	}
+}
+
+func TestDeliveryResultBlockedAfterInterimBoundary(t *testing.T) {
+	pool := postgrestest.Open(t)
+	ctx := context.Background()
+	for i, boundary := range []string{"new-attempt", "new-channel", "wait-condition", "cancel"} {
+		t.Run(boundary, func(t *testing.T) {
+			v, c := admissionFixture(t, pool, 992200+i)
+			a, err := store.AdmitDelivery(ctx, pool, c)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = store.SaveDeliveryResult(ctx, pool, resultCommand(v, a, store.DeliveryUncertain)); err != nil {
+				t.Fatal(err)
+			}
+			if boundary == "cancel" {
+				cred, err := session.New(pool, nil).Issue(ctx, v.OwnerID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if resp := deleteSubscription(auth.New(session.New(pool, nil), store.NewCancelHandler(pool)), cred.AccessToken, v.ID); resp.Code != 200 {
+					t.Fatal(resp.Code)
+				}
+			} else {
+				if boundary == "new-channel" {
+					if _, err = pool.Exec(ctx, `UPDATE app.users SET telegram_version=2 WHERE id=$1`, v.OwnerID); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if boundary == "wait-condition" {
+					p := v.CreationPrice
+					if err := p.UnmarshalText([]byte("99")); err != nil {
+						t.Fatal(err)
+					}
+					c.Quote.Price = &p
+				}
+				c.RequestID = "after-interim"
+				next, err := store.AdmitDelivery(ctx, pool, c)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if boundary == "wait-condition" {
+					if next.Outcome != store.WaitCondition {
+						t.Fatal(next)
+					}
+				} else if next.Attempt == nil {
+					t.Fatal(next)
+				}
+			}
+			before, err := store.New(pool).ByID(ctx, v.OwnerID, v.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			pos, err := journal.Current(ctx, pool)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var pointer *string
+			if err = pool.QueryRow(ctx, `SELECT current_attempt_id FROM app.subscriptions WHERE id=$1`, v.ID).Scan(&pointer); err != nil {
+				t.Fatal(err)
+			}
+			blocked := resultCommand(v, a, store.DeliveryFailed)
+			blocked.Reason = domain.AttemptsExhausted
+			after, err := store.SaveDeliveryResult(ctx, pool, blocked)
+			if err != nil || !reflect.DeepEqual(after, before) {
+				t.Fatal(after, before, err)
+			}
+			var current *string
+			if err = pool.QueryRow(ctx, `SELECT current_attempt_id FROM app.subscriptions WHERE id=$1`, v.ID).Scan(&current); err != nil || !reflect.DeepEqual(current, pointer) {
+				t.Fatal(current, pointer, err)
+			}
+			if after, err := journal.Current(ctx, pool); err != nil || after != pos {
+				t.Fatal(after, err)
+			}
+			var audit int
+			if err = pool.QueryRow(ctx, `SELECT count(*) FROM app.delivery_results WHERE attempt_id=$1`, a.Attempt.ID).Scan(&audit); err != nil || audit != 2 {
+				t.Fatal(audit, err)
+			}
+			quota := 1
+			if boundary == "cancel" {
+				quota = 0
+			}
+			assertQuota(t, pool, v.OwnerID, quota)
+		})
+	}
+}
+
+func TestDeliveryResultBlockedUpgradeRollback(t *testing.T) {
+	pool := postgrestest.Open(t)
+	ctx := context.Background()
+	for i, at := range []string{"INSERT INTO app.delivery_results", "INSERT INTO app.api_journal (", "commit"} {
+		t.Run(at, func(t *testing.T) {
+			v, c := admissionFixture(t, pool, 992210+i)
+			a, err := store.AdmitDelivery(ctx, pool, c)
+			if err != nil {
+				t.Fatal(err)
+			}
+			pending, err := store.SaveDeliveryResult(ctx, pool, resultCommand(v, a, store.DeliveryRetryable))
+			if err != nil {
+				t.Fatal(err)
+			}
+			before, err := journal.Current(ctx, pool)
+			if err != nil {
+				t.Fatal(err)
+			}
+			blocked := resultCommand(v, a, store.DeliveryFailed)
+			blocked.Reason = domain.AttemptsExhausted
+			var db store.Beginner = failedResultDB{pool, at}
+			if at == "commit" {
+				db = failedCommitDB{pool}
+			}
+			if _, err := store.SaveDeliveryResult(ctx, db, blocked); err == nil {
+				t.Fatal("expected SQL/commit failure")
+			}
+			after, err := store.New(pool).ByID(ctx, v.OwnerID, v.ID)
+			if err != nil || !reflect.DeepEqual(after, pending) {
+				t.Fatal(after, err)
+			}
+			if pos, err := journal.Current(ctx, pool); err != nil || pos != before {
+				t.Fatal(pos, err)
+			}
+			var audit int
+			if err = pool.QueryRow(ctx, `SELECT count(*) FROM app.delivery_results WHERE attempt_id=$1`, a.Attempt.ID).Scan(&audit); err != nil || audit != 1 {
+				t.Fatal(audit, err)
+			}
+			if _, err = store.SaveDeliveryResult(ctx, lostDeliveryCommitDB{pool}, blocked); !errors.Is(err, store.ErrStorage) {
+				t.Fatal(err)
+			}
+			after, err = store.SaveDeliveryResult(ctx, pool, blocked)
+			if err != nil || after.State != domain.DeliveryBlocked || after.Version != pending.Version+1 {
+				t.Fatal(after, err)
+			}
+			if pos, err := journal.Current(ctx, pool); err != nil || pos != before+1 {
+				t.Fatal(pos, err)
+			}
+			assertQuota(t, pool, v.OwnerID, 1)
+		})
+	}
+}

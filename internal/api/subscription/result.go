@@ -92,7 +92,13 @@ func SaveDeliveryResult(ctx context.Context, db Beginner, c DeliveryResultComman
 		return Record{}, storageError(ctx, err)
 	}
 	terminal := r.State == domain.Delivered || r.State == domain.Cancelled
-	mutate := !terminal && (c.Outcome == DeliverySucceeded || (current != nil && *current == c.AttemptID && currentFence == fence))
+	// Clearing current_attempt_id closes the HTTP permission, but an interim
+	// report is not final evidence. A later blocked report may strengthen that
+	// same fence while it is still pending. A new admission changes the fence;
+	// a wait-condition/recovery changes the state, so neither can be overwritten.
+	currentAttempt := current != nil && *current == c.AttemptID && currentFence == fence
+	blockedAfterInterim := c.Outcome == DeliveryFailed && current == nil && currentFence == fence && r.State == domain.PendingDelivery
+	mutate := !terminal && (c.Outcome == DeliverySucceeded || currentAttempt || blockedAfterInterim)
 	var msg, why any
 	if c.Outcome == DeliverySucceeded {
 		msg = c.MessageID

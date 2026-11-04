@@ -113,7 +113,7 @@
 | [SUB-016](tickets/SUB-016.md) | Открыть внутренний интерфейс страниц снимка | SUB-015, SUB-023, DEC-003, DEC-009 | done |
 | [SUB-025](tickets/SUB-025.md) | Передать владельца подписки в live-проекцию matcher | CON-002, SUB-011, SUB-012, SUB-013, SUB-017, SUB-019, SUB-014, MAT-014 | done |
 | [SUB-024](tickets/SUB-024.md) | Исследовать нестабильный expiry в SQL snapshot RPC тестах | SUB-016, SET-006 | planned |
-| [SUB-026](tickets/SUB-026.md) | Сохранить блокировку после промежуточного исхода той же попытки | SUB-020 | planned |
+| [SUB-026](tickets/SUB-026.md) | Сохранить блокировку после промежуточного исхода той же попытки | SUB-020 | done |
 | [SUB-017](tickets/SUB-017.md) | Сохранить допуск одной попытки доставки | SUB-013, DOM-004, DEC-004, IAM-008, DEC-005, SUB-021 | done |
 | [SUB-018](tickets/SUB-018.md) | Открыть допуск доставки с проверкой последней цены | SUB-017, MKT-006, DEC-009 | done |
 | [SUB-019](tickets/SUB-019.md) | Сохранить исход попытки в подписке | SUB-017, DOM-004, SUB-021 | done |
