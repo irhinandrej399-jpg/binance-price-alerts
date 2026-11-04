@@ -71,12 +71,13 @@ func (s *Store) Claim(ctx context.Context, triggerID string) (Lease, error) {
 	var l Lease
 	var state string
 	var oldID *string
-	var expires *time.Time
+	var expires, check *time.Time
+	var blockReason *string
 	var next pgtype.Timestamptz
 	// Read time after taking the row lock; a blocked/stale clock cannot extend
 	// old ownership. next_attempt_at may be PostgreSQL -infinity.
-	err = tx.QueryRow(ctx, `SELECT state,lease_fence,lease_id,lease_expires_at,next_attempt_at,body
- FROM app.delivery_jobs WHERE trigger_id=$1 FOR UPDATE SKIP LOCKED`, triggerID).Scan(&state, &l.Fence, &oldID, &expires, &next, &l.Body)
+	err = tx.QueryRow(ctx, `SELECT state,lease_fence,lease_id,lease_expires_at,next_attempt_at,body,next_check_at,blocked_reason
+ FROM app.delivery_jobs WHERE trigger_id=$1 FOR UPDATE SKIP LOCKED`, triggerID).Scan(&state, &l.Fence, &oldID, &expires, &next, &l.Body, &check, &blockReason)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Lease{}, ErrUnavailable
 	}
@@ -98,7 +99,14 @@ func (s *Store) Claim(ctx context.Context, triggerID string) (Lease, error) {
 	if err != nil {
 		return Lease{}, err
 	}
-	if blocked {
+	now, err := s.clock(ctx, tx)
+	if err != nil {
+		return Lease{}, err
+	}
+	// A due recovery check is local ownership only; API still decides whether
+	// the channel changed and whether the current price permits sending.
+	recovery := state == "blocked" && blockReason != nil && *blockReason == "channel_unavailable" && check != nil && !now.Before(*check)
+	if blocked && !recovery {
 		return Lease{}, ErrUnavailable
 	}
 	err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM app.delivery_uncertainties u JOIN app.delivery_attempts a USING(attempt_id) WHERE a.trigger_id=$1)`, triggerID).Scan(&l.PossibleDuplicate)
@@ -109,13 +117,9 @@ func (s *Store) Claim(ctx context.Context, triggerID string) (Lease, error) {
 	if err != nil {
 		return Lease{}, err
 	}
-	now, err := s.clock(ctx, tx)
-	if err != nil {
-		return Lease{}, err
-	}
-	if (state != "pending" && state != "leased" && state != "retryable" && state != string(WaitCondition) && state != string(WaitLimiter) && !(state == "uncertain" && l.PossibleDuplicate)) ||
+	if !recovery && ((state != "pending" && state != "leased" && state != "retryable" && state != string(WaitCondition) && state != string(WaitLimiter) && !(state == "uncertain" && l.PossibleDuplicate)) ||
 		(next.InfinityModifier == 0 && now.Before(next.Time)) || next.InfinityModifier > 0 ||
-		(expires != nil && now.Before(*expires)) {
+		(expires != nil && now.Before(*expires))) {
 		return Lease{}, ErrUnavailable
 	}
 	// A definitive refusal can arrive after uncertain released the same fence.
@@ -125,15 +129,17 @@ func (s *Store) Claim(ctx context.Context, triggerID string) (Lease, error) {
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return Lease{}, err
 	}
-	if retryNext != nil && now.Before(*retryNext) {
+	if !recovery && retryNext != nil && now.Before(*retryNext) {
 		return Lease{}, ErrUnavailable
 	}
 	l.TriggerID = triggerID
 	if expires != nil {
 		l.ExpiresAt = *expires
 	}
-	if err = checkPreviousAttempt(ctx, tx, l, oldID, now); err != nil {
-		return Lease{}, err
+	if !recovery {
+		if err = checkPreviousAttempt(ctx, tx, l, oldID, now); err != nil {
+			return Lease{}, err
+		}
 	}
 	if oldID != nil {
 		if _, err = tx.Exec(ctx, `UPDATE app.delivery_claims SET status='expired' WHERE claim_id=$1 AND status='claimed'`, *oldID); err != nil {
@@ -149,7 +155,7 @@ func (s *Store) Claim(ctx context.Context, triggerID string) (Lease, error) {
 	l.ExpiresAt = now.Add(s.ttl)
 	// PostgreSQL rejects bigint overflow and rolls back both updates.
 	err = tx.QueryRow(ctx, `UPDATE app.delivery_jobs SET state='leased',lease_fence=lease_fence+1,
- lease_id=$2,lease_expires_at=$3 WHERE trigger_id=$1 RETURNING lease_fence`, triggerID, l.ID, l.ExpiresAt).Scan(&l.Fence)
+ lease_id=$2,lease_expires_at=$3,next_attempt_at='-infinity',next_check_at=NULL,blocked_reason=NULL,blocked_binding_version=NULL WHERE trigger_id=$1 RETURNING lease_fence`, triggerID, l.ID, l.ExpiresAt).Scan(&l.Fence)
 	if err != nil {
 		return Lease{}, err
 	}

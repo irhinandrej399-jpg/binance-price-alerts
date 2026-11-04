@@ -4,9 +4,10 @@
 
 ## Активная работа
 
-- Активная реализация: нет. NTF-014 завершён; следующий по ORDER — NTF-015 после нового поручения и проверки.
+- Активная реализация: нет. NTF-015 завершён; следующий по ORDER — NTF-012 после нового поручения и проверки.
 - Незавершённая реализация: нет. Group/fencing/live/handler и полный prices Prefix интегрированы; fault takeover проверен MAT-011, cmd/runtime отдельно.
-- Последний завершённый тикет: [NTF-014](backlog/tickets/NTF-014.md). [Durable reporter](../internal/notifications/report/README.md): ограниченный проход четырёх pending outcome по исходному attempt, RPC до отдельного ack, повтор после потерянного commit-ответа без Telegram/мутации job. Реальные notifications/API БД, mTLS, restart, independent ack, late success/cancel и concurrent replay прошли полным PostgreSQL/race runner; vet/build прошли, disposable volume удалён. Scheduler/worker/runtime отдельно.
+- Последний завершённый тикет: [NTF-015](backlog/tickets/NTF-015.md). [Проверка канала](../internal/notifications/jobs/README.md): ScheduleRecovery сохраняет первый next_check_at/причину/версию текущего fence; claim срока получает новую аренду того же job. Рестарт/replay, повтор парковки/backoff, старые исходы, terminal/success, crash/takeover, rollback и бюджет проверены полным PostgreSQL/race runner; vet/build прошли, disposable volume удалён. Миграция notifications 009; handler/worker discovery — NTF-012/013.
+- [NTF-014](backlog/tickets/NTF-014.md). [Durable reporter](../internal/notifications/report/README.md): ограниченный проход четырёх pending outcome по исходному attempt, RPC до отдельного ack, повтор после потерянного commit-ответа без Telegram/мутации job. Реальные notifications/API БД, mTLS, restart, independent ack, late success/cancel и concurrent replay прошли полным PostgreSQL/race runner; vet/build прошли, disposable volume удалён. Scheduler/worker/runtime отдельно.
 - [SUB-026](backlog/tickets/SUB-026.md). [Арбитраж результатов API](../internal/api/subscription/README.md): blocked после retryable/uncertain той же последней попытки применяется в pending_delivery при прежнем fence. SQL Red подтверждён; порядки/concurrent replay, stale/отмена/success, rollback и потерянный ответ commit проверены полным PostgreSQL/race runner, vet/build прошли; disposable volume удалён. RPC/схема прежние, reporter — NTF-014.
 - [NTF-016](backlog/tickets/NTF-016.md). [Durable retryable](../internal/notifications/jobs/README.md): первый retry.Plan, бюджет и pending report под job lock, сохранение ack/jitter при replay; Exhausted атомарно сохраняет blocked/report. Полный PostgreSQL/race, vet/build прошли; disposable volume удалён. API-арбитраж перед reporter исправлен в SUB-026; права старых SQL-свидетельств — NTF-017.
 - [NTF-008](backlog/tickets/NTF-008.md). [Durable blocked](../internal/notifications/jobs/README.md): безопасная причина/версия, pending report, парковка API-отказа без HTTP и остановка текущего fence. Повторы/restart/rollback, поздний отказ/успех и дубль intake проверены полным PostgreSQL/race runner; vet/build прошли, disposable volume удалён. Передача API — NTF-014, восстановление канала — NTF-015, worker — NTF-012.
@@ -102,11 +103,11 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [NTF-015](backlog/tickets/NTF-015.md), после нового поручения и сессионной проверки. NTF-014 завершил передачу четырёх исходов API. Будущий worker выбирает также pending reports terminal/stopped jobs; Reconcile ограничен workflow/limit, ошибки повторяются с backoff, Telegram не вызывается. SUB-026 сохраняет blocked после промежуточного исхода, API берёт binding version исходного permit.
+По очереди следующий — [NTF-012](backlog/tickets/NTF-012.md), после нового поручения и сессионной проверки. NTF-015 завершил ScheduleRecovery: channel block паркуется до durable срока 1 с..1 ч, claim срока не даёт права на HTTP. Handler должен повторно вызвать SUB-018 с новым request ID; scheduler также обнаруживает не назначенные current-fence blocks после crash. Контракт — jobs/README.md. NTF-014 завершил передачу четырёх исходов API. Будущий worker выбирает также pending reports terminal/stopped jobs; Reconcile ограничен workflow/limit, ошибки повторяются с backoff, Telegram не вызывается. SUB-026 сохраняет blocked после промежуточного исхода, API берёт binding version исходного permit.
 
 NTF-016 сохраняет первый retry.Plan и durable бюджет ошибок без сброса при intake/wait/unknown. Исчерпание атомарно использует blocked-протокол, без crash-окна. Success имеет приоритет, новый Claim не разрешает HTTP. Неподходящие default-права UPDATE/DELETE на старые таблицы исходов выделены отдельно в [NTF-017](backlog/tickets/NTF-017.md); новые таблицы 008 явно закрыты. Reporter использует готовый SUB-020 с исправлением SUB-026; API берёт каноническую binding version из собственного permission по attempt ID.
 
-NTF-008 добавляет SaveBlocked/ParkBlocked и блок текущего fence даже после освобождения lease через uncertain. Для NTF-015 учитывать также durable blocks текущего fence при историческом исходе без изменения job metadata; новая версия канала не снимает permanent_failure/attempts_exhausted.
+NTF-008 добавляет SaveBlocked/ParkBlocked и блок текущего fence даже после освобождения lease через uncertain. ScheduleRecovery учитывает также durable blocks текущего fence при историческом исходе без изменения job metadata; новая версия канала не снимает permanent_failure/attempts_exhausted.
 
 NTF-006 рассчитывает retry Plan и бюджет доказанных ошибок; NTF-007 использует ConditionInterval для новой проверки после Unknown. Перед возможным HTTP-повтором нужны оба лимитера, новый API-допуск по текущей цене и новый attempt ID; trigger_id сохраняется. Полный worker/API и экспорт метрик подключаются отдельными задачами.
 
@@ -115,7 +116,7 @@ NTF-006 рассчитывает retry Plan и бюджет доказанных
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show NTF-015` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show NTF-012` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

@@ -112,3 +112,8 @@ Claim не возобновляет автоматическую отправк�
 считается по свидетельствам workflow, без сброса при intake/ожиданиях/unknown.
 Исчерпание атомарно использует blocks/reports миграции 007.
 [Контракт](../internal/notifications/jobs/README.md).
+
+`notifications/009_channel_recovery.sql` — nullable `next_check_at` и частичный
+индекс durable проверок канала того же job (NTF-015). Причина/версия остаются в
+полях миграции 007; цены блокировки нет. Применять до запуска нового jobs.Store.
+[Контракт назначения/claim](../internal/notifications/jobs/README.md).
