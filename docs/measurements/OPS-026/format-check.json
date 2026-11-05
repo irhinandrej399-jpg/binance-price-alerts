@@ -1,0 +1,10 @@
+{
+  "unknown_metric": "rejected",
+  "missing_phase": "rejected",
+  "foreign_hash": "rejected",
+  "wrong_body": "rejected",
+  "physical_offset": "rejected",
+  "pending_ack": "rejected",
+  "foreign_attempt": "rejected",
+  "missing_http": "rejected"
+}

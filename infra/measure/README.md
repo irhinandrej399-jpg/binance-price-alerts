@@ -111,3 +111,6 @@ python3 scripts/verify_joint_measurement.py /tmp/joint-a /tmp/joint-b --failed /
 Бизнес-manifest API и продолжения по устойчивым ID: [OPS-024](API.md).
 
 Продолжение исходных событий API в matcher: [OPS-025](MATCHER.md).
+
+Продолжение в notifications и сводка покрытия API → matcher/notifications:
+[OPS-026](NOTIFICATIONS.md).

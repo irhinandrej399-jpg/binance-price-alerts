@@ -1,0 +1,381 @@
+{
+  "format_version": 1,
+  "source_id": "OPS-026-notifications-v1",
+  "boundary": "handler",
+  "sources": [
+    "infra/measure/notifications_adapter.py",
+    "internal/tools/apimeasure/notifications_test.go",
+    "internal/tools/apimeasure/notifications_fixture_test.go",
+    "scripts/verify_notifications_measurement.py",
+    "docs/measurements/OPS-024/run-a2/identities.json",
+    "docs/measurements/OPS-025/run-a3/identities.json"
+  ],
+  "contract_versions": {
+    "adapter_protocol": 1,
+    "notifications_manifest": 1,
+    "alert_triggered": 1
+  },
+  "source": {
+    "path": "docs/measurements/OPS-024/run-a2/identities.json",
+    "sha256": "60187b1c96bab46ddc9009a6853e43c0780099659470c60fdfd67a97fcd85106"
+  },
+  "phases": [
+    {
+      "phase_id": "empty",
+      "unit": "adapter_call",
+      "size": 0,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "checkpoint",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "intake_first",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "a1835092-1e20-4017-a2eb-6dbb64e529cc",
+          "trigger_id": "299b2a58-5499-4fc0-9bfc-62c986dc19e5",
+          "attempt_id": null
+        },
+        {
+          "event_id": "7832653c-f9ea-43c8-bc78-0b150feb80e2",
+          "trigger_id": "5bbebf47-e567-44c9-89ac-d0d93d2c242b",
+          "attempt_id": null
+        },
+        {
+          "event_id": "0464c152-e859-48fa-b978-d31a97b16aac",
+          "trigger_id": "2d1e69a8-5057-43b6-8736-7a085686f950",
+          "attempt_id": null
+        },
+        {
+          "event_id": "fe097f4c-567f-4997-801a-790c4047856e",
+          "trigger_id": "d4e69605-8dd5-482b-832d-c21655d3ab5d",
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "intake_repeat",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "a1835092-1e20-4017-a2eb-6dbb64e529cc",
+          "trigger_id": "299b2a58-5499-4fc0-9bfc-62c986dc19e5",
+          "attempt_id": null
+        },
+        {
+          "event_id": "7832653c-f9ea-43c8-bc78-0b150feb80e2",
+          "trigger_id": "5bbebf47-e567-44c9-89ac-d0d93d2c242b",
+          "attempt_id": null
+        },
+        {
+          "event_id": "0464c152-e859-48fa-b978-d31a97b16aac",
+          "trigger_id": "2d1e69a8-5057-43b6-8736-7a085686f950",
+          "attempt_id": null
+        },
+        {
+          "event_id": "fe097f4c-567f-4997-801a-790c4047856e",
+          "trigger_id": "d4e69605-8dd5-482b-832d-c21655d3ab5d",
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "intake_second",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "a1835092-1e20-4017-a2eb-6dbb64e529cc",
+          "trigger_id": "299b2a58-5499-4fc0-9bfc-62c986dc19e5",
+          "attempt_id": null
+        },
+        {
+          "event_id": "7832653c-f9ea-43c8-bc78-0b150feb80e2",
+          "trigger_id": "5bbebf47-e567-44c9-89ac-d0d93d2c242b",
+          "attempt_id": null
+        },
+        {
+          "event_id": "0464c152-e859-48fa-b978-d31a97b16aac",
+          "trigger_id": "2d1e69a8-5057-43b6-8736-7a085686f950",
+          "attempt_id": null
+        },
+        {
+          "event_id": "fe097f4c-567f-4997-801a-790c4047856e",
+          "trigger_id": "d4e69605-8dd5-482b-832d-c21655d3ab5d",
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "intake_physical_duplicate",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "a1835092-1e20-4017-a2eb-6dbb64e529cc",
+          "trigger_id": "299b2a58-5499-4fc0-9bfc-62c986dc19e5",
+          "attempt_id": null
+        },
+        {
+          "event_id": "7832653c-f9ea-43c8-bc78-0b150feb80e2",
+          "trigger_id": "5bbebf47-e567-44c9-89ac-d0d93d2c242b",
+          "attempt_id": null
+        },
+        {
+          "event_id": "0464c152-e859-48fa-b978-d31a97b16aac",
+          "trigger_id": "2d1e69a8-5057-43b6-8736-7a085686f950",
+          "attempt_id": null
+        },
+        {
+          "event_id": "fe097f4c-567f-4997-801a-790c4047856e",
+          "trigger_id": "d4e69605-8dd5-482b-832d-c21655d3ab5d",
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "intake_tail",
+      "unit": "adapter_call",
+      "size": 2,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "a1835092-1e20-4017-a2eb-6dbb64e529cc",
+          "trigger_id": "299b2a58-5499-4fc0-9bfc-62c986dc19e5",
+          "attempt_id": null
+        },
+        {
+          "event_id": "7832653c-f9ea-43c8-bc78-0b150feb80e2",
+          "trigger_id": "5bbebf47-e567-44c9-89ac-d0d93d2c242b",
+          "attempt_id": null
+        },
+        {
+          "event_id": "0464c152-e859-48fa-b978-d31a97b16aac",
+          "trigger_id": "2d1e69a8-5057-43b6-8736-7a085686f950",
+          "attempt_id": null
+        },
+        {
+          "event_id": "fe097f4c-567f-4997-801a-790c4047856e",
+          "trigger_id": "d4e69605-8dd5-482b-832d-c21655d3ab5d",
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "observe_intake",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "a1835092-1e20-4017-a2eb-6dbb64e529cc",
+          "trigger_id": "299b2a58-5499-4fc0-9bfc-62c986dc19e5",
+          "attempt_id": null
+        },
+        {
+          "event_id": "7832653c-f9ea-43c8-bc78-0b150feb80e2",
+          "trigger_id": "5bbebf47-e567-44c9-89ac-d0d93d2c242b",
+          "attempt_id": null
+        },
+        {
+          "event_id": "0464c152-e859-48fa-b978-d31a97b16aac",
+          "trigger_id": "2d1e69a8-5057-43b6-8736-7a085686f950",
+          "attempt_id": null
+        },
+        {
+          "event_id": "fe097f4c-567f-4997-801a-790c4047856e",
+          "trigger_id": "d4e69605-8dd5-482b-832d-c21655d3ab5d",
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "discover",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "a1835092-1e20-4017-a2eb-6dbb64e529cc",
+          "trigger_id": "299b2a58-5499-4fc0-9bfc-62c986dc19e5",
+          "attempt_id": null
+        },
+        {
+          "event_id": "7832653c-f9ea-43c8-bc78-0b150feb80e2",
+          "trigger_id": "5bbebf47-e567-44c9-89ac-d0d93d2c242b",
+          "attempt_id": null
+        },
+        {
+          "event_id": "0464c152-e859-48fa-b978-d31a97b16aac",
+          "trigger_id": "2d1e69a8-5057-43b6-8736-7a085686f950",
+          "attempt_id": null
+        },
+        {
+          "event_id": "fe097f4c-567f-4997-801a-790c4047856e",
+          "trigger_id": "d4e69605-8dd5-482b-832d-c21655d3ab5d",
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "handle_0",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "a1835092-1e20-4017-a2eb-6dbb64e529cc",
+          "trigger_id": "299b2a58-5499-4fc0-9bfc-62c986dc19e5",
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "handle_retry_0",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "a1835092-1e20-4017-a2eb-6dbb64e529cc",
+          "trigger_id": "299b2a58-5499-4fc0-9bfc-62c986dc19e5",
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "handle_1",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "7832653c-f9ea-43c8-bc78-0b150feb80e2",
+          "trigger_id": "5bbebf47-e567-44c9-89ac-d0d93d2c242b",
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "handle_retry_1",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "7832653c-f9ea-43c8-bc78-0b150feb80e2",
+          "trigger_id": "5bbebf47-e567-44c9-89ac-d0d93d2c242b",
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "handle_2",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "0464c152-e859-48fa-b978-d31a97b16aac",
+          "trigger_id": "2d1e69a8-5057-43b6-8736-7a085686f950",
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "handle_retry_2",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "0464c152-e859-48fa-b978-d31a97b16aac",
+          "trigger_id": "2d1e69a8-5057-43b6-8736-7a085686f950",
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "handle_3",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "fe097f4c-567f-4997-801a-790c4047856e",
+          "trigger_id": "d4e69605-8dd5-482b-832d-c21655d3ab5d",
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "handle_retry_3",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "fe097f4c-567f-4997-801a-790c4047856e",
+          "trigger_id": "d4e69605-8dd5-482b-832d-c21655d3ab5d",
+          "attempt_id": null
+        }
+      ]
+    }
+  ],
+  "limits": {
+    "intake_wire_bytes": 8192,
+    "fetch_bytes": 1048576,
+    "fetch_max_bytes": 2097152,
+    "fixture_records": 5,
+    "fixture_jobs": 4,
+    "fixture_wire_bytes": 4290,
+    "discover_max_rows": 1000,
+    "report_max_rows": 1000,
+    "fixture_report_limit": 10,
+    "worker_max_concurrency": 1000,
+    "fixture_worker_concurrency": 4,
+    "lease_max_seconds": 60,
+    "retry_max_failures": 3,
+    "retained_attempts_per_workflow": null,
+    "total_channel_checks": null,
+    "total_relay_attempts": null
+  },
+  "qualification": {
+    "qualified": false,
+    "covered": [
+      "real handler PrepareRecipient/both limiters/CAS admission/register/one local HTTP",
+      "success/429/disconnect/403 durable outcomes and report",
+      "PendingWrite retry without another HTTP"
+    ],
+    "uncovered": [
+      "broker group intake Step/rebalance/OffsetCommit",
+      "maximal input/batches/TOAST",
+      "wait_condition/wait_limiter and contested limiter windows",
+      "retry exhaustion and historical/takeover outcome windows",
+      "late success/cancel/rebind/recovery with changed channel",
+      "rollback/crash before outcome write and failed ack",
+      "SQL scans at load and complete worker loop at load"
+    ],
+    "blockers": [
+      "PostgreSQL device IO/temp peak unsupported",
+      "Kafka fsync unsupported",
+      "unbounded retained attempts/channel checks/retries",
+      "uncovered write classes/maximal batches",
+      "fixture is not DEC-008 load profile",
+      "market-data manifest remains OPS-022"
+    ]
+  }
+}
