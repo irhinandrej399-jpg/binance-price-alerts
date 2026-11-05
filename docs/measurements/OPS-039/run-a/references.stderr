@@ -1,0 +1,5 @@
+panic: unsupported syscall stop 0
+
+goroutine 1 [running, locked to thread]:
+main.main()
+	/Users/andrey/Desktop/Binance/infra/postgres/measure/ancillary/main_linux.go:430 +0x1efc

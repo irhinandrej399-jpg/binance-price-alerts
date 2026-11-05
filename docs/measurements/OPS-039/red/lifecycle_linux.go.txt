@@ -1,0 +1,13 @@
+package main
+
+import (
+ "os"
+ "fmt"
+ "syscall"
+)
+func lifecycleEnabled() bool { return os.Getenv("OPS039_LIFECYCLE") == "1" }
+func (c *capture) stopWitness(pid int, status syscall.WaitStatus) {
+ pending:=map[int]any{}
+ for tid,t:=range c.tasks { pending[tid]=map[string]any{"nr":t.nr,"args":t.args,"entered":t.entered,"newborn":t.newborn} }
+ c.emit("wait_stop",map[string]any{"pid":pid,"status":int(status),"active":c.active,"queue":append([]int{},c.queue...),"pending":pending,"identity":readEvidence(fmt.Sprintf("/proc/%d/status",pid)),"stat":readEvidence(fmt.Sprintf("/proc/%d/stat",pid))})
+}

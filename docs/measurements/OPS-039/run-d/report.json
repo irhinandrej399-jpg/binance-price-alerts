@@ -1,0 +1,202 @@
+{
+  "project": "binance-ops039-870ddf1cba",
+  "image": "postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc",
+  "commands": [
+    [
+      "env",
+      "GOCACHE=/tmp/binance-ops038-gocache",
+      "GOMODCACHE=/tmp/binance-ops039-modcache",
+      "GOOS=linux",
+      "GOARCH=arm64",
+      "CGO_ENABLED=0",
+      "GOTOOLCHAIN=local",
+      "go",
+      "build",
+      "-o",
+      "docs/measurements/OPS-039/run-d/capture",
+      "./infra/postgres/measure/ancillary"
+    ],
+    [
+      "env",
+      "GOCACHE=/tmp/binance-ops038-gocache",
+      "GOMODCACHE=/tmp/binance-ops039-modcache",
+      "GOOS=linux",
+      "GOARCH=arm64",
+      "CGO_ENABLED=0",
+      "GOTOOLCHAIN=local",
+      "go",
+      "build",
+      "-o",
+      "docs/measurements/OPS-039/run-d/control",
+      "./infra/postgres/measure/lifecycle/control"
+    ],
+    [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "binance-ops039-870ddf1cba",
+      "--label",
+      "com.docker.compose.project=binance-ops039-870ddf1cba",
+      "--network",
+      "none",
+      "--cpus",
+      "1",
+      "--memory",
+      "512m",
+      "--cap-add",
+      "SYS_PTRACE",
+      "--security-opt",
+      "seccomp=unconfined",
+      "--tmpfs",
+      "/probe:rw,size=16m",
+      "--entrypoint",
+      "sleep",
+      "postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc",
+      "infinity"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops039-870ddf1cba",
+      "uname",
+      "-a"
+    ],
+    [
+      "docker",
+      "cp",
+      "docs/measurements/OPS-039/run-d/capture",
+      "binance-ops039-870ddf1cba:/tmp/capture"
+    ],
+    [
+      "docker",
+      "cp",
+      "docs/measurements/OPS-039/run-d/control",
+      "binance-ops039-870ddf1cba:/tmp/control"
+    ],
+    [
+      "docker",
+      "exec",
+      "-e",
+      "OPS038_INVENTORY=1",
+      "-e",
+      "OPS039_LIFECYCLE=1",
+      "-e",
+      "OPS039_EARLY_CHILD=1",
+      "-e",
+      "OPS038_PATH_SCOPE=/probe",
+      "-e",
+      "OPS038_READ_PROBE=/proc/2147483647/status",
+      "-e",
+      "OPS038_PG_WITNESS=/probe/pg-witness-not-provided",
+      "binance-ops039-870ddf1cba",
+      "/tmp/capture",
+      "/probe/work",
+      "/tmp/references.gz",
+      "--",
+      "/tmp/control",
+      "references"
+    ],
+    [
+      "docker",
+      "cp",
+      "binance-ops039-870ddf1cba:/tmp/references.gz",
+      "docs/measurements/OPS-039/run-d/references.jsonl.gz"
+    ],
+    [
+      "docker",
+      "exec",
+      "-e",
+      "OPS038_INVENTORY=1",
+      "-e",
+      "OPS039_LIFECYCLE=1",
+      "-e",
+      "OPS039_EARLY_CHILD=1",
+      "-e",
+      "OPS038_PATH_SCOPE=/probe",
+      "-e",
+      "OPS038_READ_PROBE=/proc/2147483647/status",
+      "-e",
+      "OPS038_PG_WITNESS=/probe/pg-witness-not-provided",
+      "binance-ops039-870ddf1cba",
+      "/tmp/capture",
+      "/probe/work",
+      "/tmp/exec.gz",
+      "--",
+      "/tmp/control",
+      "exec"
+    ],
+    [
+      "docker",
+      "cp",
+      "binance-ops039-870ddf1cba:/tmp/exec.gz",
+      "docs/measurements/OPS-039/run-d/exec.jsonl.gz"
+    ],
+    [
+      "docker",
+      "rm",
+      "-f",
+      "binance-ops039-870ddf1cba"
+    ],
+    [
+      "docker",
+      "container",
+      "ls",
+      "-a",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-ops039-870ddf1cba"
+    ],
+    [
+      "docker",
+      "volume",
+      "ls",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-ops039-870ddf1cba"
+    ],
+    [
+      "docker",
+      "network",
+      "ls",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-ops039-870ddf1cba"
+    ]
+  ],
+  "status": "captured-not-qualified",
+  "temp_peak_live_bytes": null,
+  "lower_bytes": null,
+  "upper_bytes": null,
+  "qualification_blocked": true,
+  "binary_sha256": {
+    "capture": "833776a04626577dc61284b20c50d6cc8f11779b1e9a6cce8f3527ad5cc37847",
+    "control": "d9f95f6260584ac33063352964b824c2ff015567fe72863d461d9f35b9ae8efd"
+  },
+  "kernel": "Linux 72cec26acee6 6.12.76-linuxkit #1 SMP Wed May 13 14:27:18 UTC 2026 aarch64 GNU/Linux",
+  "references_returncode": 0,
+  "exec_returncode": 0,
+  "cleanup": {
+    "container": [],
+    "volume": [],
+    "network": []
+  },
+  "sha256": {
+    "references.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "inventory_linux.go.txt": "bdf5cec58243df7bf2478ad708843dde6be2a3b571ac1ceeb1ea3c9d4039c7a8",
+    "exec.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "control-main_linux.go.txt": "55ef227f26910a500cd27ed14656558fd2f76aa290a58e9aaa8ebf92cf80e20d",
+    "run.py.txt": "f7fea69859b6e1d3f60afef1091cd7c43f1a414e59b508b7bcd4372abdf1456f",
+    "exec.stdout": "6903967b604259510d4ae4a90585a981c65043c08c92b0888f79db2934f629e7",
+    "verify.py.txt": "bd9597d696f4e9f56b29bff0b3a8d9bdadb28e9d122930610fb063385b1d770c",
+    "clone_linux_arm64.s.txt": "2befe3b2db3c2b0f5b1c08b33feb898169c07cf3bbc92aa5d5e261bf0dc31102",
+    "references.stdout": "651651ba17f8e397c47b5041200a1f42d3237856aa6eb05daebf8957d7804a52",
+    "main_linux.go.txt": "c58f2f67c685f7eb0afdcbdca3b49c0cce58a89ce66260e068ffe18c39872599",
+    "message_linux.go.txt": "8cbb27c705f5fae43dfa401e50a8786b1464ad670b050f69ed0a499b923d57ba",
+    "ancillary-verify.py.txt": "715e30ac5ebd7a88f83eb5cafc138df72691112eb6e073d845e9523f16bebdbf",
+    "references.jsonl.gz": "8f6296ac8357d91346b380ffe2ae1096eb16a40c6eee718e8a8284349447ed0c",
+    "inventory-verify.py.txt": "41ef316f18b7dfa04d24d3a2aaabe0c28c61669b2095741708879c5f1624217d",
+    "exec.jsonl.gz": "ab73dd9acd10e76f963ced83b3784869e93e2c5683879f4d544ba9d409afcae4",
+    "lifecycle_linux.go.txt": "6543942b0db3fe94f9d5ce144199ec276d6e42973c1b3489ee84cf6fcaa6156f"
+  }
+}

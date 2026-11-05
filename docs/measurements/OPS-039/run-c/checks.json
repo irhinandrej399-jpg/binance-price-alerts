@@ -1,0 +1,242 @@
+{
+  "results": {
+    "references": {
+      "transitions": 0,
+      "inherited_returns": 0,
+      "incomplete_evidence": 10,
+      "inventory": {
+        "checkpoints": 158,
+        "census_changed_checkpoints": 0,
+        "census_read_errors": 0,
+        "fd_read_errors": 933,
+        "map_read_errors": 51441,
+        "consistency": "unknown",
+        "pg_coverage": "blocked: external aliases/custom tablespaces not certified",
+        "new_identities": [
+          [
+            25,
+            3430410
+          ],
+          [
+            26,
+            3430411
+          ],
+          [
+            27,
+            3430412
+          ],
+          [
+            28,
+            3430412
+          ],
+          [
+            29,
+            3430412
+          ],
+          [
+            30,
+            3430412
+          ],
+          [
+            31,
+            3430449
+          ],
+          [
+            32,
+            3430472
+          ],
+          [
+            33,
+            3430490
+          ],
+          [
+            34,
+            3430507
+          ]
+        ],
+        "vanished_identities": [
+          [
+            24,
+            3430403
+          ],
+          [
+            26,
+            3430411
+          ],
+          [
+            27,
+            3430412
+          ],
+          [
+            28,
+            3430412
+          ],
+          [
+            29,
+            3430412
+          ],
+          [
+            30,
+            3430412
+          ],
+          [
+            31,
+            3430449
+          ],
+          [
+            32,
+            3430472
+          ],
+          [
+            33,
+            3430490
+          ],
+          [
+            34,
+            3430507
+          ]
+        ],
+        "temp_peak_live_bytes": null,
+        "lower_bytes": null,
+        "upper_bytes": null,
+        "qualification_blocked": true
+      },
+      "clone3_successful_variants": [
+        false,
+        true
+      ],
+      "birth_count": 9,
+      "early_child_stops": 9
+    },
+    "exec": {
+      "transitions": 1,
+      "inherited_returns": 0,
+      "incomplete_evidence": 12,
+      "inventory": {
+        "checkpoints": 54,
+        "census_changed_checkpoints": 1,
+        "census_read_errors": 0,
+        "fd_read_errors": 317,
+        "map_read_errors": 13388,
+        "consistency": "unknown",
+        "pg_coverage": "blocked: external aliases/custom tablespaces not certified",
+        "new_identities": [
+          [
+            47,
+            3430539
+          ],
+          [
+            48,
+            3430545
+          ],
+          [
+            49,
+            3430545
+          ],
+          [
+            50,
+            3430546
+          ],
+          [
+            51,
+            3430546
+          ],
+          [
+            52,
+            3430546
+          ],
+          [
+            53,
+            3430564
+          ],
+          [
+            54,
+            3430564
+          ],
+          [
+            55,
+            3430564
+          ],
+          [
+            56,
+            3430565
+          ],
+          [
+            57,
+            3430565
+          ]
+        ],
+        "vanished_identities": [
+          [
+            46,
+            3430536
+          ],
+          [
+            48,
+            3430545
+          ],
+          [
+            49,
+            3430545
+          ],
+          [
+            50,
+            3430546
+          ],
+          [
+            51,
+            3430546
+          ],
+          [
+            52,
+            3430546
+          ],
+          [
+            53,
+            3430564
+          ],
+          [
+            54,
+            3430564
+          ],
+          [
+            55,
+            3430564
+          ],
+          [
+            56,
+            3430565
+          ],
+          [
+            57,
+            3430565
+          ]
+        ],
+        "temp_peak_live_bytes": null,
+        "lower_bytes": null,
+        "upper_bytes": null,
+        "qualification_blocked": true
+      },
+      "birth_count": 10,
+      "early_child_stops": 10
+    }
+  },
+  "negative_checks": [
+    "missing-clone3-bytes",
+    "substituted-clone3-flags",
+    "missing-parent-event",
+    "substituted-child",
+    "missing-return",
+    "substituted-return",
+    "missing-early-stop",
+    "missing-path",
+    "missing-kernel-info",
+    "missing-exec-transition",
+    "substituted-former-TID",
+    "lost-exec-gate",
+    "lost-exec-pending",
+    "lost-siblings",
+    "substituted-census",
+    "false-completeness"
+  ]
+}

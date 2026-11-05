@@ -81,13 +81,14 @@ def ns(e, base):
         text(v, base+'/ns/'+n)
 
 
-def replay(rows):
-    require(rows[0]['schema'] == SCHEMA, 'missing OPS-038 schema')
+def replay(rows, lifecycle=False):
+    require(rows[0]['schema'] == ('ops039-ptrace-lifecycle-v1' if lifecycle else SCHEMA), 'missing OPS-038 schema')
     # Reuse the unchanged ancillary/lifecycle validation, with its declared old
     # schema only in an in-memory view. Original preserved raw is never rewritten.
     view = list(rows)
     view[0] = dict(rows[0], schema='ops033-ptrace-ancillary-v1')
-    ancillary.replay(view)
+    if not lifecycle:
+        ancillary.replay(view)
     envs = [r for r in rows if r['kind'] == 'inventory_environment']
     require(len(envs) == 1, 'environment missing/duplicate')
     env = envs[0]
@@ -110,6 +111,9 @@ def replay(rows):
             require(rows[i+1]['kind'] == 'inventory' and rows[i+1]['phase'] == 'initial', 'initial checkpoint missing')
         if kind == 'event' and r['event'] in (1,2,3):
             alive.add(r['message'])
+        if kind == 'exec_transition':
+            require(lifecycle, 'unexpected exec transition')
+            alive.difference_update(r['retired']); alive.discard(r['former']); alive.add(pid)
         if kind == 'exit':
             alive.remove(pid)
         if kind in ('dispatch','release'):

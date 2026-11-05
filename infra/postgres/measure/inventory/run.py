@@ -18,7 +18,7 @@ def run(cmd,check=True,timeout=60):
  if check and p.returncode: raise RuntimeError((cmd,p.returncode,p.stderr))
  return p
 try:
- for source,target in [('ancillary/main_linux.go','main_linux.go.txt'),('ancillary/message_linux.go','message_linux.go.txt'),('ancillary/inventory_linux.go','inventory_linux.go.txt'),('inventory/control/main_linux.go','control-main_linux.go.txt'),('inventory/run.py','run.py.txt'),('inventory/verify.py','verify.py.txt'),('ancillary/verify.py','ancillary-verify.py.txt')]:
+ for source,target in [('ancillary/main_linux.go','main_linux.go.txt'),('ancillary/message_linux.go','message_linux.go.txt'),('ancillary/inventory_linux.go','inventory_linux.go.txt'),('ancillary/lifecycle_linux.go','lifecycle_linux.go.txt'),('inventory/control/main_linux.go','control-main_linux.go.txt'),('inventory/run.py','run.py.txt'),('inventory/verify.py','verify.py.txt'),('ancillary/verify.py','ancillary-verify.py.txt')]:
   shutil.copyfile(Path('infra/postgres/measure')/source,out/target)
  env=['env','GOCACHE=/tmp/binance-ops038-gocache','GOOS=linux','GOARCH=arm64','CGO_ENABLED=0','GOTOOLCHAIN=local']
  for binary,source in [('capture','./infra/postgres/measure/ancillary'),('control','./infra/postgres/measure/inventory/control')]:

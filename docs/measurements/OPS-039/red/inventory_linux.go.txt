@@ -1,0 +1,161 @@
+// OPS-038 inventories are additive and deliberately never claim atomicity.
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
+)
+
+func inventoryEnabled() bool { return os.Getenv("OPS038_INVENTORY") == "1" }
+func readEvidence(path string) map[string]any {
+	b, e := os.ReadFile(path)
+	err := ""
+	if e != nil {
+		err = e.Error()
+	}
+	return map[string]any{"path": path, "text": string(b), "error": err}
+}
+func listEvidence(path string) map[string]any {
+	es, e := os.ReadDir(path)
+	names := []string{}
+	err := ""
+	if e != nil {
+		err = e.Error()
+	}
+	for _, v := range es {
+		names = append(names, v.Name())
+	}
+	return map[string]any{"path": path, "names": names, "error": err}
+}
+func linkEvidence(path string) map[string]any {
+	s, e := os.Readlink(path)
+	err := ""
+	if e != nil {
+		err = e.Error()
+	}
+	return map[string]any{"path": path, "text": s, "error": err}
+}
+func inodeEvidence(path string) map[string]any {
+	s, e := stat(path)
+	var value any = s
+	err := ""
+	if e != nil {
+		value = nil
+		err = e.Error()
+	}
+	// stat is one syscall: its error applies to every required stat field.
+	return map[string]any{"path": path, "link": linkEvidence(path), "stat": value, "error": err}
+}
+func numericNames(e map[string]any) []int {
+	ids := []int{}
+	for _, s := range e["names"].([]string) {
+		n, err := strconv.Atoi(s)
+		if err == nil && n > 0 {
+			ids = append(ids, n)
+		}
+	}
+	sort.Ints(ids)
+	return ids
+}
+func census() map[string]any {
+	listing := listEvidence("/proc")
+	processes := []any{}
+	for _, pid := range numericNames(listing) {
+		base := fmt.Sprintf("/proc/%d", pid)
+		ts := listEvidence(base + "/task")
+		threads := []any{}
+		for _, tid := range numericNames(ts) {
+			p := fmt.Sprintf("%s/task/%d", base, tid)
+			threads = append(threads, map[string]any{"tid": tid, "status": readEvidence(p + "/status"), "stat": readEvidence(p + "/stat")})
+		}
+		processes = append(processes, map[string]any{"pid": pid, "tasks": ts, "threads": threads})
+	}
+	return map[string]any{"listing": listing, "processes": processes}
+}
+func namespaces(base string) map[string]any {
+	result := map[string]any{}
+	for _, n := range []string{"pid", "mnt", "user", "net", "ipc", "uts", "cgroup", "time"} {
+		result[n] = linkEvidence(base + "/ns/" + n)
+	}
+	return result
+}
+func (c *capture) inventory(phase string, pid int) {
+	before := census()
+	owners := []any{}
+	lineage := []int{}
+	visible := map[int]bool{}
+	for tid := range c.tasks {
+		lineage = append(lineage, tid)
+	}
+	sort.Ints(lineage)
+	for _, p := range before["processes"].([]any) {
+		process := p.(map[string]any)
+		for _, t := range process["threads"].([]any) {
+			tid := t.(map[string]any)["tid"].(int)
+			visible[tid] = true
+			base := fmt.Sprintf("/proc/%d/task/%d", process["pid"], tid)
+			fds := listEvidence(base + "/fd")
+			fdrows := []any{}
+			for _, n := range fds["names"].([]string) {
+				fdrows = append(fdrows, inodeEvidence(base+"/fd/"+n))
+			}
+			maps := readEvidence(base + "/maps")
+			mappings := []any{}
+			for _, line := range strings.Split(maps["text"].(string), "\n") {
+				if line == "" {
+					continue
+				}
+				fields := strings.Fields(line)
+				if len(fields) < 5 {
+					mappings = append(mappings, map[string]any{"line": line, "error": "unparsed maps line"})
+					continue
+				}
+				mappings = append(mappings, map[string]any{"line": line, "evidence": inodeEvidence(base + "/map_files/" + fields[0])})
+			}
+			owners = append(owners, map[string]any{"pid": process["pid"], "tid": tid, "traced": c.tasks[tid] != nil, "fds": fds, "fd_entries": fdrows, "maps": maps, "map_entries": mappings, "mountinfo": readEvidence(base + "/mountinfo"), "namespaces": namespaces(base), "root": linkEvidence(base + "/root"), "cwd": linkEvidence(base + "/cwd")})
+		}
+	}
+	paths := []any{}
+	directories := []any{}
+	walkErr := ""
+	scope := os.Getenv("OPS038_PATH_SCOPE")
+	if scope == "" {
+		scope = c.root
+	}
+	err := filepath.WalkDir(scope, func(path string, d os.DirEntry, e error) error {
+		if e != nil {
+			paths = append(paths, map[string]any{"path": path, "walk_error": e.Error()})
+			return nil
+		}
+		if d.IsDir() {
+			directories = append(directories, listEvidence(path))
+		}
+		// Link target and stat are separate observations; aliases remain unresolved.
+		paths = append(paths, inodeEvidence(path))
+		return nil
+	})
+	if err != nil {
+		walkErr = err.Error()
+	}
+	external := []int{}
+	missing := []int{}
+	for tid := range visible {
+		if c.tasks[tid] == nil {
+			external = append(external, tid)
+		}
+	}
+	sort.Ints(external)
+	for _, tid := range lineage {
+		if !visible[tid] {
+			missing = append(missing, tid)
+		}
+	}
+	c.emit("inventory", map[string]any{"version": "ops038-inventory-v1", "phase": phase, "pid": pid, "lineage": lineage, "external": external, "lineage_missing": missing, "census_before": before, "census_after": census(), "owners": owners, "path_scope": scope, "paths": paths, "directories": directories, "walk_error": walkErr, "read_probe": readEvidence(os.Getenv("OPS038_READ_PROBE")), "consistency": map[string]any{"status": "unknown", "complete": false, "reason": "no all-owner barrier; shared FD tables, memory, kernel references and outside-namespace aliases unresolved; repeated census is not atomicity"}})
+}
+func (c *capture) inventoryEnvironment() {
+	c.emit("inventory_environment", map[string]any{"version": "ops038-inventory-v1", "kernel": readEvidence("/proc/version"), "mountinfo": readEvidence("/proc/self/mountinfo"), "namespaces": namespaces("/proc/self"), "status": readEvidence("/proc/self/status"), "work_root": c.root, "path_scope": os.Getenv("OPS038_PATH_SCOPE"), "read_probe": os.Getenv("OPS038_READ_PROBE"), "pg_witness": readEvidence(os.Getenv("OPS038_PG_WITNESS")), "isolation": "visible PID namespace only; host peers, kernel queues, aliases and custom tablespaces not certified; missing PG witness blocks PG use", "abi": "linux-arm64-little-endian-lp64"})
+}

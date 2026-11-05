@@ -1,0 +1,249 @@
+{
+  "diagnosis": "former TID retains gate; new leader openat queues behind vanished former TID",
+  "exact_exec": {
+    "returncode": 0,
+    "seconds": 0.255222,
+    "transitions": 1
+  },
+  "final": {
+    "references": {
+      "transitions": 0,
+      "inherited_returns": 0,
+      "incomplete_evidence": 9,
+      "inventory": {
+        "checkpoints": 158,
+        "census_changed_checkpoints": 1,
+        "census_read_errors": 0,
+        "fd_read_errors": 937,
+        "map_read_errors": 53419,
+        "consistency": "unknown",
+        "pg_coverage": "blocked: external aliases/custom tablespaces not certified",
+        "new_identities": [
+          [
+            25,
+            3459466
+          ],
+          [
+            26,
+            3459470
+          ],
+          [
+            27,
+            3459470
+          ],
+          [
+            28,
+            3459471
+          ],
+          [
+            29,
+            3459471
+          ],
+          [
+            30,
+            3459471
+          ],
+          [
+            31,
+            3459509
+          ],
+          [
+            32,
+            3459536
+          ],
+          [
+            33,
+            3459554
+          ],
+          [
+            34,
+            3459573
+          ]
+        ],
+        "vanished_identities": [
+          [
+            24,
+            3459462
+          ],
+          [
+            26,
+            3459470
+          ],
+          [
+            27,
+            3459470
+          ],
+          [
+            28,
+            3459471
+          ],
+          [
+            29,
+            3459471
+          ],
+          [
+            30,
+            3459471
+          ],
+          [
+            31,
+            3459509
+          ],
+          [
+            32,
+            3459536
+          ],
+          [
+            33,
+            3459554
+          ],
+          [
+            34,
+            3459573
+          ]
+        ],
+        "temp_peak_live_bytes": null,
+        "lower_bytes": null,
+        "upper_bytes": null,
+        "qualification_blocked": true
+      },
+      "clone3_successful_variants": [
+        false,
+        true
+      ],
+      "birth_count": 9,
+      "early_child_stops": 9
+    },
+    "exec": {
+      "transitions": 1,
+      "inherited_returns": 0,
+      "incomplete_evidence": 12,
+      "inventory": {
+        "checkpoints": 54,
+        "census_changed_checkpoints": 0,
+        "census_read_errors": 0,
+        "fd_read_errors": 309,
+        "map_read_errors": 13180,
+        "consistency": "unknown",
+        "pg_coverage": "blocked: external aliases/custom tablespaces not certified",
+        "new_identities": [
+          [
+            47,
+            3459615
+          ],
+          [
+            48,
+            3459615
+          ],
+          [
+            49,
+            3459615
+          ],
+          [
+            50,
+            3459615
+          ],
+          [
+            51,
+            3459616
+          ],
+          [
+            52,
+            3459616
+          ],
+          [
+            53,
+            3459637
+          ],
+          [
+            54,
+            3459637
+          ],
+          [
+            55,
+            3459637
+          ],
+          [
+            56,
+            3459637
+          ],
+          [
+            57,
+            3459637
+          ]
+        ],
+        "vanished_identities": [
+          [
+            46,
+            3459606
+          ],
+          [
+            47,
+            3459615
+          ],
+          [
+            48,
+            3459615
+          ],
+          [
+            49,
+            3459615
+          ],
+          [
+            50,
+            3459615
+          ],
+          [
+            52,
+            3459616
+          ],
+          [
+            53,
+            3459637
+          ],
+          [
+            54,
+            3459637
+          ],
+          [
+            55,
+            3459637
+          ],
+          [
+            56,
+            3459637
+          ],
+          [
+            57,
+            3459637
+          ]
+        ],
+        "temp_peak_live_bytes": null,
+        "lower_bytes": null,
+        "upper_bytes": null,
+        "qualification_blocked": true
+      },
+      "birth_count": 10,
+      "early_child_stops": 10
+    }
+  },
+  "negative_checks": [
+    "missing-clone3-bytes",
+    "substituted-clone3-flags",
+    "missing-parent-event",
+    "substituted-child",
+    "missing-return",
+    "substituted-return",
+    "missing-early-stop",
+    "missing-path",
+    "short-kernel-info",
+    "missing-kernel-info",
+    "missing-exec-transition",
+    "substituted-former-TID",
+    "lost-exec-gate",
+    "lost-exec-pending",
+    "lost-siblings",
+    "substituted-census",
+    "false-completeness"
+  ]
+}

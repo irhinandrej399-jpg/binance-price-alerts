@@ -1,0 +1,61 @@
+package main
+
+import (
+ "encoding/json"
+ "fmt"
+ "os"
+ "runtime"
+ "syscall"
+ "unsafe"
+)
+func check(e error) { if e!=nil { panic(e) } }
+func emit(m map[string]any) { check(json.NewEncoder(os.Stdout).Encode(m)) }
+func identity() map[string]any {
+ tid:=syscall.Gettid();s,e:=os.ReadFile(fmt.Sprintf("/proc/%d/status",tid));check(e);st,e:=os.ReadFile(fmt.Sprintf("/proc/%d/stat",tid));check(e)
+ return map[string]any{"pid":os.Getpid(),"tid":tid,"status":string(s),"stat":string(st)}
+}
+func checkpoint(tag string, more map[string]any) {
+ m:=identity();m["tag"]=tag;for k,v:=range more {m[k]=v};emit(m)
+ syscall.RawSyscall(155,0,0,0)
+}
+// The child branch executes only assembly syscalls; it never enters Go runtime.
+func cloneControl(nr, flags, args, size, stack, fd, word uintptr) int64
+func main() {
+ runtime.LockOSThread()
+ mode:=os.Args[1]
+ if mode=="after-exec" { checkpoint("after-exec",nil);return }
+ if mode=="exec" {
+  go func(){runtime.LockOSThread();if syscall.Gettid()==os.Getpid(){panic("leader")};checkpoint("nonleader-exec",nil);check(syscall.Exec("/tmp/control",[]string{"control","after-exec"},os.Environ()))}()
+  select{}
+ }
+ check(os.MkdirAll("/probe/work",0700))
+ fd,e:=syscall.Open("/probe/work/source",syscall.O_CREAT|syscall.O_RDWR,0600);check(e)
+ check(syscall.Ftruncate(fd,4096))
+ dup,_,errno:=syscall.Syscall(syscall.SYS_FCNTL,uintptr(fd),1030,64);check(errnoError(errno))
+ check(syscall.Dup3(fd,70,syscall.O_CLOEXEC))
+ check(syscall.Close(int(dup)));check(syscall.Close(70))
+ // Explicit procfs reopen path and failed pointer/unknown clone3 sizes.
+ reopened,e:=syscall.Open(fmt.Sprintf("/proc/self/fd/%d",fd),syscall.O_RDONLY,0);check(e);check(syscall.Close(reopened))
+ syscall.RawSyscall6(435,1,88,0,0,0,0)
+ var args [11]uint64
+ syscall.RawSyscall6(435,uintptr(unsafe.Pointer(&args[0])),8,0,0,0,0)
+ for _,nr:=range []uintptr{220,435} {
+  for _,shared:=range []bool{false,true} {
+   stack,e:=syscall.Mmap(-1,0,65536,syscall.PROT_READ|syscall.PROT_WRITE,syscall.MAP_PRIVATE|syscall.MAP_ANON);check(e)
+   var word uint64
+   flags:=uintptr(17);if shared {flags|=0x100|0x400|0x4000} // VM, FILES, VFORK, SIGCHLD
+   args=[11]uint64{};args[0]=uint64(flags&^255);args[4]=17;args[5]=uint64(uintptr(unsafe.Pointer(&stack[0])));args[6]=uint64(len(stack))
+   checkpoint("before-clone",map[string]any{"nr":nr,"flags":flags,"fd":fd,"shared":shared})
+   ret:=cloneControl(nr,flags,uintptr(unsafe.Pointer(&args[0])),88,uintptr(unsafe.Pointer(&stack[len(stack)-16])),uintptr(fd),uintptr(unsafe.Pointer(&word)))
+   var status syscall.WaitStatus
+   if ret>0 { _,e=syscall.Wait4(int(ret),&status,0,nil);check(e) }
+   var st syscall.Stat_t;fdError:=syscall.Fstat(fd,&st)
+   checkpoint("after-clone",map[string]any{"nr":nr,"flags":flags,"ret":ret,"shared":shared,"word":word,"fd_closed":fdError==syscall.EBADF,"child_status":int(status)})
+   if ret>0 { if status!=0 || (shared && (word!=42 || fdError!=syscall.EBADF)) || (!shared && (word!=0 || fdError!=nil)) {panic("clone semantics")} }
+   if fdError==syscall.EBADF {fd,e=syscall.Open("/probe/work/source",syscall.O_RDWR,0);check(e)}
+   check(syscall.Munmap(stack))
+  }
+ }
+ check(syscall.Close(fd));checkpoint("complete",nil)
+}
+func errnoError(e syscall.Errno) error {if e==0{return nil};return e}

@@ -218,7 +218,7 @@
 | [OPS-035](tickets/OPS-035.md) | Восстановить доказанные границы apparent peak из raw | OPS-034 | planned |
 | [OPS-036](tickets/OPS-036.md) | Проверить самостоятельный observer на PostgreSQL | OPS-035 | planned |
 | [OPS-038](tickets/OPS-038.md) | Сохранять независимый census и полные inode inventories | OPS-033 | done |
-| [OPS-039](tickets/OPS-039.md) | Сохранять lifecycle evidence при shared state и nonleader exec | OPS-038 | planned |
+| [OPS-039](tickets/OPS-039.md) | Сохранять lifecycle evidence при shared state и nonleader exec | OPS-038 | done |
 | [OPS-040](tickets/OPS-040.md) | Проверить reference witnesses и повторить PostgreSQL capture | OPS-038, OPS-039 | planned |
 
 [OPS-031](tickets/OPS-031.md) разделён на OPS-033–036: ancillary raw →

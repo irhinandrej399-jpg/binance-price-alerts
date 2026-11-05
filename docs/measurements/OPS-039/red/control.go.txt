@@ -1,0 +1,51 @@
+package main
+
+import (
+ "encoding/json"
+ "fmt"
+ "os"
+ "runtime"
+ "syscall"
+)
+
+func check(err error) { if err != nil { panic(err) } }
+func emit(row map[string]any) { check(json.NewEncoder(os.Stdout).Encode(row)) }
+func witness(tag string, fd int) map[string]any {
+ var s syscall.Stat_t
+ check(syscall.Fstat(fd, &s))
+ return map[string]any{"tag":tag,"pid":os.Getpid(),"tid":syscall.Gettid(),"fd":fd,"dev":s.Dev,"ino":s.Ino,"mode":s.Mode,"size":s.Size,"nlink":s.Nlink}
+}
+func main() {
+ runtime.LockOSThread()
+ if os.Args[1] == "exec" {
+  go func() {
+   runtime.LockOSThread()
+   tid:=syscall.Gettid()
+   if tid==os.Getpid() { panic("exec control must run on a nonleader") }
+   emit(map[string]any{"tag":"nonleader-exec","pid":os.Getpid(),"tid":tid})
+   check(syscall.Exec("/bin/true",[]string{"true"},os.Environ()))
+  }()
+  select{}
+ }
+ check(os.MkdirAll("/probe/work",0700))
+ fd,e:=syscall.Open("/probe/work/source",syscall.O_CREAT|syscall.O_RDWR|syscall.O_EXCL,0600);check(e)
+ check(syscall.Ftruncate(fd,4096))
+ emit(witness("before-rename",fd))
+ check(syscall.Rename("/probe/work/source","/probe/outside"))
+ emit(witness("outside-root-open",fd))
+ // Force another serialized operation while only the outside name remains.
+ check(syscall.Ftruncate(fd,8192))
+ emit(witness("outside-root-grown",fd))
+ check(syscall.Unlink("/probe/outside"))
+ emit(witness("outside-root-unlinked",fd))
+ mapping,e:=syscall.Mmap(fd,0,8192,syscall.PROT_READ|syscall.PROT_WRITE,syscall.MAP_SHARED);check(e)
+ emit(witness("before-mapping-only",fd))
+ check(syscall.Close(fd))
+ mapping[0]=42
+ // A marker operation creates a raw snapshot during the mapping-only interval.
+ marker,e:=syscall.Open("/probe/marker",syscall.O_CREAT|syscall.O_RDWR,0600);check(e)
+ emit(map[string]any{"tag":"mapping-only","pid":os.Getpid(),"tid":syscall.Gettid(),"value":mapping[0]})
+ check(syscall.Close(marker))
+ check(syscall.Munmap(mapping))
+ fmt.Println(`{"tag":"complete"}`)
+}

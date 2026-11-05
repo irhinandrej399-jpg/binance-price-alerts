@@ -1,0 +1,147 @@
+{
+  "project": "binance-ops039-08c939e379",
+  "image": "postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc",
+  "commands": [
+    [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "binance-ops039-08c939e379",
+      "--label",
+      "com.docker.compose.project=binance-ops039-08c939e379",
+      "--network",
+      "none",
+      "--cpus",
+      "1",
+      "--memory",
+      "256m",
+      "--cap-add",
+      "SYS_PTRACE",
+      "--security-opt",
+      "seccomp=unconfined",
+      "--tmpfs",
+      "/probe:rw,size=16m",
+      "--entrypoint",
+      "sleep",
+      "postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc",
+      "infinity"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops039-08c939e379",
+      "uname",
+      "-a"
+    ],
+    [
+      "docker",
+      "cp",
+      "/tmp/ops039-capture",
+      "binance-ops039-08c939e379:/tmp/capture"
+    ],
+    [
+      "docker",
+      "cp",
+      "/tmp/ops039-control",
+      "binance-ops039-08c939e379:/tmp/control"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops039-08c939e379",
+      "/tmp/control",
+      "exec"
+    ],
+    [
+      "docker",
+      "exec",
+      "-e",
+      "OPS039_LIFECYCLE=1",
+      "-e",
+      "OPS038_INVENTORY=1",
+      "-e",
+      "OPS038_PATH_SCOPE=/probe",
+      "-e",
+      "OPS038_READ_PROBE=/proc/2147483647/status",
+      "binance-ops039-08c939e379",
+      "/tmp/capture",
+      "/probe/work",
+      "/tmp/exec.gz",
+      "--",
+      "/tmp/control",
+      "exec"
+    ],
+    [
+      "docker",
+      "cp",
+      "binance-ops039-08c939e379:/tmp/exec.gz",
+      "docs/measurements/OPS-039/exact-exec/exec.jsonl.gz"
+    ],
+    [
+      "docker",
+      "rm",
+      "-f",
+      "binance-ops039-08c939e379"
+    ],
+    [
+      "docker",
+      "container",
+      "ls",
+      "-a",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-ops039-08c939e379"
+    ],
+    [
+      "docker",
+      "volume",
+      "ls",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-ops039-08c939e379"
+    ],
+    [
+      "docker",
+      "network",
+      "ls",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-ops039-08c939e379"
+    ]
+  ],
+  "captures": {
+    "exec": {
+      "returncode": 0,
+      "seconds": 0.255222
+    }
+  },
+  "qualification_blocked": true,
+  "temp_peak_live_bytes": null,
+  "lower_bytes": null,
+  "upper_bytes": null,
+  "binary_sha256": {
+    "capture": "833776a04626577dc61284b20c50d6cc8f11779b1e9a6cce8f3527ad5cc37847",
+    "control": "68347e77aa80e3aa2054e8a0665a93e8a4437850c7f9ab98455ad2512c23e1a1"
+  },
+  "kernel": "Linux 673bc14993a4 6.12.76-linuxkit #1 SMP Wed May 13 14:27:18 UTC 2026 aarch64 GNU/Linux",
+  "exec_baseline_returncode": 0,
+  "cleanup": {
+    "container": [],
+    "volume": [],
+    "network": []
+  },
+  "sha256": {
+    "inventory_linux.go.txt": "bdf5cec58243df7bf2478ad708843dde6be2a3b571ac1ceeb1ea3c9d4039c7a8",
+    "exec.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "run.py.txt": "7a139bcdf98ac33480eb92037edb7f145e1106f8c9fc8e7b42af540f14d6a5d8",
+    "exec.stdout": "1eed3db045d358d82c9b7524efb1d095fa9cc69519a28ce97422940eebcced9b",
+    "control.go.txt": "9e76dbe5d5502355c344e33934c042e46ce5e6f3dcb673ecddafff3cc23cb580",
+    "exec-baseline.stdout": "5b08ceddd24ba626cebe4b2df988d3d1a548f0d04ba49648d9936fd157ca1a34",
+    "exec.jsonl.gz": "4105a3336b0000c9020342c9069f260cb743c5a82f7af0425995c8f421a84291",
+    "capture-main_linux.go.txt": "c58f2f67c685f7eb0afdcbdca3b49c0cce58a89ce66260e068ffe18c39872599",
+    "exec-baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "lifecycle_linux.go.txt": "6543942b0db3fe94f9d5ce144199ec276d6e42973c1b3489ee84cf6fcaa6156f",
+    "capture-message_linux.go.txt": "8cbb27c705f5fae43dfa401e50a8786b1464ad670b050f69ed0a499b923d57ba"
+  }
+}

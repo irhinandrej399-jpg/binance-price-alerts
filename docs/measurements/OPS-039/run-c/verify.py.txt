@@ -1,0 +1,240 @@
+"""Full OPS-039 lifecycle + OPS-038 inventories; never authorizes bounds."""
+import argparse
+import copy
+import gzip
+import hashlib
+import importlib.util
+import json
+from pathlib import Path
+import shutil
+import struct
+import tempfile
+
+BASE=Path(__file__).parents[1]
+def module(name,path):
+    spec=importlib.util.spec_from_file_location(name,path)
+    m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);return m
+inv=module('inventory',BASE/'inventory/verify.py');a=inv.ancillary;require=a.require
+PATHS={56:[1],437:[1],221:[0],281:[1],35:[1],36:[0,2],37:[1,3],38:[1,3],276:[1,3],78:[1],79:[1],48:[1]}
+def identity(status,stat,pid):
+    tid,ppid,start=inv.stat_identity(stat)
+    parsed=dict(x.split(':',1) for x in status.splitlines() if ':' in x)
+    require(tid==pid==int(parsed['Pid']) and ppid==int(parsed['PPid']) and start>0,'stop identity')
+    return int(parsed['Tgid']),start
+
+def input_data(r):
+    d=r['lifecycle'];args=r['args'];nr=r['nr'];bad=False
+    require(d['version']=='linux-arm64-lifecycle-v1','lifecycle ABI')
+    require([p['arg'] for p in d['paths']]==PATHS.get(nr,[]),'path arguments omitted')
+    for p in d['paths']:
+        m=p['memory'];require(m['address']==args[p['arg']] and 0<m['length']<=4096,'path address/limit')
+        b=a.mem(m,m['address'],m['length']);bad|=b is None
+        if b is not None: require(b.endswith(b'\0') and b'\0' not in b[:-1],'path terminator')
+    flags=None
+    if nr==220: flags=args[0]
+    if nr==435:
+        m=d['clone3'];b=a.mem(m,args[0],args[1]);bad|=b is None or args[1] not in (64,80,88)
+        if not bad: flags=struct.unpack_from('<Q',b)[0]
+    else: require(d['clone3'] is None,'unexpected clone3')
+    if nr==437:
+        m=d['open_how'];b=a.mem(m,args[2],args[3]);bad|=b is None or args[3]!=24
+    require(d['flags']==flags and d['incomplete']==bad,'flags/incomplete disagree with bytes')
+    return flags
+
+def replay(rows):
+    require(rows[0]['kind']=='header' and rows[0]['schema']=='ops039-ptrace-lifecycle-v1' and rows[0]['arch']=='arm64','missing lifecycle schema')
+    require(rows[-1]['kind']=='footer','missing footer')
+    entries={};tasks={};groups={};active=0;queue=[];early=set();journal=set();pending_event=None
+    info=None;stop=None;clock=-1;root=None;transitions=0;inherited=0;incomplete=0
+    last={};returns=[];births=[];stops={}
+    for seq,r in enumerate(rows,1):
+        require(r['seq']==seq and r['ns']>=clock,'sequence/clock');clock=r['ns']
+        k=r['kind'];pid=r.get('pid')
+        if pending_event is not None:
+            require(k=='exec_transition','missing exec transition')
+        if k=='root':
+            require(root is None,'duplicate root');root=pid
+            tasks[pid]={'nr':0,'args':[0]*6,'entered':False,'newborn':True};groups[pid]=pid
+        elif k=='wait_stop':
+            require(r['active']==active and r['queue']==queue,'stop gate/queue witness mismatch')
+            require(r['pending']=={str(p):t for p,t in tasks.items()},'pending operation lost/substituted')
+            status=inv.text(r['identity'],f'/proc/{pid}/status');stat=inv.text(r['stat'],f'/proc/{pid}/stat')
+            if r['identity']['error'] or r['stat']['error']: incomplete+=1
+            else:
+                group,start=identity(status,stat,pid)
+                if pid in groups and (r['status']>>16)!=4: require(group==groups[pid],'task group differs from procfs')
+                last[pid]=(group,start)
+            stop=r;stops[pid]=r
+        elif k=='syscall_info':
+            require(stop and stop['pid']==pid and (stop['status']&0xffff)==34175,'syscall info stop binding')
+            b=bytes.fromhex(r['hex']);require(len(b)==88 and r['errno']==0 and r['bytes']>=24,'syscall info bytes')
+            require(struct.unpack_from('<I',b,4)[0]==0xc00000b7,'unknown audit ABI')
+            info=(pid,b)
+            if b[0] not in (1,2): incomplete+=1
+        elif k=='early_child_stop':
+            require(pid not in tasks and pid not in early,'early child registration');early.add(pid)
+        elif k=='child_stop':
+            require(pid in tasks and tasks[pid]['newborn'],'child stop binding');early.discard(pid)
+        elif k=='event':
+            require(pid in stops and stops[pid]['status']>>16==r['event'],'ptrace event stop binding')
+            require(pid in tasks,'missing event parent')
+            if r['event'] in (1,2,3):
+                t=tasks[pid];require(t['entered'] and t['nr'] in (220,435),'birth without clone entry')
+                flags=input_data(entries[pid]);child=r['message'];require(child not in tasks,'duplicate child')
+                groups[child]=groups[pid] if flags is not None and flags&0x10000 else child
+                tasks[child]={'nr':0,'args':[0]*6,'entered':False,'newborn':True}
+                births.append((pid,child,flags,t['nr'],r['seq']))
+            elif r['event']==4: pending_event=r
+            elif r['event']!=6: incomplete+=1
+        elif k=='exec_transition':
+            require(pending_event is not None and pending_event['pid']==pid and pending_event['message']==r['former'],'exec former TID mismatch')
+            former=r['former'];require(former in tasks,'exec source lost');t=tasks[former]
+            retired=sorted(p for p in tasks if groups[p]==groups[former] and p!=former)
+            require(r['retired']==retired and r['abandoned']=={str(p):tasks[p] for p in retired},'exec siblings/pending lost')
+            require(r['pending_nr']==t['nr'] and r['pending_args']==t['args'] and r['pending_entered']==t['entered'] and t['entered'] and t['nr'] in (221,281),'exec pending syscall lost')
+            ids=set(retired)|{former}
+            expected=pid if active==former else 0 if active in ids else active
+            expected_queue=[p for p in queue if p not in ids]
+            require((r['active_before'],r['active_after'],r['queue_before'],r['queue_after'])==(active,expected,queue,expected_queue),'exec gate/queue transition')
+            for p in ids: tasks.pop(p,None);groups.pop(p,None);entries.pop(p,None)
+            tasks[pid]=t;groups[pid]=pid;entries[pid]=dict(pid=pid,nr=t['nr'],args=t['args'])
+            active=expected;queue=expected_queue
+            identity(inv.text(r['identity']),inv.text(r['stat']),pid)
+            pending_event=None;transitions+=1
+        elif k=='enter':
+            require(pid in tasks and not tasks[pid]['entered'],'unmatched entry')
+            require(info and info[0]==pid and info[1][0]==1,'entry missing kernel info')
+            b=info[1];require(r['nr']==struct.unpack_from('<Q',b,24)[0] and r['args']==list(struct.unpack_from('<6Q',b,32)),'entry args differ from kernel')
+            require(isinstance(r['serial'],bool),'serial flag')
+            flags=input_data(r);incomplete+=int(r['lifecycle']['incomplete'])
+            tasks[pid]={'nr':r['nr'],'args':r['args'],'entered':True,'newborn':False};entries[pid]=r
+            if r['nr'] in a.CALLS: a.decode(r,r,False)
+            info=None
+        elif k in ('leave','inherited_return'):
+            require(info and info[0]==pid and info[1][0]==2,'return missing kernel info')
+            require(r['ret']==struct.unpack_from('<q',info[1],24)[0],'return differs from kernel')
+            t=tasks[pid]
+            if k=='inherited_return':
+                require(not t['entered'] and t['newborn'],'unmatched inherited return');t['newborn']=False;inherited+=1
+            else:
+                require(t['entered'] and t['nr']==r['nr'],'unmatched return');t['entered']=False
+                entry=entries.pop(pid);returns.append((entry,r))
+                if r['nr'] in a.CALLS: a.decode(r,entry,True)
+            info=None
+        elif k=='dispatch':
+            require(active==0 and pid in tasks and tasks[pid]['entered'],'overlapping dispatch');active=pid
+            if queue: require(queue.pop(0)==pid,'queue dispatch order')
+        elif k=='queued':
+            require(active!=0 and pid not in queue and pid!=active and tasks[pid]['entered'],'invalid queue');queue.append(pid)
+        elif k=='release':
+            require(active==pid and (pid not in tasks or not tasks[pid]['entered']),'release mismatch');active=0
+        elif k=='exit':
+            require(pid in tasks and stop and stop['pid']==pid and stop['status']==r['status'],'exit binding')
+            tasks.pop(pid);groups.pop(pid);entries.pop(pid,None);queue=[p for p in queue if p!=pid]
+        elif k=='unsupported': journal.add(r['reason'])
+        else: require(k in ('header','footer','inventory','inventory_environment','signal'),'unhandled record '+k)
+    require(root and not tasks and not queue and active==0 and not early and pending_event is None,'incomplete lifecycle')
+    f=rows[-1];require(f['root_exit']==0 and f['status']=='unknown' and f['qualification_blocked'] and f['temp_peak_live_bytes'] is None and set(f['issues'])==journal,'footer/issue journal')
+    return {'transitions':transitions,'births':births,'inherited_returns':inherited,'incomplete_evidence':incomplete,'returns':returns,'inventory':inv.replay(rows,lifecycle=True)}
+
+# Entries belong to a replay invocation, not module state.
+
+def verify(directory):
+    report=json.loads((directory/'report.json').read_text())
+    require(report['status']=='captured-not-qualified' and all(not v for v in report['cleanup'].values()),'capture/cleanup failed')
+    require(report['qualification_blocked'] and all(report[k] is None for k in ('temp_peak_live_bytes','lower_bytes','upper_bytes')),'false bounds')
+    required={'references.jsonl.gz','exec.jsonl.gz','references.stdout','exec.stdout','main_linux.go.txt','lifecycle_linux.go.txt','inventory_linux.go.txt','message_linux.go.txt','control-main_linux.go.txt','clone_linux_arm64.s.txt','run.py.txt','verify.py.txt','inventory-verify.py.txt','ancillary-verify.py.txt'}
+    require(required<=report['sha256'].keys() and set(report['binary_sha256'])=={'capture','control'},'artifact/source/binary hashes missing')
+    for name,digest in report['sha256'].items(): require(hashlib.sha256((directory/name).read_bytes()).hexdigest()==digest,'hash mismatch '+name)
+    result={}
+    for mode in ('references','exec'):
+        require(report[mode+'_returncode']==0,'capture returncode')
+        rows=a.load(directory/(mode+'.jsonl.gz'));r=replay(rows)
+        points=[json.loads(l) for l in (directory/(mode+'.stdout')).read_text().splitlines()]
+        gates=[x for x in rows if x['kind']=='enter' and x['nr']==155 and any(p['tid']==x['pid'] for p in points)]
+        require(len(points)==len(gates),'independent checkpoint omitted')
+        for p,g in zip(points,gates):
+            require(p['tid']==g['pid'],'helper gate ordering')
+            group,start=identity(p['status'],p['stat'],p['tid']);require(group==p['pid'],'helper TGID')
+            checkpoint=rows[g['seq']];require(checkpoint['kind']=='inventory' and checkpoint['phase']=='before','helper checkpoint synchronization')
+            census=inv.census(checkpoint['census_before']);require(p['tid'] in census and census[p['tid']]==(group,(p['tid'],start)),'independent starttime/census mismatch')
+        if mode=='references':
+            require([p['tag'] for p in points]==['dup-reopen']+['before-clone','after-clone']*4+['complete'],'reference stages')
+            f=points[0]
+            require(any(e['nr']==25 and e['pid']==f['tid'] and e['args'][:3]==[f['fd'],1030,64] and x['ret']==f['dup'] for e,x in r['returns']),'independent fcntl return')
+            require(any(e['nr']==24 and e['pid']==f['tid'] and e['args'][:3]==[f['fd'],70,524288] and x['ret']==0 for e,x in r['returns']),'independent dup3 return')
+            require(any(e['nr']==56 and e['pid']==f['tid'] and any(bytes.fromhex(p['memory']['hex'])==f"/proc/self/fd/{f['fd']}\0".encode() for p in e['lifecycle']['paths']) and x['ret']>=0 for e,x in r['returns']),'reopen path/return')
+            successful=[]
+            for index in range(4):
+                before,after=points[1+index*2:3+index*2];lo=gates[1+index*2]['seq'];hi=gates[2+index*2]['seq']
+                require(before['nr']==after['nr'] and before['flags']==after['flags'] and before['shared']==after['shared'],'helper clone binding')
+                pairs=[(e,x) for e,x in r['returns'] if e['pid']==before['tid'] and e['nr']==before['nr'] and lo<e['seq']<hi]
+                require(len(pairs)==1,'clone call omitted/duplicated');e,x=pairs[0]
+                flags=before['flags'] if before['nr']==220 else before['flags']&~255
+                require(e['lifecycle']['flags']==flags and x['ret']==after['ret'],'independent clone flags/return mismatch')
+                if x['ret']>0:
+                    child=x['ret'];successful.append((before['nr'],before['shared']))
+                    require(after['child_status']==0 and after['word']==(42 if before['shared'] else 0) and after['fd_closed']==before['shared'],'independent shared FD/VM semantics')
+                    require(any(b[0]==before['tid'] and b[1]==child and b[2]==flags and b[3]==before['nr'] for b in r['births']),'child lineage mismatch')
+                    closes=[(ce,cx) for ce,cx in r['returns'] if ce['pid']==child and ce['nr']==57 and ce['args'][0]==before['fd'] and cx['ret']==0]
+                    require(len(closes)==1,'inherited FD close missing')
+                    ce,_=closes[0];cp=rows[ce['seq']];require(cp['kind']=='inventory','child close checkpoint')
+                    owner=next(o for o in cp['owners'] if o['tid']==child)
+                    require(any(z['path'].endswith('/'+str(before['fd'])) and z['stat'] and inv.same(z['stat'],before['source']) for z in owner['fd_entries']),'inherited FD identity mismatch')
+                else:
+                    require(before['nr']==435 and x['ret'] in (-1,-38),'unexpected clone failure')
+            require((220,False) in successful and (220,True) in successful,'legacy clone controls failed')
+            # A denied clone3 remains explicitly untested; no claim of successful creation.
+            r['clone3_successful_variants']=[shared for nr,shared in successful if nr==435]
+            failed=[(e,x) for e,x in r['returns'] if e['nr']==435 and (e['args'][0]==1 or e['args'][1]==8)]
+            require(len(failed)==2 and all(x['ret']<0 and e['lifecycle']['incomplete'] for e,x in failed),'clone3 failure controls')
+        else:
+            require([p['tag'] for p in points]==['nonleader-exec','after-exec'],'exec helper stages')
+            before,after=points;require(before['tid']!=before['pid'] and after['tid']==after['pid']==before['pid'],'nonleader exec independent transition')
+            transitions=[x for x in rows if x['kind']=='exec_transition'];require(len(transitions)==1,'exec transition count')
+            t=transitions[0];require(t['former']==before['tid'] and t['pid']==after['tid'],'independent former TID')
+            require(inv.stat_identity(t['stat']['text'])[2]==inv.stat_identity(after['stat'])[2],'exec identity starttime mismatch')
+            require(any(e['pid']==after['tid'] and e['nr']==221 and x['ret']==0 for e,x in r['returns']),'exec return not transferred')
+        r.pop('returns');r['birth_count']=len(r.pop('births'));r['early_child_stops']=sum(x['kind']=='early_child_stop' for x in rows)
+        require(r['early_child_stops']>0,'early child stop control absent')
+        result[mode]=r
+    return result
+
+def negative_checks(directory):
+    checks=[]
+    def reject(name,mode,mutate):
+        with tempfile.TemporaryDirectory(prefix='ops039-tamper-') as tmp:
+            dest=Path(tmp)/'data';shutil.copytree(directory,dest)
+            path=dest/(mode+'.jsonl.gz');rows=a.load(path);mutate(rows)
+            for seq,r in enumerate(rows,1):r['seq']=seq
+            with gzip.open(path,'wt',compresslevel=1) as f:
+                for r in rows:f.write(json.dumps(r)+'\n')
+            report=json.loads((dest/'report.json').read_text());report['sha256'][path.name]=hashlib.sha256(path.read_bytes()).hexdigest();(dest/'report.json').write_text(json.dumps(report))
+            try:verify(dest)
+            except (ValueError,KeyError,IndexError,TypeError,StopIteration):checks.append(name)
+            else:raise ValueError('tamper accepted '+name)
+    def entry(rows,nr):return next(r for r in rows if r['kind']=='enter' and r['nr']==nr)
+    def transition(rows):return next(r for r in rows if r['kind']=='exec_transition')
+    reject('missing-clone3-bytes','references',lambda rows:entry(rows,435)['lifecycle'].pop('clone3'))
+    reject('substituted-clone3-flags','references',lambda rows:next(r for r in rows if r['kind']=='enter' and r['nr']==435 and r['lifecycle']['flags'] is not None)['lifecycle'].__setitem__('flags',1))
+    reject('missing-parent-event','references',lambda rows:rows.remove(next(r for r in rows if r['kind']=='event' and r['event'] in (1,2,3))))
+    reject('substituted-child','references',lambda rows:next(r for r in rows if r['kind']=='event' and r['event'] in (1,2,3)).__setitem__('message',99999))
+    reject('missing-return','references',lambda rows:rows.remove(next(r for r in rows if r['kind']=='leave' and r['nr']==435)))
+    reject('substituted-return','references',lambda rows:next(r for r in rows if r['kind']=='leave' and r['nr']==25).__setitem__('ret',99999))
+    reject('missing-early-stop','references',lambda rows:rows.remove(next(r for r in rows if r['kind']=='early_child_stop')))
+    reject('missing-path','references',lambda rows:entry(rows,56)['lifecycle'].__setitem__('paths',[]))
+    reject('missing-kernel-info','references',lambda rows:rows.remove(next(r for r in rows if r['kind']=='syscall_info')))
+    reject('missing-exec-transition','exec',lambda rows:rows.remove(transition(rows)))
+    reject('substituted-former-TID','exec',lambda rows:transition(rows).__setitem__('former',transition(rows)['pid']))
+    reject('lost-exec-gate','exec',lambda rows:transition(rows).__setitem__('active_after',0))
+    reject('lost-exec-pending','exec',lambda rows:transition(rows).__setitem__('pending_entered',False))
+    reject('lost-siblings','exec',lambda rows:transition(rows).__setitem__('retired',[]))
+    reject('substituted-census','exec',lambda rows:next(r for r in rows if r['kind']=='inventory')['census_before']['processes'].pop())
+    reject('false-completeness','exec',lambda rows:next(r for r in rows if r['kind']=='inventory')['consistency'].__setitem__('complete',True))
+    return checks
+
+if __name__=='__main__':
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('directory',type=Path);p.add_argument('--record',action='store_true');args=p.parse_args()
+    result={'results':verify(args.directory),'negative_checks':negative_checks(args.directory)}
+    if args.record:(args.directory/'checks.json').write_text(json.dumps(result,indent=2)+'\n')
+    print(json.dumps(result,indent=2))

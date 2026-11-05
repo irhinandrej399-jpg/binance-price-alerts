@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"compress/gzip"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -21,6 +22,10 @@ import (
 )
 
 type task struct {
+	cloneData        []byte
+	flags            uint64
+	flagsKnown       bool
+	tgid             int
 	nr               uint64
 	args             [6]uint64
 	entered, newborn bool
@@ -41,6 +46,7 @@ type capture struct {
 	queue  []int
 	enc    *json.Encoder
 	seq    int
+	flush  func()
 	t0     time.Time
 	root   string
 	issues map[string]bool
@@ -54,6 +60,9 @@ func (c *capture) emit(kind string, data map[string]any) {
 	data["kind"], data["seq"], data["ns"] = kind, c.seq, time.Since(c.t0).Nanoseconds()
 	if err := c.enc.Encode(data); err != nil {
 		panic(err)
+	}
+	if c.flush != nil {
+		c.flush()
 	}
 }
 func (c *capture) issue(s string) {
@@ -244,9 +253,22 @@ func main() {
 	defer z.Close()
 	defer b.Flush()
 	c := &capture{tasks: map[int]*task{}, enc: json.NewEncoder(b), t0: time.Now(), root: os.Args[1], issues: map[string]bool{}}
+	if lifecycleEnabled() {
+		c.flush = func() {
+			if e := b.Flush(); e != nil {
+				panic(e)
+			}
+			if e := z.Flush(); e != nil {
+				panic(e)
+			}
+		}
+	}
 	schema := "ops033-ptrace-ancillary-v1"
 	if inventoryEnabled() {
 		schema = "ops038-ptrace-inventory-v1"
+	}
+	if lifecycleEnabled() {
+		schema = "ops039-ptrace-lifecycle-v1"
 	}
 	c.emit("header", map[string]any{"schema": schema, "arch": runtime.GOARCH, "root": c.root, "command": os.Args[4:], "go_version": runtime.Version(), "ancillary_contract": "linux-arm64-ancillary-v1", "msghdr_bytes": 56, "mmsghdr_bytes": 64, "cmsghdr_bytes": 16, "control_limit": 1 << 20, "vector_limit": 1024})
 	if inventoryEnabled() {
@@ -270,7 +292,7 @@ func main() {
 	if err = syscall.PtraceSetOptions(rootPID, opts); err != nil {
 		panic(err)
 	}
-	c.tasks[rootPID] = &task{newborn: true}
+	c.tasks[rootPID] = &task{newborn: true, tgid: rootPID}
 	c.emit("root", map[string]any{"pid": rootPID, "options": opts})
 	c.snapshot("initial", rootPID)
 	if err = b.Flush(); err != nil {
@@ -289,6 +311,9 @@ func main() {
 		}
 		if err != nil {
 			panic(err)
+		}
+		if lifecycleEnabled() {
+			c.stopWitness(pid, status)
 		}
 		t := c.tasks[pid]
 		if t == nil {
@@ -310,6 +335,9 @@ func main() {
 				rootExit = status.ExitStatus()
 			}
 			delete(c.tasks, pid)
+			if lifecycleEnabled() {
+				c.dropQueue(map[int]bool{pid: true})
+			}
 			c.release(pid)
 			continue
 		}
@@ -322,17 +350,40 @@ func main() {
 			if err != nil {
 				panic(err)
 			}
+			if lifecycleEnabled() && os.Getenv("OPS039_EARLY_CHILD") == "1" && (event == 1 || event == 2 || event == 3) && !earlyStops[int(msg)] {
+				var childStatus syscall.WaitStatus
+				got, e := syscall.Wait4(int(msg), &childStatus, syscall.WALL, nil)
+				if e != nil {
+					panic(e)
+				}
+				c.stopWitness(got, childStatus)
+				if !childStatus.Stopped() || childStatus.StopSignal() != syscall.SIGSTOP {
+					panic("expected early child SIGSTOP")
+				}
+				earlyStops[got] = true
+				c.emit("early_child_stop", map[string]any{"pid": got})
+			}
 			c.emit("event", map[string]any{"pid": pid, "event": event, "message": msg})
 			if event == 1 || event == 2 || event == 3 {
 				if _, ok := c.tasks[int(msg)]; ok {
 					panic("duplicate child")
 				}
-				c.tasks[int(msg)] = &task{newborn: true}
+				group := int(msg)
+				if lifecycleEnabled() && c.cloneFlags(pid, t)&0x10000 != 0 {
+					group = t.tgid
+				}
+				c.tasks[int(msg)] = &task{newborn: true, tgid: group}
 				if earlyStops[int(msg)] {
 					delete(earlyStops, int(msg))
 					c.emit("child_stop", map[string]any{"pid": int(msg)})
 					c.resume(int(msg), 0)
 				}
+			}
+			if lifecycleEnabled() && event == 4 {
+				t = c.execTransition(pid, int(msg))
+			}
+			if lifecycleEnabled() && event != 1 && event != 2 && event != 3 && event != 4 && event != 6 {
+				c.issue("unhandled ptrace event")
 			}
 			if event == 6 && c.active != pid {
 				c.issue("exit outside serialized syscall")
@@ -343,13 +394,18 @@ func main() {
 		if status.StopSignal() == syscall.Signal(int(syscall.SIGTRAP)|0x80) {
 			var info [88]byte
 			n, _, errno := syscall.Syscall6(syscall.SYS_PTRACE, 0x420e, uintptr(pid), uintptr(len(info)), uintptr(unsafe.Pointer(&info[0])), 0, 0)
-			if errno != 0 || n < 24 {
-				panic(fmt.Sprintf("get syscall info: %v bytes=%d", errno, n))
+			if lifecycleEnabled() {
+				c.emit("syscall_info", map[string]any{"pid": pid, "bytes": n, "errno": int(errno), "hex": hex.EncodeToString(info[:])})
+			}
+			if errno != 0 || n < 24 || (info[0] == 1 && n < 80) || (info[0] == 2 && n < 33) || binary.LittleEndian.Uint32(info[4:8]) != 0xc00000b7 {
+				if lifecycleEnabled() {
+					c.issue("syscall info unreadable or unknown ABI")
+					c.resume(pid, 0)
+					continue
+				}
+				panic(fmt.Sprintf("get syscall info/ABI: %v bytes=%d", errno, n))
 			}
 			op := info[0]
-			if binary.LittleEndian.Uint32(info[4:8]) != 0xc00000b7 {
-				panic("unexpected audit arch")
-			}
 			if op == 1 {
 				if t.entered {
 					panic("double syscall entry")
@@ -362,6 +418,9 @@ func main() {
 				t.newborn = false
 				serial := c.classify(pid, t)
 				row := map[string]any{"pid": pid, "nr": t.nr, "args": t.args, "serial": serial}
+				if lifecycleEnabled() {
+					row["lifecycle"] = c.lifecycleInput(pid, t)
+				}
 				if messageCall(t.nr) {
 					row["messages"] = c.messages(pid, t, false, 0)
 				}
@@ -381,6 +440,9 @@ func main() {
 					t.newborn = false
 				} else {
 					row := map[string]any{"pid": pid, "nr": t.nr, "ret": ret}
+					if lifecycleEnabled() {
+						row["lifecycle_return"] = c.lifecycleOutput(pid, t, ret)
+					}
 					if messageCall(t.nr) {
 						row["messages"] = c.messages(pid, t, true, ret)
 					}
@@ -390,7 +452,12 @@ func main() {
 				}
 				c.resume(pid, 0)
 			} else {
-				panic(fmt.Sprintf("unsupported syscall stop %d", op))
+				if lifecycleEnabled() {
+					c.issue(fmt.Sprintf("unsupported syscall stop %d", op))
+					c.resume(pid, 0)
+				} else {
+					panic(fmt.Sprintf("unsupported syscall stop %d", op))
+				}
 			}
 		} else if status.StopSignal() == syscall.SIGSTOP && t.newborn {
 			c.emit("child_stop", map[string]any{"pid": pid})

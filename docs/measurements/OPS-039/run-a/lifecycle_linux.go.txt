@@ -1,0 +1,140 @@
+package main
+
+import (
+	"encoding/binary"
+	"encoding/hex"
+	"fmt"
+	"os"
+	"sort"
+	"syscall"
+)
+
+func lifecycleEnabled() bool { return os.Getenv("OPS039_LIFECYCLE") == "1" }
+func (c *capture) stopWitness(pid int, status syscall.WaitStatus) {
+	pending := map[int]any{}
+	for tid, t := range c.tasks {
+		pending[tid] = map[string]any{"nr": t.nr, "args": t.args, "entered": t.entered, "newborn": t.newborn}
+	}
+	c.emit("wait_stop", map[string]any{"pid": pid, "status": int(status), "active": c.active, "queue": append([]int{}, c.queue...), "pending": pending, "identity": readEvidence(fmt.Sprintf("/proc/%d/status", pid)), "stat": readEvidence(fmt.Sprintf("/proc/%d/stat", pid))})
+}
+
+func (c *capture) dropQueue(ids map[int]bool) {
+	q := []int{}
+	for _, p := range c.queue {
+		if !ids[p] {
+			q = append(q, p)
+		}
+	}
+	c.queue = q
+}
+func (c *capture) execTransition(pid, former int) *task {
+	source := c.tasks[former]
+	if source == nil {
+		c.issue("exec former TID not registered")
+		source = &task{tgid: pid, newborn: true}
+	}
+	retired := []int{}
+	abandoned := map[int]any{}
+	ids := map[int]bool{}
+	for tid, t := range c.tasks {
+		if t.tgid == source.tgid && tid != former {
+			retired = append(retired, tid)
+			ids[tid] = true
+			abandoned[tid] = *t
+			delete(c.tasks, tid)
+		}
+	}
+	sort.Ints(retired)
+	activeBefore := c.active
+	queueBefore := append([]int{}, c.queue...)
+	delete(c.tasks, former)
+	ids[former] = true
+	c.dropQueue(ids)
+	if c.active == former {
+		c.active = pid
+	} else if ids[c.active] {
+		c.active = 0
+		c.issue("exec abandoned active sibling")
+	}
+	c.tasks[pid] = source
+	source.tgid = pid
+	c.emit("exec_transition", map[string]any{"pid": pid, "former": former, "retired": retired, "abandoned": abandoned, "pending_nr": source.nr, "pending_args": source.args, "pending_entered": source.entered, "active_before": activeBefore, "active_after": c.active, "queue_before": queueBefore, "queue_after": append([]int{}, c.queue...), "identity": readEvidence(fmt.Sprintf("/proc/%d/status", pid)), "stat": readEvidence(fmt.Sprintf("/proc/%d/stat", pid))})
+	return source
+}
+func pathMemory(pid int, address uint64) memory {
+	m := readMemory(pid, address, 4096)
+	data, _ := hex.DecodeString(m.Hex)
+	for i, b := range data {
+		if b == 0 {
+			m.Hex = hex.EncodeToString(data[:i+1])
+			m.Length = uint64(i + 1)
+			m.Error = ""
+			return m
+		}
+	}
+	if m.Error == "" {
+		m.Error = "path exceeds 4096 bytes without NUL"
+	}
+	return m
+}
+func (c *capture) cloneFlags(pid int, t *task) uint64 {
+	if t.nr == 220 {
+		return t.args[0]
+	}
+	if t.nr == 435 && (t.args[1] == 64 || t.args[1] == 80 || t.args[1] == 88) {
+		m := readMemory(pid, t.args[0], t.args[1])
+		b, _ := hex.DecodeString(m.Hex)
+		if m.Error == "" && len(b) >= 8 {
+			return binary.LittleEndian.Uint64(b[:8])
+		}
+	}
+	c.issue("clone flags unavailable")
+	return 0
+}
+func (c *capture) lifecycleInput(pid int, t *task) map[string]any {
+	data := map[string]any{"version": "linux-arm64-lifecycle-v1", "paths": []any{}, "clone3": nil, "flags": nil, "incomplete": false}
+	indices := []int{}
+	switch t.nr {
+	case 56, 437, 221, 276:
+		indices = []int{1}
+		if t.nr == 221 {
+			indices = []int{0}
+		}
+	case 35, 38, 78, 79, 48:
+		indices = []int{1}
+	case 36, 37:
+		indices = []int{1, 3}
+	}
+	paths := []any{}
+	for _, i := range indices {
+		m := pathMemory(pid, t.args[i])
+		paths = append(paths, map[string]any{"arg": i, "memory": m})
+		if m.Error != "" {
+			data["incomplete"] = true
+			c.issue("lifecycle path unreadable")
+		}
+	}
+	data["paths"] = paths
+	if t.nr == 435 {
+		m := readMemory(pid, t.args[0], t.args[1])
+		data["clone3"] = m
+		if m.Error != "" || (t.args[1] != 64 && t.args[1] != 80 && t.args[1] != 88) {
+			data["incomplete"] = true
+			c.issue("clone3 unreadable or unsupported size")
+		} else {
+			b, _ := hex.DecodeString(m.Hex)
+			data["flags"] = binary.LittleEndian.Uint64(b[:8])
+		}
+	}
+	if t.nr == 220 {
+		data["flags"] = t.args[0]
+	}
+	if t.nr == 437 {
+		data["open_how"] = readMemory(pid, t.args[2], t.args[3])
+		if t.args[3] != 24 || data["open_how"].(memory).Error != "" {
+			data["incomplete"] = true
+			c.issue("open_how unreadable or unsupported size")
+		}
+	}
+	return data
+}
