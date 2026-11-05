@@ -1,0 +1,126 @@
+{
+  "project": "binance-ops037-preflight-4523599d9e",
+  "image": "postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc",
+  "commands": [
+    [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "binance-ops037-preflight-4523599d9e",
+      "--label",
+      "com.docker.compose.project=binance-ops037-preflight-4523599d9e",
+      "--network",
+      "none",
+      "--cpus",
+      "1",
+      "--memory",
+      "256m",
+      "--cap-add",
+      "SYS_PTRACE",
+      "--security-opt",
+      "seccomp=unconfined",
+      "--tmpfs",
+      "/probe:rw,size=16m",
+      "--entrypoint",
+      "sleep",
+      "postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc",
+      "infinity"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops037-preflight-4523599d9e",
+      "uname",
+      "-a"
+    ],
+    [
+      "docker",
+      "cp",
+      "/tmp/ops037-preflight-capture",
+      "binance-ops037-preflight-4523599d9e:/probe/capture"
+    ],
+    [
+      "docker",
+      "cp",
+      "/tmp/ops037-preflight-control",
+      "binance-ops037-preflight-4523599d9e:/probe/control"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops037-preflight-4523599d9e",
+      "/probe/capture",
+      "/probe/work",
+      "/probe/references.gz",
+      "--",
+      "/probe/control",
+      "references"
+    ],
+    [
+      "docker",
+      "cp",
+      "binance-ops037-preflight-4523599d9e:/probe/references.gz",
+      "docs/measurements/OPS-037/preflight/references.jsonl.gz"
+    ],
+    [
+      "docker",
+      "rm",
+      "-f",
+      "binance-ops037-preflight-4523599d9e"
+    ],
+    [
+      "docker",
+      "container",
+      "ls",
+      "-a",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-ops037-preflight-4523599d9e"
+    ],
+    [
+      "docker",
+      "volume",
+      "ls",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-ops037-preflight-4523599d9e"
+    ],
+    [
+      "docker",
+      "network",
+      "ls",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-ops037-preflight-4523599d9e"
+    ]
+  ],
+  "captures": {
+    "references": {
+      "returncode": 127,
+      "seconds": 0.07479895799999997
+    }
+  },
+  "qualification_blocked": true,
+  "temp_peak_live_bytes": null,
+  "lower_bytes": null,
+  "upper_bytes": null,
+  "binary_sha256": {
+    "capture": "ba31b0a2a272a8cd352b0a14d7e309bc287655629ca9ab107d1172b29b12e6ca",
+    "control": "7f241efa1a589bcafd2a9fc07a873d01a74b610c786eb7bf7057d66100151c19"
+  },
+  "kernel": "Linux bdb6ed676d89 6.12.76-linuxkit #1 SMP Wed May 13 14:27:18 UTC 2026 aarch64 GNU/Linux",
+  "cleanup": {
+    "container": [],
+    "volume": [],
+    "network": []
+  },
+  "sha256": {
+    "references.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "run.py.txt": "8c623b1a89f36615a825ca712ee6a8f2e256f48dc387749344aeedcd5bcbe588",
+    "control.go.txt": "9e76dbe5d5502355c344e33934c042e46ce5e6f3dcb673ecddafff3cc23cb580",
+    "references.stdout": "ca6086642e5c2bed6cd51ead11521d848efa392f4b2effa04f0cb02f81aa8c39",
+    "capture-main_linux.go.txt": "9817e64044e12bb8efcfc0a88a3f95dff566d72f4e771ff17cf8acaadeeef8e8",
+    "capture-message_linux.go.txt": "8cbb27c705f5fae43dfa401e50a8786b1464ad670b050f69ed0a499b923d57ba"
+  }
+}

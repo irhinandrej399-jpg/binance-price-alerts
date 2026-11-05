@@ -1,6 +1,6 @@
 # Бэклог Binance Price Alerts
 
-Создан 25 октября 2026. После уточнения ADR и зависимостей: активных карточек — **147**, из них **9 карточек решений** и **138 задач реализации/проверки**; отдельно **14 контейнеров split**, не выдаваемых на одну сессию. Приложение ещё не реализовано.
+Создан 25 октября 2026. После уточнения ADR и зависимостей: активных карточек — **157**, из них **9 карточек решений** и **148 задач реализации/проверки**; отдельно **17 контейнеров split**, не выдаваемых на одну сессию. Приложение ещё не реализовано.
 
 Карточки хранятся здесь как Markdown в локальном Git-репозитории. После завершения тикета агент создаёт commit по [правилам Git](../GIT.md). Это исходный план первой очереди; готовность карточки к исполнению проверяется отдельно.
 
@@ -214,12 +214,20 @@
 | [OPS-029](tickets/OPS-029.md) | Измерить количество и время fsync процесса Kafka | OPS-020, OPS-023 | done |
 | [OPS-032](tickets/OPS-032.md) | Подключить и проверить temp peak observer в фазовом runner | OPS-036, OPS-023 | planned |
 | [OPS-033](tickets/OPS-033.md) | Сохранять и проверять передачу FD через ancillary data | OPS-019 | done |
-| [OPS-034](tickets/OPS-034.md) | Замкнуть модель ссылок и идентичности work inode | OPS-033 | planned |
+| [OPS-034](tickets/OPS-034.md) | Замкнуть модель ссылок и идентичности work inode | OPS-033, OPS-040 | planned |
 | [OPS-035](tickets/OPS-035.md) | Восстановить доказанные границы apparent peak из raw | OPS-034 | planned |
 | [OPS-036](tickets/OPS-036.md) | Проверить самостоятельный observer на PostgreSQL | OPS-035 | planned |
+| [OPS-038](tickets/OPS-038.md) | Сохранять независимый census и полные inode inventories | OPS-033 | done |
+| [OPS-039](tickets/OPS-039.md) | Сохранять lifecycle evidence при shared state и nonleader exec | OPS-038 | planned |
+| [OPS-040](tickets/OPS-040.md) | Проверить reference witnesses и повторить PostgreSQL capture | OPS-038, OPS-039 | planned |
 
 [OPS-031](tickets/OPS-031.md) разделён на OPS-033–036: ancillary raw →
 identity/references → classifier/bounds → самостоятельный PG gate.
+Перед OPS-034 добавлена предпосылка [OPS-037](tickets/OPS-037.md):
+полные raw inventories/reference controls, отсутствующие в ancillary capture.
+OPS-037 split после реального preflight: [OPS-038](tickets/OPS-038.md)
+(inventory/census) → [OPS-039](tickets/OPS-039.md) (lifecycle/exec) →
+[OPS-040](tickets/OPS-040.md) (reference verifier/PG); OPS-034 ждёт OPS-040.
 [Старые raw](../measurements/OPS-031/README.md) остаются unknown, peak=null;
 OPS-032/018 ждут готового observer.
 
@@ -269,3 +277,4 @@ OPS-032/018 ждут готового observer.
 | [OPS-021](tickets/OPS-021.md) | [OPS-023](tickets/OPS-023.md), [OPS-024](tickets/OPS-024.md), [OPS-025](tickets/OPS-025.md), [OPS-026](tickets/OPS-026.md) | split |
 | [OPS-030](tickets/OPS-030.md) | [OPS-031](tickets/OPS-031.md), [OPS-032](tickets/OPS-032.md) | split |
 | [OPS-031](tickets/OPS-031.md) | [OPS-033](tickets/OPS-033.md), [OPS-034](tickets/OPS-034.md), [OPS-035](tickets/OPS-035.md), [OPS-036](tickets/OPS-036.md) | split |
+| [OPS-037](tickets/OPS-037.md) | [OPS-038](tickets/OPS-038.md), [OPS-039](tickets/OPS-039.md), [OPS-040](tickets/OPS-040.md) | split |

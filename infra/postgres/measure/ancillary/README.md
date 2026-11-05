@@ -102,3 +102,8 @@ ABI/semantics: [Linux user_msghdr/mmsghdr](https://github.com/torvalds/linux/blo
 [recvmsg](https://man7.org/linux/man-pages/man2/recvmsg.2.html),
 [sendmmsg partial success](https://man7.org/linux/man-pages/man2/sendmmsg.2.html),
 [recvmmsg](https://man7.org/linux/man-pages/man2/recvmmsg.2.html).
+
+OPS-038 adds an opt-in [inventory mode](../inventory/README.md), with a separate
+raw schema, independent process/thread census and unfiltered FD/maps evidence.
+Legacy mode and historical raw retain their old contract. New runner source
+snapshots also include `inventory_linux.go`, required by the capture build.

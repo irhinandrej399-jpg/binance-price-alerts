@@ -1,0 +1,103 @@
+{
+  "result": {
+    "checkpoints": 448,
+    "new_identities": [
+      [
+        41,
+        3323765
+      ],
+      [
+        42,
+        3323772
+      ],
+      [
+        43,
+        3323772
+      ],
+      [
+        44,
+        3323772
+      ],
+      [
+        45,
+        3323772
+      ],
+      [
+        46,
+        3323772
+      ]
+    ],
+    "vanished_identities": [
+      [
+        12,
+        3323748
+      ],
+      [
+        18,
+        3323750
+      ],
+      [
+        19,
+        3323750
+      ],
+      [
+        20,
+        3323750
+      ],
+      [
+        21,
+        3323750
+      ],
+      [
+        22,
+        3323750
+      ],
+      [
+        40,
+        3323762
+      ],
+      [
+        42,
+        3323772
+      ],
+      [
+        43,
+        3323772
+      ],
+      [
+        44,
+        3323772
+      ],
+      [
+        45,
+        3323772
+      ],
+      [
+        46,
+        3323772
+      ]
+    ],
+    "temp_peak_live_bytes": null,
+    "lower_bytes": null,
+    "upper_bytes": null,
+    "qualification_blocked": true
+  },
+  "negative_checks": [
+    "missing-initial",
+    "missing-final",
+    "missing-census",
+    "omitted-process",
+    "missing-FD",
+    "substituted-FD-inode",
+    "missing-maps",
+    "substituted-maps",
+    "missing-map-entry",
+    "omitted-path",
+    "missing-paths",
+    "substituted-path-stat",
+    "missing-namespaces",
+    "missing-read-error",
+    "false-completeness",
+    "missing-environment"
+  ]
+}

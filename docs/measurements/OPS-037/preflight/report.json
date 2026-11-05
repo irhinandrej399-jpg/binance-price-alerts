@@ -1,0 +1,176 @@
+{
+  "project": "binance-ops037-preflight-6e724cb07e",
+  "image": "postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc",
+  "commands": [
+    [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "binance-ops037-preflight-6e724cb07e",
+      "--label",
+      "com.docker.compose.project=binance-ops037-preflight-6e724cb07e",
+      "--network",
+      "none",
+      "--cpus",
+      "1",
+      "--memory",
+      "256m",
+      "--cap-add",
+      "SYS_PTRACE",
+      "--security-opt",
+      "seccomp=unconfined",
+      "--tmpfs",
+      "/probe:rw,size=16m",
+      "--entrypoint",
+      "sleep",
+      "postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc",
+      "infinity"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops037-preflight-6e724cb07e",
+      "uname",
+      "-a"
+    ],
+    [
+      "docker",
+      "cp",
+      "/tmp/ops037-preflight-capture",
+      "binance-ops037-preflight-6e724cb07e:/tmp/capture"
+    ],
+    [
+      "docker",
+      "cp",
+      "/tmp/ops037-preflight-control",
+      "binance-ops037-preflight-6e724cb07e:/tmp/control"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops037-preflight-6e724cb07e",
+      "/tmp/control",
+      "exec"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops037-preflight-6e724cb07e",
+      "/tmp/capture",
+      "/probe/work",
+      "/tmp/references.gz",
+      "--",
+      "/tmp/control",
+      "references"
+    ],
+    [
+      "docker",
+      "cp",
+      "binance-ops037-preflight-6e724cb07e:/tmp/references.gz",
+      "docs/measurements/OPS-037/preflight/references.jsonl.gz"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops037-preflight-6e724cb07e",
+      "/tmp/capture",
+      "/probe/work",
+      "/tmp/exec.gz",
+      "--",
+      "/tmp/control",
+      "exec"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops037-preflight-6e724cb07e",
+      "sh",
+      "-c",
+      "for p in /proc/[0-9]*/task/[0-9]*/status; do echo \"$p\"; cat \"$p\"; done"
+    ],
+    [
+      "docker",
+      "cp",
+      "binance-ops037-preflight-6e724cb07e:/tmp/exec.gz",
+      "docs/measurements/OPS-037/preflight/exec.partial.jsonl.gz"
+    ],
+    [
+      "docker",
+      "rm",
+      "-f",
+      "binance-ops037-preflight-6e724cb07e"
+    ],
+    [
+      "docker",
+      "container",
+      "ls",
+      "-a",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-ops037-preflight-6e724cb07e"
+    ],
+    [
+      "docker",
+      "volume",
+      "ls",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-ops037-preflight-6e724cb07e"
+    ],
+    [
+      "docker",
+      "network",
+      "ls",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-ops037-preflight-6e724cb07e"
+    ]
+  ],
+  "captures": {
+    "references": {
+      "returncode": 0,
+      "seconds": 0.09428687500000005
+    },
+    "exec": {
+      "status": "timeout",
+      "timeout_seconds": 8,
+      "seconds": 8.007104333
+    }
+  },
+  "qualification_blocked": true,
+  "temp_peak_live_bytes": null,
+  "lower_bytes": null,
+  "upper_bytes": null,
+  "binary_sha256": {
+    "capture": "ba31b0a2a272a8cd352b0a14d7e309bc287655629ca9ab107d1172b29b12e6ca",
+    "control": "7f241efa1a589bcafd2a9fc07a873d01a74b610c786eb7bf7057d66100151c19"
+  },
+  "kernel": "Linux 79bdd23a5f45 6.12.76-linuxkit #1 SMP Wed May 13 14:27:18 UTC 2026 aarch64 GNU/Linux",
+  "exec_baseline_returncode": 0,
+  "cleanup": {
+    "container": [],
+    "volume": [],
+    "network": []
+  },
+  "sha256": {
+    "exec.partial.jsonl.gz": "95cd65d7794f769ba6388c496a56602976a478a5bda7c20defcf1a4e93ceb3e1",
+    "references.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "exec.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "run.py.txt": "20669186eea1dcd4cef4f187f269ff33e889855800c475b6a650aae774e0f6ba",
+    "exec.stdout": "9e1430d654547387ef29ec0c6317e519d9a9f173b8fc5a579b5af5c4b187475a",
+    "control.go.txt": "9e76dbe5d5502355c344e33934c042e46ce5e6f3dcb673ecddafff3cc23cb580",
+    "references.stdout": "5d04fdcfd466e863d9898892f96447413c641fc6e1f484a3061482a11da114b9",
+    "attempt-timeout-report.json": "4568b530ef752946e66bc43d69e265b7b3ba643b1dd7d60511a767b4b9137800",
+    "references.jsonl.gz": "7e5be1824f88868d0785d7bbee2256c993c307a720a148e521f50d4d1f2cba64",
+    "exec-baseline.stdout": "baafeed84a64fbf05b599680e18efebb6421858ca046a74450b3fbfbd7ffdb97",
+    "capture-main_linux.go.txt": "9817e64044e12bb8efcfc0a88a3f95dff566d72f4e771ff17cf8acaadeeef8e8",
+    "exec-baseline.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "capture-message_linux.go.txt": "8cbb27c705f5fae43dfa401e50a8786b1464ad670b050f69ed0a499b923d57ba",
+    "exec-processes.txt.gz": "fc36a4c71fe641d87e07b6cde2a83fe5bac66d512e97cb28d14fcb8530549deb"
+  },
+  "uncompressed_sha256": {
+    "exec-processes.txt": "ec6e4d956b43f7706a4accecb8cbe752def9e2dfff9b8a776587c30fc4bc910c"
+  },
+  "packaging": "exec-processes.txt preserved as lossless gzip; procfs Groups trailing space unchanged"
+}

@@ -76,6 +76,10 @@ func (c *capture) work(path string) bool {
 	return path == c.root || strings.HasPrefix(path, c.root+"/")
 }
 func (c *capture) snapshot(phase string, pid int) {
+	if inventoryEnabled() {
+		c.inventory(phase, pid)
+		return
+	}
 	// All operations classified as mutations are stopped/queued, except the
 	// one just completed. This assumption is explicitly NOT yet proven complete.
 	var files []file
@@ -148,6 +152,9 @@ func fdRegular(pid int, fd uint64) bool {
 }
 func (c *capture) classify(pid int, t *task) bool {
 	n, a := t.nr, t.args
+	if inventoryEnabled() && n == 155 {
+		return true
+	} // getpgid: helper checkpoint barrier on caller only.
 	switch n {
 	// Potentially blocking pipe/socket IO must not hold the filesystem gate.
 	case 64, 66, 68, 70, 287:
@@ -237,7 +244,14 @@ func main() {
 	defer z.Close()
 	defer b.Flush()
 	c := &capture{tasks: map[int]*task{}, enc: json.NewEncoder(b), t0: time.Now(), root: os.Args[1], issues: map[string]bool{}}
-	c.emit("header", map[string]any{"schema": "ops033-ptrace-ancillary-v1", "arch": runtime.GOARCH, "root": c.root, "command": os.Args[4:], "go_version": runtime.Version(), "ancillary_contract": "linux-arm64-ancillary-v1", "msghdr_bytes": 56, "mmsghdr_bytes": 64, "cmsghdr_bytes": 16, "control_limit": 1 << 20, "vector_limit": 1024})
+	schema := "ops033-ptrace-ancillary-v1"
+	if inventoryEnabled() {
+		schema = "ops038-ptrace-inventory-v1"
+	}
+	c.emit("header", map[string]any{"schema": schema, "arch": runtime.GOARCH, "root": c.root, "command": os.Args[4:], "go_version": runtime.Version(), "ancillary_contract": "linux-arm64-ancillary-v1", "msghdr_bytes": 56, "mmsghdr_bytes": 64, "cmsghdr_bytes": 16, "control_limit": 1 << 20, "vector_limit": 1024})
+	if inventoryEnabled() {
+		c.inventoryEnvironment()
+	}
 	// Never promote a candidate maximum while the classifier proof is open.
 	c.issue("complete syscall classification and monotonic-per-operation proof pending")
 	cmd := exec.Command(os.Args[4], os.Args[5:]...)

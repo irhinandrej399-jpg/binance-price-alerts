@@ -1,0 +1,46 @@
+import gzip, hashlib, json, shutil, subprocess, time, uuid
+from pathlib import Path
+out=Path('docs/measurements/OPS-037/preflight')
+image='postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc'
+project='binance-ops037-preflight-'+uuid.uuid4().hex[:10]
+label='com.docker.compose.project='+project
+report={'project':project,'image':image,'commands':[],'captures':{},'qualification_blocked':True,'temp_peak_live_bytes':None,'lower_bytes':None,'upper_bytes':None}
+def run(args,check=True):
+ report['commands'].append(args)
+ p=subprocess.run(args,capture_output=True,text=True,timeout=8 if '/tmp/capture' in args else 45)
+ if check and p.returncode: raise RuntimeError((args,p.returncode,p.stderr))
+ return p
+for src,dest in [('/tmp/ops037-preflight.go','control.go.txt'),('/tmp/ops037-preflight.py','run.py.txt'),('infra/postgres/measure/ancillary/main_linux.go','capture-main_linux.go.txt'),('infra/postgres/measure/ancillary/message_linux.go','capture-message_linux.go.txt')]:
+ shutil.copyfile(src,out/dest)
+report['binary_sha256']={name:hashlib.sha256(Path('/tmp/ops037-preflight-'+name).read_bytes()).hexdigest() for name in ('capture','control')}
+try:
+ run(['docker','run','-d','--name',project,'--label',label,'--network','none','--cpus','1','--memory','256m','--cap-add','SYS_PTRACE','--security-opt','seccomp=unconfined','--tmpfs','/probe:rw,size=16m','--entrypoint','sleep',image,'infinity'])
+ report['kernel']=run(['docker','exec',project,'uname','-a']).stdout.strip()
+ for binary in ('capture','control'):
+  run(['docker','cp','/tmp/ops037-preflight-'+binary,project+':/tmp/'+binary])
+ baseline=run(['docker','exec',project,'/tmp/control','exec'])
+ (out/'exec-baseline.stdout').write_text(baseline.stdout)
+ (out/'exec-baseline.stderr').write_text(baseline.stderr)
+ report['exec_baseline_returncode']=baseline.returncode
+ for mode in ('references','exec'):
+  t=time.monotonic()
+  try:
+   p=run(['docker','exec',project,'/tmp/capture','/probe/work','/tmp/'+mode+'.gz','--','/tmp/control',mode],False)
+   report['captures'][mode]={'returncode':p.returncode,'seconds':time.monotonic()-t}
+   (out/(mode+'.stdout')).write_text(p.stdout)
+   (out/(mode+'.stderr')).write_text(p.stderr)
+   target=mode+'.jsonl.gz'
+  except subprocess.TimeoutExpired as error:
+   report['captures'][mode]={'status':'timeout','timeout_seconds':8,'seconds':time.monotonic()-t}
+   (out/(mode+'.stdout')).write_bytes(error.stdout or b'')
+   (out/(mode+'.stderr')).write_bytes(error.stderr or b'')
+   target=mode+'.partial.jsonl.gz'
+   status=run(['docker','exec',project,'sh','-c','for p in /proc/[0-9]*/task/[0-9]*/status; do echo "$p"; cat "$p"; done'])
+   (out/(mode+'-processes.txt')).write_text(status.stdout)
+  run(['docker','cp',project+':/tmp/'+mode+'.gz',str(out/target)])
+finally:
+ run(['docker','rm','-f',project],False)
+ report['cleanup']={kind:run(['docker',kind,'ls',*(['-a'] if kind=='container' else []),'-q','--filter','label='+label]).stdout.splitlines() for kind in ('container','volume','network')}
+ report['sha256']={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in out.iterdir() if p.is_file() and p.name!='report.json'}
+ (out/'report.json').write_text(json.dumps(report,indent=2)+'\n')
+print(json.dumps(report['captures']))

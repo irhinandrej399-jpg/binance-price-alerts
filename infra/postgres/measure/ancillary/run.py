@@ -51,7 +51,7 @@ def process_evidence():
 
 
 try:
-    for name in ("main_linux.go", "message_linux.go", "control/main_linux.go"):
+    for name in ("main_linux.go", "message_linux.go", "inventory_linux.go", "control/main_linux.go"):
         (OUT / (name.replace("/", "-") + ".txt")).write_bytes((HERE / name).read_bytes())
     (OUT / "gate-source.py.txt").write_bytes(Path(__file__).read_bytes())
     (OUT / "verifier-source.py.txt").write_bytes((HERE / "verify.py").read_bytes())

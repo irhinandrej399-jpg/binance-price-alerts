@@ -1,0 +1,27 @@
+{
+  "reference_snapshots": 36,
+  "mapping_only_snapshots": 5,
+  "inode": [
+    86,
+    3
+  ],
+  "independent_size_after_rename": 8192,
+  "snapshot_size_after_rename": null,
+  "ancillary_replay": {
+    "counts": {},
+    "issues": [],
+    "rights": [],
+    "temp_peak_live_bytes": null,
+    "lower_bytes": null,
+    "upper_bytes": null,
+    "qualification_blocked": true
+  },
+  "exec_baseline_returncode": 0,
+  "exec_capture": "timeout",
+  "exec_partial_rows": 4,
+  "timeout_root_cause": "not established by partial raw",
+  "temp_peak_live_bytes": null,
+  "lower_bytes": null,
+  "upper_bytes": null,
+  "qualification_blocked": true
+}

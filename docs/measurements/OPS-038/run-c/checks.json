@@ -1,0 +1,114 @@
+{
+  "result": {
+    "checkpoints": 448,
+    "census_changed_checkpoints": 1,
+    "census_read_errors": 0,
+    "fd_read_errors": 3100,
+    "map_read_errors": 218431,
+    "consistency": "unknown",
+    "pg_coverage": "blocked: external aliases/custom tablespaces not certified",
+    "new_identities": [
+      [
+        42,
+        3338034
+      ],
+      [
+        43,
+        3338043
+      ],
+      [
+        44,
+        3338043
+      ],
+      [
+        45,
+        3338043
+      ],
+      [
+        46,
+        3338043
+      ],
+      [
+        47,
+        3338043
+      ],
+      [
+        48,
+        3338059
+      ]
+    ],
+    "vanished_identities": [
+      [
+        13,
+        3338013
+      ],
+      [
+        19,
+        3338016
+      ],
+      [
+        20,
+        3338016
+      ],
+      [
+        21,
+        3338016
+      ],
+      [
+        22,
+        3338016
+      ],
+      [
+        23,
+        3338016
+      ],
+      [
+        41,
+        3338029
+      ],
+      [
+        43,
+        3338043
+      ],
+      [
+        44,
+        3338043
+      ],
+      [
+        45,
+        3338043
+      ],
+      [
+        46,
+        3338043
+      ],
+      [
+        47,
+        3338043
+      ]
+    ],
+    "temp_peak_live_bytes": null,
+    "lower_bytes": null,
+    "upper_bytes": null,
+    "qualification_blocked": true
+  },
+  "negative_checks": [
+    "missing-initial",
+    "missing-final",
+    "missing-census",
+    "omitted-process",
+    "substituted-starttime",
+    "missing-FD",
+    "substituted-FD-inode",
+    "missing-maps",
+    "substituted-maps",
+    "missing-map-entry",
+    "omitted-path",
+    "missing-paths",
+    "substituted-path-stat",
+    "missing-namespaces",
+    "missing-read-error",
+    "false-completeness",
+    "missing-environment"
+  ]
+}

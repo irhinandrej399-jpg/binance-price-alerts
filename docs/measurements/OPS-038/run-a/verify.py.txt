@@ -1,0 +1,266 @@
+"""OPS-038 full inventory artifact verifier. Valid raw is still blocked/unknown."""
+import argparse
+import copy
+import gzip
+import hashlib
+import importlib.util
+import json
+from pathlib import Path
+import re
+import shutil
+import tempfile
+
+spec = importlib.util.spec_from_file_location('ancillary', Path(__file__).parents[1]/'ancillary/verify.py')
+ancillary = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(ancillary)
+require = ancillary.require
+SCHEMA = 'ops038-ptrace-inventory-v1'
+VERSION = 'ops038-inventory-v1'
+
+
+def text(e, path=None):
+    require(set(e) == {'path', 'text', 'error'}, 'read/link witness fields')
+    require(all(isinstance(e[k], str) for k in e), 'witness types')
+    require(path is None or e['path'] == path, 'read path binding')
+    require(e['error'] or e['text'], 'empty witness without error')
+    return e['text']
+
+
+def listing(e, path):
+    require(set(e) == {'path', 'names', 'error'} and e['path'] == path, 'directory witness')
+    require(isinstance(e['error'], str) and len(e['names']) == len(set(e['names'])), 'directory duplicates')
+    require(all(isinstance(n, str) and '/' not in n for n in e['names']), 'directory names')
+    return e['names']
+
+
+def stat_identity(raw):
+    # comm may contain spaces and parentheses. starttime is field 22.
+    end = raw.rfind(')')
+    require(end > 0, 'proc stat comm')
+    fields = raw[end+2:].split()
+    return int(raw.split(' ', 1)[0]), int(fields[1]), int(fields[19])
+
+
+def census(c):
+    names = listing(c['listing'], '/proc')
+    pids = sorted(int(n) for n in names if n.isdigit() and int(n) > 0)
+    require([p['pid'] for p in c['processes']] == pids, 'census process omitted')
+    result = {}
+    for p in c['processes']:
+        base = f"/proc/{p['pid']}"
+        tids = sorted(int(n) for n in listing(p['tasks'], base+'/task') if n.isdigit() and int(n) > 0)
+        require([t['tid'] for t in p['threads']] == tids, 'census thread omitted')
+        for t in p['threads']:
+            path = base+f"/task/{t['tid']}"
+            status, raw = text(t['status'], path+'/status'), text(t['stat'], path+'/stat')
+            identity = None
+            if not t['stat']['error'] and not t['status']['error']:
+                tid, ppid, start = stat_identity(raw)
+                parsed = dict(line.split(':', 1) for line in status.splitlines() if ':' in line)
+                require(tid == t['tid'] == int(parsed['Pid']) and ppid == int(parsed['PPid'])
+                        and int(parsed['Tgid']) == p['pid'] and start > 0, 'PID/TID/TGID/PPID/starttime binding')
+                identity = (tid, start)
+            require(t['tid'] not in result, 'duplicate TID')
+            result[t['tid']] = (p['pid'], identity)
+    return result
+
+
+def inode(e, path):
+    require(set(e) == {'path', 'link', 'stat', 'error'} and e['path'] == path, 'inode witness fields/path')
+    text(e['link'], path)
+    if e['error']:
+        require(e['stat'] is None, 'stat error conflict')
+    else:
+        s = e['stat']
+        require({'dev','ino','size','nlink','mode','path'} <= s.keys() and s['path'] == path, 'stat fields/path')
+        require(all(isinstance(s[k], int) and s[k] >= 0 for k in ('dev','ino','size','nlink','mode')) and s['ino'] > 0, 'stat values')
+
+
+def ns(e, base):
+    require(set(e) == {'pid','mnt','user','net','ipc','uts','cgroup','time'}, 'namespaces missing')
+    for n, v in e.items():
+        text(v, base+'/ns/'+n)
+
+
+def replay(rows):
+    require(rows[0]['schema'] == SCHEMA, 'missing OPS-038 schema')
+    # Reuse the unchanged ancillary/lifecycle validation, with its declared old
+    # schema only in an in-memory view. Original preserved raw is never rewritten.
+    view = list(rows)
+    view[0] = dict(rows[0], schema='ops033-ptrace-ancillary-v1')
+    ancillary.replay(view)
+    envs = [r for r in rows if r['kind'] == 'inventory_environment']
+    require(len(envs) == 1, 'environment missing/duplicate')
+    env = envs[0]
+    require(env['version'] == VERSION and env['abi'] == 'linux-arm64-little-endian-lp64', 'inventory ABI')
+    require(env['work_root'] == rows[0]['root'] and env['path_scope'] and env['isolation'], 'isolation scope')
+    for k, path in [('kernel','/proc/version'),('mountinfo','/proc/self/mountinfo'),('status','/proc/self/status'),('pg_witness',None)]:
+        text(env[k], path)
+    ns(env['namespaces'], '/proc/self')
+    # A witness can be absent/failed or contain explicit PG settings/tablespaces.
+    # OPS-038 cannot authorize PG or custom tablespaces from this raw alone.
+    if not env['pg_witness']['error']:
+        pg = json.loads(env['pg_witness']['text'])
+        require({'io_method','tablespaces','settings'} <= pg.keys(), 'PG input witness contract')
+    alive = set()
+    snapshots = []
+    expected = []
+    for i, r in enumerate(rows):
+        kind, pid = r['kind'], r.get('pid')
+        if kind == 'root':
+            alive.add(pid)
+            expected.append(('initial', pid))
+            require(rows[i+1]['kind'] == 'inventory' and rows[i+1]['phase'] == 'initial', 'initial checkpoint missing')
+        if kind == 'event' and r['event'] in (1,2,3):
+            alive.add(r['message'])
+        if kind == 'exit':
+            alive.remove(pid)
+        if kind in ('dispatch','release'):
+            require(rows[i-1]['kind'] == 'inventory' and rows[i-1]['pid'] == pid and
+                    rows[i-1]['phase'] == ('before' if kind == 'dispatch' else 'after'), 'operation checkpoint missing')
+        if kind != 'inventory':
+            continue
+        require(r['version'] == VERSION and r['phase'] in ('initial','before','after','final'), 'checkpoint version/phase')
+        require(r['lineage'] == sorted(alive), 'lineage differs from ptrace journal')
+        before, after = census(r['census_before']), census(r['census_after'])
+        require(r['external'] == sorted(set(before)-alive) and r['lineage_missing'] == sorted(alive-set(before)), 'lineage comparison')
+        require([(o['pid'],o['tid']) for o in r['owners']] == [(p,t) for t,(p,_) in before.items()], 'owner inventory omitted')
+        for o in r['owners']:
+            base = f"/proc/{o['pid']}/task/{o['tid']}"
+            require(o['traced'] == (o['tid'] in alive), 'external owner misclassified')
+            names = listing(o['fds'], base+'/fd')
+            require([e['path'] for e in o['fd_entries']] == [base+'/fd/'+n for n in names], 'FD inventory omitted')
+            for e in o['fd_entries']:
+                inode(e, e['path'])
+            maps = text(o['maps'], base+'/maps')
+            lines = maps.splitlines()
+            require([e['line'] for e in o['map_entries']] == lines, 'maps inventory omitted/substituted')
+            for e in o['map_entries']:
+                parts = e['line'].split()
+                require(len(parts) >= 5 and re.fullmatch('[0-9a-f]+-[0-9a-f]+', parts[0]), 'unparsed mapping: incomplete')
+                inode(e['evidence'], base+'/map_files/'+parts[0])
+                s = e['evidence']['stat']
+                if s:
+                    dev = parts[3].split(':')
+                    major, minor = int(dev[0],16), int(dev[1],16)
+                    # Linux new_encode_dev to userspace dev_t encoding.
+                    encoded = (minor & 255) | (major << 8) | ((minor & ~255) << 12)
+                    require(s['ino'] == int(parts[4]) and s['dev'] == encoded, 'maps identity disagrees with stat')
+            text(o['mountinfo'], base+'/mountinfo')
+            ns(o['namespaces'], base)
+            text(o['root'], base+'/root'); text(o['cwd'], base+'/cwd')
+        require(r['path_scope'] == env['path_scope'] and r['paths'] and isinstance(r['walk_error'],str), 'path inventory missing')
+        for e in r['paths']:
+            require(e['path'] == r['path_scope'] or e['path'].startswith(r['path_scope']+'/'), 'path outside declared walk')
+            if 'walk_error' in e:
+                require(e['walk_error'], 'silent walk failure')
+            else:
+                inode(e, e['path'])
+        text(r['read_probe'], env['read_probe'])
+        require(r['consistency']['status'] == 'unknown' and r['consistency']['complete'] is False and r['consistency']['reason'], 'false atomicity/completeness')
+        snapshots.append(r)
+    require(snapshots[0]['phase'] == 'initial' and snapshots[-1]['phase'] == 'final' and
+            rows[-2] is snapshots[-1], 'initial/final checkpoint missing')
+    identities = [set(v[1] for v in census(r['census_before']).values() if v[1]) for r in snapshots]
+    return {'checkpoints':len(snapshots), 'new_identities': sorted(set.union(*identities)-identities[0]),
+            'vanished_identities':sorted(set.union(*identities)-identities[-1]),
+            'temp_peak_live_bytes':None,'lower_bytes':None,'upper_bytes':None,'qualification_blocked':True}
+
+
+def same(a,b):
+    return all(a[k] == b[k] for k in ('dev','ino','mode','size','nlink'))
+
+
+def verify(directory):
+    report = json.loads((directory/'report.json').read_text())
+    require(report['status'] == 'captured-not-qualified' and all(not v for v in report['cleanup'].values()), 'run/cleanup failed')
+    require(report['qualification_blocked'] and all(report[k] is None for k in ('temp_peak_live_bytes','lower_bytes','upper_bytes')), 'false qualification')
+    required = {'capture.jsonl.gz','helper.stdout','external.stdout','main_linux.go.txt','message_linux.go.txt','inventory_linux.go.txt','control-main_linux.go.txt','run.py.txt','verify.py.txt'}
+    require(required <= report['sha256'].keys(), 'required artifact hashes')
+    require(set(report['binary_sha256']) == {'capture','control'}, 'binary hashes')
+    for name, digest in report['sha256'].items():
+        require(hashlib.sha256((directory/name).read_bytes()).hexdigest() == digest, 'hash mismatch '+name)
+    rows = ancillary.load(directory/'capture.jsonl.gz')
+    result = replay(rows)
+    points = [json.loads(s) for s in (directory/'helper.stdout').read_text().splitlines()]
+    require([p['tag'] for p in points] == ['before-rename','renamed','grown','unlinked','mapping-only','unmapped','external-gone','complete'], 'helper stages')
+    external = json.loads((directory/'external.stdout').read_text())
+    gates = [r for r in rows if r['kind'] == 'enter' and r['nr'] == 155 and r['pid'] == points[0]['tid']]
+    require(len(gates) == 7, 'helper checkpoint count')
+    for p, gate in zip(points[:-1], gates):
+        checkpoint = rows[gate['seq']]  # next row after syscall entry, seq starts at 1
+        require(checkpoint['kind'] == 'inventory' and checkpoint['phase'] == 'before', 'helper synchronization')
+        c = census(checkpoint['census_before'])
+        for t in p['tasks']:
+            tid, _, start = stat_identity(t['stat'])
+            # New/vanished helper runtime threads make evidence incomplete; never atomic.
+            require(tid in c and c[tid][1] == (tid,start), 'independent census identity mismatch')
+        owner = next(o for o in checkpoint['owners'] if o['tid'] == p['tid'])
+        s = p['source']
+        if p['tag'] in ('before-rename','renamed','grown','unlinked'):
+            fd = next(e for e in owner['fd_entries'] if e['path'].endswith('/'+str(s['fd'])))
+            require(fd['stat'] is not None and same(fd['stat'],s), 'independent fstat mismatch')
+            if p['tag'] in ('renamed','grown','unlinked'):
+                require('/probe/outside' in fd['link']['text'], 'rename/unlink target lost')
+            if p['tag'] != 'unlinked':
+                path = '/probe/work/source' if p['tag'] == 'before-rename' else '/probe/outside'
+                require(any(e['path'] == path and e.get('stat') and same(e['stat'],s) for e in checkpoint['paths']), 'independent path witness mismatch')
+        maps = [line for line in owner['maps']['text'].splitlines() if len(line.split()) >= 5 and int(line.split()[4]) == s['ino'] and '/probe/outside' in line]
+        independent = [line for line in p['maps'].splitlines() if len(line.split()) >= 5 and int(line.split()[4]) == s['ino'] and '/probe/outside' in line]
+        if p['tag'] == 'mapping-only':
+            require(maps and maps == independent, 'mapping-only inode lost')
+            require(not any(e.get('stat') and e['stat']['dev'] == s['dev'] and e['stat']['ino'] == s['ino'] for e in owner['fd_entries']), 'mapping-only still has FD')
+        if p['tag'] in ('unmapped','external-gone'):
+            require(not maps and not independent, 'munmap witness mismatch')
+        ext = [o for o in checkpoint['owners'] if o['pid'] == external['pid']]
+        if p['tag'] != 'external-gone':
+            require(ext and all(not o['traced'] for o in ext), 'external owner hidden')
+            require(any(e.get('stat') and same(e['stat'],external['source']) for o in ext for e in o['fd_entries']), 'external FD lost')
+        else:
+            require(not ext, 'external disappearance missing')
+        require(checkpoint['read_probe']['error'], 'real read error control missing')
+    require([p['source']['size'] for p in points[:4]] == [4096,4096,8192,8192] and points[3]['source']['nlink'] == 0, 'growth/unlink control')
+    require(result['new_identities'] and result['vanished_identities'], 'census change absent')
+    return result
+
+
+def negative_checks(directory):
+    original = ancillary.load(directory/'capture.jsonl.gz')
+    checks = []
+    def reject(name, mutate):
+        with tempfile.TemporaryDirectory(prefix='ops038-tamper-') as tmp:
+            dest = Path(tmp)/'data'; shutil.copytree(directory,dest)
+            rows = copy.deepcopy(original); mutate(rows)
+            for i,r in enumerate(rows,1): r['seq'] = i
+            path = dest/'capture.jsonl.gz'
+            with gzip.open(path,'wt') as f:
+                for r in rows: f.write(json.dumps(r)+'\n')
+            report = json.loads((dest/'report.json').read_text())
+            report['sha256'][path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
+            (dest/'report.json').write_text(json.dumps(report))
+            try: verify(dest)
+            except (ValueError,KeyError,IndexError,TypeError,StopIteration): checks.append(name)
+            else: raise ValueError('tamper accepted '+name)
+    def cp(rows): return next(r for r in rows if r['kind'] == 'inventory' and any('/probe/outside' in e['link']['text'] for o in r['owners'] for e in o['fd_entries']))
+    reject('missing-initial', lambda rows: rows.remove(next(r for r in rows if r['kind']=='inventory')))
+    reject('missing-final', lambda rows: rows.pop(-2))
+    reject('missing-census', lambda rows: cp(rows).pop('census_before'))
+    reject('omitted-process', lambda rows: cp(rows)['census_before']['processes'].pop())
+    reject('missing-FD', lambda rows: next(o for o in cp(rows)['owners'] if o['fd_entries'])['fd_entries'].pop())
+    reject('substituted-FD-inode', lambda rows: next(e for o in cp(rows)['owners'] for e in o['fd_entries'] if '/probe/outside' in e['link']['text'])['stat'].__setitem__('ino',1))
+    reject('missing-maps', lambda rows: cp(rows)['owners'][0].pop('maps'))
+    reject('substituted-maps', lambda rows: cp(rows)['owners'][0]['maps'].__setitem__('text','substitution'))
+    reject('missing-map-entry', lambda rows: next(o for o in cp(rows)['owners'] if o['map_entries'])['map_entries'].pop())
+    reject('missing-paths', lambda rows: cp(rows).pop('paths'))
+    reject('substituted-path-stat', lambda rows: next(e for e in cp(rows)['paths'] if e['path']=='/probe/outside')['stat'].__setitem__('size',1))
+    reject('missing-namespaces', lambda rows: cp(rows)['owners'][0].pop('namespaces'))
+    reject('missing-read-error', lambda rows: cp(rows)['read_probe'].__setitem__('error',''))
+    reject('false-completeness', lambda rows: cp(rows)['consistency'].__setitem__('complete',True))
+    reject('missing-environment', lambda rows: rows.remove(next(r for r in rows if r['kind']=='inventory_environment')))
+    return checks
+
+if __name__ == '__main__':
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('directory',type=Path);parser.add_argument('--record',action='store_true');args=parser.parse_args()
+    result={'result':verify(args.directory),'negative_checks':negative_checks(args.directory)}
+    if args.record: (args.directory/'checks.json').write_text(json.dumps(result,indent=2)+'\n')
+    print(json.dumps(result,indent=2))

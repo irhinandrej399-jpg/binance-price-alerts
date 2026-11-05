@@ -1,0 +1,7 @@
+{"dev":86,"fd":4,"ino":3,"mode":33152,"nlink":1,"pid":34,"size":4096,"tag":"before-rename","tid":34}
+{"dev":86,"fd":4,"ino":3,"mode":33152,"nlink":1,"pid":34,"size":4096,"tag":"outside-root-open","tid":34}
+{"dev":86,"fd":4,"ino":3,"mode":33152,"nlink":1,"pid":34,"size":8192,"tag":"outside-root-grown","tid":34}
+{"dev":86,"fd":4,"ino":3,"mode":33152,"nlink":0,"pid":34,"size":8192,"tag":"outside-root-unlinked","tid":34}
+{"dev":86,"fd":4,"ino":3,"mode":33152,"nlink":0,"pid":34,"size":8192,"tag":"before-mapping-only","tid":34}
+{"pid":34,"tag":"mapping-only","tid":34,"value":42}
+{"tag":"complete"}
