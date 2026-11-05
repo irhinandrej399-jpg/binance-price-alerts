@@ -5,6 +5,7 @@ import gzip
 import json
 from pathlib import Path
 from measure_kafka import difference, totals
+from kafka_fsync import verify_observer
 
 
 def verify(directory):
@@ -15,9 +16,12 @@ def verify(directory):
         assert report['error'] == 'injected failure after up', report.get('error')
         return 'expected failure; cleanup verified'
     assert report['status'] == 'complete'
-    assert report['fsync']['status'] == 'unsupported'
-    assert report['fsync']['qualification_blocked'] is True
-    assert report['fsync']['count'] is None and report['fsync']['time_ms'] is None
+    if report['fsync']['status'] == 'measured':
+        verify_observer(directory, report)
+    else:
+        assert report['fsync']['status'] == 'unsupported'
+        assert report['fsync']['qualification_blocked'] is True
+        assert report['fsync']['count'] is None and report['fsync']['time_ms'] is None
     assert report['version'] and report['image_digests'] and report['broker_configs'] and report['topic_configs']
     assert report['project'].startswith('binance-kafka-measure-')
     assert 'KAFKA_LOG_FLUSH_INTERVAL_MESSAGES: "1"' in report['compose']

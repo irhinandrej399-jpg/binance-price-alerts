@@ -1,0 +1,5 @@
+1715  1793877924.131457 fsync(3)        = 0 <0.002579>
+1715  1793877924.134349 +++ exited with 0 +++
+1714  1793877924.134391 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=1715, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+1714  1793877924.139068 fdatasync(3)    = 0 <0.000080>
+1714  1793877924.139694 +++ exited with 0 +++

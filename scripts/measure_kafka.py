@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 import time
 import uuid
+from kafka_fsync import Observer
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -41,7 +42,11 @@ def main(argv=None, session=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--fail-after-up', action='store_true')
+    parser.add_argument('--observe-fsync', action='store_true')
+    parser.add_argument('--fsync-fault', choices=['unavailable', 'lost'])
     args = parser.parse_args(argv)
+    if args.fsync_fault and not args.observe_fsync:
+        parser.error('--fsync-fault requires --observe-fsync')
     args.output.mkdir(parents=True, exist_ok=False)
     project = 'binance-kafka-measure-' + uuid.uuid4().hex[:12]
     prefix = 'measure-' + uuid.uuid4().hex[:12]
@@ -59,6 +64,7 @@ def main(argv=None, session=None):
                         'reason': 'No broker-scoped syscall count/time observer in this profile; sync is not a counter.'},
               'boundary': 'Publish returned nil (EndTxn committed), wait 1s, container sync, live file stat; not an atomic broker snapshot.'}
     driver = None
+    observer = None
 
     def run(cmd, **kwargs):
         report['commands'].append(cmd)
@@ -122,6 +128,10 @@ def main(argv=None, session=None):
             report['image_digests'] = json.loads(run(['docker', 'image', 'inspect', '--format', '{{json .RepoDigests}}', report['image']]))
             report['version'] = inside('/opt/kafka/bin/kafka-topics.sh', '--version').strip()
             report['filesystem'] = inside('bash', '-c', 'df -T /var/lib/kafka/data; cat /proc/mounts')
+            if args.observe_fsync:
+                observer = Observer(run, cid, project, args.output, args.fsync_fault)
+                report['fsync'] = observer.report
+                observer.start()
             snapshot('initial')
             inside('timeout', '90', 'bash', '-s', '--', prefix, input=(ROOT / 'infra/kafka/init-topics.sh').read_text())
             if session:
@@ -140,14 +150,22 @@ def main(argv=None, session=None):
             for name, op in ([(p, p) for p in session.phases] if session else [('empty', 'empty'), ('first', 'publish'), ('repeat', 'publish')]):
                 report['phases'][name] = {}  # operations persisted separately below
                 before = snapshot(name + '-before') if session else previous
+                if observer:
+                    observer.begin(name)
+                    if args.fsync_fault == 'lost':
+                        observer.exec('kill -KILL "$(cat /trace/pid)"')
                 ack = session.operation(op) if session else operation(op)
                 current = snapshot(name)
+                if observer:
+                    observer.end(name)
                 report['phases'][name].update(ack=ack, delta_previous=difference(before, current), delta_baseline=difference(baseline, current))
                 if session:
                     report['phases'][name]['background_delta'] = difference(previous, before)
                 previous = current
                 if session:
                     session.sync()
+            if observer:
+                observer.finish()
             if session:
                 report['verification'] = session.verify()
             else:
@@ -169,6 +187,13 @@ def main(argv=None, session=None):
                 driver.kill()
                 driver.wait(timeout=10)
         try:
+            observer_error = None
+            if observer and observer.created:
+                try:
+                    observer.finish()
+                except BaseException as exc:
+                    observer_error = exc
+                    report.update(status='failed', error=str(exc))
             try:
                 report['broker_log'] = run(compose + ['logs', '--no-color', 'kafka'])
             except Exception as exc:
@@ -185,6 +210,8 @@ def main(argv=None, session=None):
             raise
         finally:
             save(args.output / 'report.json', report)
+        if observer_error:
+            raise observer_error
     print(args.output / 'report.json')
 
 

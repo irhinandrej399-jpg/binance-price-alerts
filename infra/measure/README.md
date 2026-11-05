@@ -1,5 +1,9 @@
 # Совместный фазовый runner (OPS-023)
 
+Опциональный `--observe-kafka-fsync` включает [observer OPS-029](../kafka/measure/FSYNC.md)
+вокруг существующих фаз Kafka без изменения manifest/adapter. Он снимает только
+Kafka syscall blocker; полный отчёт по-прежнему `qualified=false`.
+
 Из корня репозитория, Docker и локальный Go toolchain:
 
 ```sh

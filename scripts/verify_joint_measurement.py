@@ -9,6 +9,7 @@ from pathlib import Path
 import measure_joint as joint
 import measure_postgres as pg
 import measure_kafka as kafka
+from kafka_fsync import verify_observer
 
 
 def read(path):
@@ -49,7 +50,11 @@ def verify(path):
     assert not any(p['cleanup'].values()) and k['cleanup']['verified']
     assert p['image']['Id'] and k['image_digests']
     assert set(p['migration_history']) == set(pg.OWNERS)
-    assert p['unsupported'] and k['fsync']['status'] == 'unsupported'
+    assert p['unsupported']
+    if k['fsync']['status'] == 'measured':
+        verify_observer(path / 'kafka', k)
+    else:
+        assert k['fsync']['status'] == 'unsupported'
     assert set(p['phases']) == set(ids)
     pg_previous = pg.summarize(raw(path / 'postgres/baseline.json.gz'))
     previous = kafka.totals(raw(path / 'kafka/baseline.json.gz')['files'])

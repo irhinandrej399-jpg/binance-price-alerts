@@ -1,0 +1,13 @@
+{
+  "count": "rejected",
+  "time": "rejected",
+  "loss": "rejected",
+  "unknown": "rejected",
+  "cleanup": "rejected",
+  "missing_end": "rejected",
+  "garbage": "rejected",
+  "unfinished": "rejected",
+  "crossing": "rejected",
+  "foreign": "rejected",
+  "delta": "rejected"
+}

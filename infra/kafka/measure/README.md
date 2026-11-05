@@ -1,5 +1,9 @@
 # Физический collector Kafka (OPS-020)
 
+Опциональное broker-scoped наблюдение fsync/fdatasync добавлено в OPS-029:
+[протокол, права, команды и raw](FSYNC.md). Без `--observe-fsync` сохранён
+исходный unsupported режим, описанный ниже.
+
 Из корня, Docker и Go из проекта:
 
 ```sh

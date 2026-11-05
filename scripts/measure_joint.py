@@ -134,6 +134,7 @@ def main():
     p.add_argument('--output', required=True, type=Path)
     p.add_argument('--manifest', required=True, type=Path)
     p.add_argument('--timeout', default=60, type=float)
+    p.add_argument('--observe-kafka-fsync', action='store_true')
     p.add_argument('--command', nargs=argparse.REMAINDER, required=True)
     args = p.parse_args()
     manifest = json.loads(args.manifest.read_text())
@@ -149,7 +150,7 @@ def main():
               'schema_sha256': hashes(list((ROOT / 'migrations').glob('*/*.sql'))),
               'contract_sha256': hashes(list((ROOT / 'proto').rglob('*.proto')) + list((ROOT / 'internal/contracts').rglob('*.go'))),
               'collector_reports': {'postgres': 'postgres/report.json', 'kafka': 'kafka/report.json'},
-              'qualification_blockers': ['Kafka fsync unsupported', 'PostgreSQL temp peak/device IO unsupported', 'Control run is not cost qualification']}
+              'qualification_blockers': ([] if args.observe_kafka_fsync else ['Kafka fsync unsupported']) + ['PostgreSQL temp peak/device IO unsupported', 'Control run is not cost qualification']}
     session = Session(manifest, args.command, args.timeout, report)
     phase_iter = iter(session.phases)
     session.op_barrier = threading.Barrier(2, action=lambda: session.request(next(phase_iter)))
@@ -157,7 +158,10 @@ def main():
 
     def collect(module, owner):
         try:
-            module.main(['--output', str(args.output / owner)], session=session)
+            collector_args = ['--output', str(args.output / owner)]
+            if owner == 'kafka' and args.observe_kafka_fsync:
+                collector_args += ['--observe-fsync']
+            module.main(collector_args, session=session)
         except BaseException:
             try:
                 session.close()
