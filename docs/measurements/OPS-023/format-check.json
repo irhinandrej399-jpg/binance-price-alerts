@@ -1,0 +1,6 @@
+{
+  "missing_phase": "rejected",
+  "missing_metric": "rejected",
+  "unknown_metric": "rejected",
+  "null_metric": "rejected"
+}

@@ -1,0 +1,39 @@
+{
+  "format_version": 1,
+  "source_id": "OPS-023-control-v1",
+  "sources": [
+    "infra/measure/control_adapter.py",
+    "internal/tools/pgmeasure/main.go",
+    "internal/tools/kafkameasure/main.go",
+    "scripts/measure_joint.py",
+    "scripts/measure_postgres.py",
+    "scripts/measure_kafka.py"
+  ],
+  "contract_versions": {
+    "adapter_protocol": 1,
+    "event_envelope": 1,
+    "control_payload": 1
+  },
+  "phases": [
+    {
+      "phase_id": "empty",
+      "unit": "operation",
+      "size": 0,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "write",
+      "unit": "account",
+      "size": 10,
+      "max_batch": 10,
+      "links": [
+        {
+          "event_id": "ops020-probe-1",
+          "trigger_id": null,
+          "attempt_id": null
+        }
+      ]
+    }
+  ]
+}

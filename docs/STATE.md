@@ -1,11 +1,12 @@
 # Текущее состояние проекта
 
-Обновлено: 4 ноября 2026. Это краткая навигация для новой сессии. Статусы живут в карточках, результаты — в их журнале, решения — в ADR; фактические файлы и проверки подтверждают сводку.
+Обновлено: 5 ноября 2026. Это краткая навигация для новой сессии. Статусы живут в карточках, результаты — в их журнале, решения — в ADR; фактические файлы и проверки подтверждают сводку.
 
 ## Активная работа
 
-- Активная реализация: нет. OPS-020 завершён; следующий по ORDER — OPS-021 после нового поручения и проверки.
-- Последний завершённый тикет: [OPS-020](backlog/tickets/OPS-020.md). [Kafka collector](../infra/kafka/measure/README.md): полная опись apparent/allocated файлов, internal topics/metadata, baseline/empty/две транзакции одинаковых bytes; два чистых volume, read_committed и cleanup успеха/отказа проверены. [Отчёт](measurements/OPS-020/README.md). Fsync count/time unsupported блокирует соответствующую квалификацию; roll/таблица стоимости отдельно.
+- Активная реализация: нет.
+- Последний завершённый тикет: [OPS-023](backlog/tickets/OPS-023.md). [Совместный фазовый runner](../infra/measure/README.md): один внешний adapter между PostgreSQL/Kafka snapshots, runtime DSNs, manifest/report v1; три чистых control прогона, ошибка/timeout и cleanup проверены. [Отчёт](measurements/OPS-023/README.md). Unsupported остаётся блокером квалификации; бизнес-manifests отдельно.
+- [OPS-020](backlog/tickets/OPS-020.md). [Kafka collector](../infra/kafka/measure/README.md): полная опись apparent/allocated файлов, internal topics/metadata, baseline/empty/две транзакции одинаковых bytes; два чистых volume, read_committed и cleanup успеха/отказа проверены. [Отчёт](measurements/OPS-020/README.md). Fsync count/time unsupported блокирует соответствующую квалификацию; roll/таблица стоимости отдельно.
 - [OPS-019](backlog/tickets/OPS-019.md). [PostgreSQL collector](../infra/postgres/measure/README.md): forks/WAL/temp/IO и checkpoint, runtime adapter, чистые volumes 1000/1000/2000, cleanup успеха/ошибки и raw verifier проверены. [Отчёт](measurements/OPS-019/README.md). Unsupported явно блокирует соответствующую квалификацию; Kafka/manifests/таблица отдельно.
 - Незавершённая реализация: нет. Group/fencing/live/handler и полный prices Prefix интегрированы; fault takeover проверен MAT-011, cmd/runtime отдельно.
 - [NTF-013](backlog/tickets/NTF-013.md). [Ограниченный worker](../internal/notifications/worker/README.md): SQL discovery due jobs/reports/recovery, порции с пределом параллелизма и паузой, deadlines/cancellation; PendingWrite удерживается и повторяется без нового Handle, включая restart того же Worker. Полный PostgreSQL/race, vet/build прошли; disposable volume удалён. Cmd/runtime, SIGTERM/HTTP и нагрузка отдельно.
@@ -103,11 +104,11 @@
 
 DEC-001–009 приняты. DEC-004 пересматривает прежнюю гарантию уведомления по снимку создания и terminal-срабатывание до доставки. SUB-019/020 и relay SUB-009 завершены; MAT-012 завершена, durable reporter NTF-014 завершён.
 
-Выбраны PostgreSQL и Kafka/KRaft, полный профиль стенда закреплён DEC-008. SQL-replay готов в SUB-022, cleaner Kafka — OPS-014, ограничители — OPS-015/016. Измерительный harness — OPS-019–022 (контейнер OPS-017), квалификация таблицы стоимости/квот — OPS-018; до их готовности OPS-015/016 остаются planned; скорость cleaner пока считается нулевой. Telegram-политика и freshness согласованы, но не реализованы. Наличие каталога из четырёх сервисов не означает готовность этих решений.
+Выбраны PostgreSQL и Kafka/KRaft, полный профиль стенда закреплён DEC-008. SQL-replay готов в SUB-022, cleaner Kafka — OPS-014, ограничители — OPS-015/016. Измерительный harness — collectors OPS-019/020, фазовый runner OPS-023, manifests OPS-024–026/OPS-022 (контейнеры OPS-017/021), квалификация таблицы стоимости/квот — OPS-018; до их готовности OPS-015/016 остаются planned; скорость cleaner пока считается нулевой. Telegram-политика и freshness согласованы, но не реализованы. Наличие каталога из четырёх сервисов не означает готовность этих решений.
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [OPS-021](backlog/tickets/OPS-021.md), после нового поручения и сессионной проверки. PostgreSQL/Kafka collectors OPS-019/020 готовы; затем нужны manifests OPS-021/022 и квалификация OPS-018. OPS-015/016 остаются planned.
+По очереди следующий — [OPS-024](backlog/tickets/OPS-024.md), после нового поручения и сессионной проверки. OPS-023 завершён: общий runner двух collectors готов, контрольные empty/write/verification и ошибка/timeout пройдены. Далее matcher OPS-025 → notifications/сводка OPS-026 → market-data OPS-022 → квалификация OPS-018. OPS-021 остаётся split; бизнес-измерения ещё не запускались. OPS-015/016 остаются planned.
 
 NTF-013 подготовил `worker.New(Config)` / `Run(ctx)` над готовыми jobs.Store и handler.Handler. Discovery выбирает due jobs/checks, pending reports всех четырёх видов также у stopped/terminal jobs и не назначенные current-fence channel blocks. Настройки concurrency/interval/timeout/write timeout/recovery interval обязательны; handler отдельно требует Policy/ReportLimit/RecoveryInterval. Контракты — worker/README.md и handler/README.md. Worker хранит не записанный PendingWrite между Run и завершает Retry до новой выборки. После потери процесса сохраняется риск внешнего дубля; signals/HTTP shutdown — OPS-011. SQL scan/нагрузка ещё не измерялись. SUB-027 обеспечивает CAS адресата; старый admission без CAS для отправки не использовать.
 
@@ -122,7 +123,7 @@ NTF-006 рассчитывает retry Plan и бюджет доказанных
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show OPS-021` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show OPS-024` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

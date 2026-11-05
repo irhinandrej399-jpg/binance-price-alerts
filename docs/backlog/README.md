@@ -204,8 +204,11 @@
 | [OPS-018](tickets/OPS-018.md) | Квалифицировать таблицу стоимости и квоты durable приёма | OPS-022, DEC-008 | planned |
 | [OPS-019](tickets/OPS-019.md) | Собрать физические метрики PostgreSQL на disposable стенде | SET-006, DEC-008 | done |
 | [OPS-020](tickets/OPS-020.md) | Собрать физические метрики Kafka на disposable стенде | SET-009, DEC-008 | done |
-| [OPS-021](tickets/OPS-021.md) | Измерить manifest продолжения API в matcher и notifications | OPS-019, OPS-020, SUB-009, SUB-020, NTF-013 | planned |
-| [OPS-022](tickets/OPS-022.md) | Измерить manifest источника market-data и свести покрытие затрат | OPS-019, OPS-020, OPS-021, MKT-014 | planned |
+| [OPS-022](tickets/OPS-022.md) | Измерить manifest источника market-data и свести покрытие затрат | OPS-019, OPS-020, OPS-026, MKT-014 | planned |
+| [OPS-023](tickets/OPS-023.md) | Подключить внешние фазы к совместному измерительному runner | OPS-019, OPS-020 | done |
+| [OPS-024](tickets/OPS-024.md) | Измерить manifest операций владельца API | OPS-023, SUB-009, SUB-020, SUB-027 | planned |
+| [OPS-025](tickets/OPS-025.md) | Измерить продолжение API в matcher | OPS-024, MAT-011 | planned |
+| [OPS-026](tickets/OPS-026.md) | Измерить продолжение API в notifications и свести цепочку | OPS-025, NTF-013, NTF-014, NTF-015 | planned |
 
 ### Сквозная проверка
 
@@ -250,3 +253,4 @@
 | [OPS-005](tickets/OPS-005.md) | [OPS-012](tickets/OPS-012.md), [OPS-013](tickets/OPS-013.md) | split |
 | [LOAD-005](tickets/LOAD-005.md) | [LOAD-010](tickets/LOAD-010.md), [LOAD-011](tickets/LOAD-011.md), [LOAD-012](tickets/LOAD-012.md), [LOAD-013](tickets/LOAD-013.md) | split |
 | [OPS-017](tickets/OPS-017.md) | [OPS-019](tickets/OPS-019.md), [OPS-020](tickets/OPS-020.md), [OPS-021](tickets/OPS-021.md), [OPS-022](tickets/OPS-022.md) | split |
+| [OPS-021](tickets/OPS-021.md) | [OPS-023](tickets/OPS-023.md), [OPS-024](tickets/OPS-024.md), [OPS-025](tickets/OPS-025.md), [OPS-026](tickets/OPS-026.md) | split |

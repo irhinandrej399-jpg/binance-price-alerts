@@ -62,13 +62,13 @@ def delta(before, after):
     return after - before
 
 
-def main():
+def main(argv=None, session=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True, help='new directory; never overwritten')
     parser.add_argument('--rows', type=int, default=1000)
     parser.add_argument('--command', nargs=argparse.REMAINDER, help='trusted adapter executable and args; runtime DSNs in env; default pgmeasure')
     parser.add_argument('--fail-after-up', action='store_true', help='verify error cleanup')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     args.output.mkdir(parents=True, exist_ok=False)
     project = 'binance-pg-measure-' + uuid.uuid4().hex[:12]
     report = {'format_version': 1, 'project': project, 'status': 'running',
@@ -81,7 +81,7 @@ def main():
     def run(command, **kwargs):
         # Never persist environment, container inspect, or credentials.
         report['commands'].append(command)
-        result = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True, **kwargs)
+        result = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True, timeout=240, **kwargs)
         if result.returncode:
             # Diagnostics may include SQL values; persist only a safe error class.
             if command[:2] == ['docker', 'compose'] and command[-1] in ('120', '--remove-orphans'):
@@ -148,13 +148,21 @@ def main():
             binary = tmp / 'adapter'
             run(['go', 'build', '-o', str(binary), './internal/tools/pgmeasure'])
             report['initial_api_accounts'] = int(sql('api', 'SELECT count(*) FROM app.users;').strip())
+
+            if session:
+                session.setup('postgres', env)
             snapshot('warmup')  # First catalogue reads may set hint bits/generate WAL.
-            for phase in ('empty', 'adapter'):
+            if session:
+                previous = snapshot('baseline')
+                session.sync()
+            for phase in (session.phases if session else ('empty', 'adapter')):
                 sql('api', 'CHECKPOINT;')
                 before = snapshot(phase + '-before')
                 started = time.monotonic()
                 operation = None
-                if phase == 'adapter':
+                if session:
+                    operation = session.operation(phase)
+                elif phase == 'adapter':
                     operation = run(args.command or [str(binary), '--rows', str(args.rows)]).strip()
                 else:
                     time.sleep(0.1)
@@ -166,6 +174,10 @@ def main():
                     'operation_delta': delta(summarize(before), summarize(after)),
                     'checkpoint_delta': delta(summarize(after), summarize(checkpoint)),
                     'inclusive_delta': delta(summarize(before), summarize(checkpoint))}
+                if session:
+                    report['phases'][phase]['background_delta'] = delta(summarize(previous), summarize(before))
+                    previous = checkpoint
+                    session.sync()
                 # Reset stamps must match across the whole measurement window.
                 for owner in OWNERS:
                     for field in ('wal', 'checkpointer', 'bgwriter', 'database_stats'):
@@ -182,8 +194,10 @@ def main():
                         raise RuntimeError('custom tablespaces need additional temp-file collector')
                     if any(snap['settings'][k]['value'] != 'on' for k in ('fsync','synchronous_commit','full_page_writes','track_io_timing','track_wal_io_timing')):
                         raise RuntimeError('required durability/timing unavailable')
+            if session:
+                report['verification'] = session.verify()
             report['final_api_accounts'] = int(sql('api', 'SELECT count(*) FROM app.users;').strip())
-            if not args.command and (report['initial_api_accounts'] != 0 or report['final_api_accounts'] != args.rows):
+            if not session and not args.command and (report['initial_api_accounts'] != 0 or report['final_api_accounts'] != args.rows):
                 raise RuntimeError('adapter account count mismatch')
             report['unsupported'] = {
                 'temp_peak_live_bytes': 'Snapshots cannot capture deleted temporary files; cumulative temp_bytes and temp I/O retained; peak qualification blocked.',

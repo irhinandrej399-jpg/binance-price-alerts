@@ -37,11 +37,11 @@ def difference(before, after):
             for k in sorted(before.keys() | after.keys())}
 
 
-def main():
+def main(argv=None, session=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--fail-after-up', action='store_true')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     args.output.mkdir(parents=True, exist_ok=False)
     project = 'binance-kafka-measure-' + uuid.uuid4().hex[:12]
     prefix = 'measure-' + uuid.uuid4().hex[:12]
@@ -105,8 +105,9 @@ def main():
     def terminate(signum, frame):
         raise InterruptedError(f'signal {signum}')
 
-    signal.signal(signal.SIGTERM, terminate)
-    signal.signal(signal.SIGINT, terminate)
+    if not session:
+        signal.signal(signal.SIGTERM, terminate)
+        signal.signal(signal.SIGINT, terminate)
     try:
         with tempfile.TemporaryDirectory(prefix='kafka-measure-') as tmp:
             binary = str(Path(tmp) / 'driver')
@@ -123,24 +124,37 @@ def main():
             report['filesystem'] = inside('bash', '-c', 'df -T /var/lib/kafka/data; cat /proc/mounts')
             snapshot('initial')
             inside('timeout', '90', 'bash', '-s', '--', prefix, input=(ROOT / 'infra/kafka/init-topics.sh').read_text())
-            report['producer_command'] = [binary, f'127.0.0.1:{port}', prefix]
-            driver = subprocess.Popen(report['producer_command'], cwd=ROOT, env=env, text=True,
-                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            report['prepared'] = operation()
+            if session:
+                session.setup('kafka', dict(env, KAFKA_BROKERS=f'127.0.0.1:{port}', KAFKA_PREFIX=prefix))
+            else:
+                report['producer_command'] = [binary, f'127.0.0.1:{port}', prefix]
+                driver = subprocess.Popen(report['producer_command'], cwd=ROOT, env=env, text=True,
+                                          stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                report['prepared'] = operation()
             report['topic_configs'] = inside('/opt/kafka/bin/kafka-configs.sh', '--bootstrap-server', 'kafka:9092', '--entity-type', 'topics', '--describe', '--all')
             report['broker_configs'] = inside('/opt/kafka/bin/kafka-configs.sh', '--bootstrap-server', 'kafka:9092', '--entity-type', 'brokers', '--entity-name', '1', '--describe', '--all')
             baseline = snapshot('baseline')
             previous = baseline
-            for name, op in [('empty', 'empty'), ('first', 'publish'), ('repeat', 'publish')]:
+            if session:
+                session.sync()
+            for name, op in ([(p, p) for p in session.phases] if session else [('empty', 'empty'), ('first', 'publish'), ('repeat', 'publish')]):
                 report['phases'][name] = {}  # operations persisted separately below
-                ack = operation(op)
+                before = snapshot(name + '-before') if session else previous
+                ack = session.operation(op) if session else operation(op)
                 current = snapshot(name)
-                report['phases'][name].update(ack=ack, delta_previous=difference(previous, current), delta_baseline=difference(baseline, current))
+                report['phases'][name].update(ack=ack, delta_previous=difference(before, current), delta_baseline=difference(baseline, current))
+                if session:
+                    report['phases'][name]['background_delta'] = difference(previous, before)
                 previous = current
-            report['read_committed'] = operation('read')
-            driver.stdin.close()
-            if driver.wait(timeout=10):
-                raise RuntimeError('driver failed at shutdown')
+                if session:
+                    session.sync()
+            if session:
+                report['verification'] = session.verify()
+            else:
+                report['read_committed'] = operation('read')
+                driver.stdin.close()
+                if driver.wait(timeout=10):
+                    raise RuntimeError('driver failed at shutdown')
             report['status'] = 'complete'
     except BaseException as exc:
         report['status'] = 'failed'
