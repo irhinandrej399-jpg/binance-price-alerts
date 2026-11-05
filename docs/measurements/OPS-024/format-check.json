@@ -1,0 +1,10 @@
+{
+  "source": "run-a2",
+  "checks": {
+    "missing_phase": "rejected",
+    "same_physical_offset": "rejected",
+    "missing_original_bytes": "rejected",
+    "unknown_numeric_metric": "rejected",
+    "inconsistent_quote_revision": "rejected"
+  }
+}

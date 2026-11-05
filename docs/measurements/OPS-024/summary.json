@@ -1,0 +1,536 @@
+{
+  "format_version": 1,
+  "source_id": "OPS-024-api-v1",
+  "status": "collected-not-qualified",
+  "qualified": false,
+  "accepted_runs": {
+    "run-a2": {
+      "postgres_project": "binance-pg-measure-9914672460bd",
+      "kafka_project": "binance-kafka-measure-90815ee52ec6",
+      "prefix": "measure-4bc448525a85",
+      "cleanup": {
+        "postgres": {
+          "container": [],
+          "volume": [],
+          "network": []
+        },
+        "kafka": {
+          "verified": true,
+          "leftovers": {
+            "container": "",
+            "volume": "",
+            "network": ""
+          }
+        }
+      },
+      "journal_events": 19,
+      "outbox_events": 4,
+      "read_committed_records": {
+        "delivery-requests": 5,
+        "subscription-changes": 20
+      },
+      "phases": {
+        "empty": {
+          "fixture_size": 0,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 0,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 1723,
+          "kafka_all_allocated_bytes": 8192,
+          "kafka_log_apparent_bytes": 432
+        },
+        "create": {
+          "fixture_size": 5,
+          "unit": "adapter_call",
+          "api_relation_bytes": 90112,
+          "wal_insert_bytes": 11104,
+          "checkpoint_wal_insert_bytes": 264,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 432
+        },
+        "workflow": {
+          "fixture_size": 4,
+          "unit": "adapter_call",
+          "api_relation_bytes": 32768,
+          "wal_insert_bytes": 21552,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 432
+        },
+        "workflow_replay": {
+          "fixture_size": 4,
+          "unit": "adapter_call",
+          "api_relation_bytes": 32768,
+          "wal_insert_bytes": 242216,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 432
+        },
+        "cancel": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 14280,
+          "checkpoint_wal_insert_bytes": 201312,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 432
+        },
+        "cancel_replay": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 3792,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 360,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 360
+        },
+        "prepare": {
+          "fixture_size": 4,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 4272,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 432
+        },
+        "admission_wait": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 65536,
+          "wal_insert_bytes": 17928,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 360,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 360
+        },
+        "admission": {
+          "fixture_size": 4,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 21992,
+          "checkpoint_wal_insert_bytes": 264,
+          "kafka_all_apparent_bytes": 360,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 360
+        },
+        "admission_replay": {
+          "fixture_size": 4,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 10424,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 432
+        },
+        "succeeded": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 24576,
+          "wal_insert_bytes": 15240,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 360,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 360
+        },
+        "retryable": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 16904,
+          "checkpoint_wal_insert_bytes": 264,
+          "kafka_all_apparent_bytes": 360,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 360
+        },
+        "uncertain": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 18392,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 4096,
+          "kafka_log_apparent_bytes": 432
+        },
+        "blocked": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 19896,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 360,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 360
+        },
+        "results_replay": {
+          "fixture_size": 4,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 7424,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 432
+        },
+        "subscription_first": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 8952,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 1973,
+          "kafka_all_allocated_bytes": 4096,
+          "kafka_log_apparent_bytes": 1973
+        },
+        "subscription_lost": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 9048,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 2626,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 2625
+        },
+        "subscription_retry": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 776,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 1977,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 1977
+        },
+        "subscription_drain": {
+          "fixture_size": 17,
+          "unit": "published_event",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 22824,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 27871,
+          "kafka_all_allocated_bytes": 53248,
+          "kafka_log_apparent_bytes": 27870
+        },
+        "delivery_first": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 16384,
+          "wal_insert_bytes": 4872,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 2190,
+          "kafka_all_allocated_bytes": 4096,
+          "kafka_log_apparent_bytes": 2190
+        },
+        "delivery_lost": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 680,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 2916,
+          "kafka_all_allocated_bytes": 4096,
+          "kafka_log_apparent_bytes": 2914
+        },
+        "delivery_retry": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 5144,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 2194,
+          "kafka_all_allocated_bytes": 4096,
+          "kafka_log_apparent_bytes": 2194
+        },
+        "delivery_drain": {
+          "fixture_size": 2,
+          "unit": "published_event",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 6280,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 3956,
+          "kafka_all_allocated_bytes": 8192,
+          "kafka_log_apparent_bytes": 3956
+        }
+      }
+    },
+    "run-b2": {
+      "postgres_project": "binance-pg-measure-62f1be67308a",
+      "kafka_project": "binance-kafka-measure-ae127dd8123a",
+      "prefix": "measure-1679e4a943d5",
+      "cleanup": {
+        "postgres": {
+          "container": [],
+          "volume": [],
+          "network": []
+        },
+        "kafka": {
+          "verified": true,
+          "leftovers": {
+            "container": "",
+            "volume": "",
+            "network": ""
+          }
+        }
+      },
+      "journal_events": 19,
+      "outbox_events": 4,
+      "read_committed_records": {
+        "delivery-requests": 5,
+        "subscription-changes": 20
+      },
+      "phases": {
+        "empty": {
+          "fixture_size": 0,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 238400,
+          "checkpoint_wal_insert_bytes": 392,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 432
+        },
+        "create": {
+          "fixture_size": 5,
+          "unit": "adapter_call",
+          "api_relation_bytes": 90112,
+          "wal_insert_bytes": 196360,
+          "checkpoint_wal_insert_bytes": 392,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 432
+        },
+        "workflow": {
+          "fixture_size": 4,
+          "unit": "adapter_call",
+          "api_relation_bytes": 32768,
+          "wal_insert_bytes": 21552,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 360,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 360
+        },
+        "workflow_replay": {
+          "fixture_size": 4,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 2896,
+          "checkpoint_wal_insert_bytes": 239472,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 432
+        },
+        "cancel": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 14304,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 432
+        },
+        "cancel_replay": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 3792,
+          "checkpoint_wal_insert_bytes": 264,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 432
+        },
+        "prepare": {
+          "fixture_size": 4,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 4272,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 432
+        },
+        "admission_wait": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 65536,
+          "wal_insert_bytes": 17984,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 432
+        },
+        "admission": {
+          "fixture_size": 4,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 21992,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 432
+        },
+        "admission_replay": {
+          "fixture_size": 4,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 10480,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 4096,
+          "kafka_log_apparent_bytes": 432
+        },
+        "succeeded": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 24576,
+          "wal_insert_bytes": 15240,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 432
+        },
+        "retryable": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 16904,
+          "checkpoint_wal_insert_bytes": 264,
+          "kafka_all_apparent_bytes": 360,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 360
+        },
+        "uncertain": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 18368,
+          "checkpoint_wal_insert_bytes": 232,
+          "kafka_all_apparent_bytes": 360,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 360
+        },
+        "blocked": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 19896,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 432
+        },
+        "results_replay": {
+          "fixture_size": 4,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 7424,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 432
+        },
+        "subscription_first": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 8952,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 1973,
+          "kafka_all_allocated_bytes": 4096,
+          "kafka_log_apparent_bytes": 1973
+        },
+        "subscription_lost": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 9048,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 2626,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 2625
+        },
+        "subscription_retry": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 776,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 1905,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 1905
+        },
+        "subscription_drain": {
+          "fixture_size": 17,
+          "unit": "published_event",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 22824,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 27798,
+          "kafka_all_allocated_bytes": 45056,
+          "kafka_log_apparent_bytes": 27798
+        },
+        "delivery_first": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 16384,
+          "wal_insert_bytes": 4872,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 2190,
+          "kafka_all_allocated_bytes": 4096,
+          "kafka_log_apparent_bytes": 2190
+        },
+        "delivery_lost": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 680,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 2842,
+          "kafka_all_allocated_bytes": 12288,
+          "kafka_log_apparent_bytes": 2842
+        },
+        "delivery_retry": {
+          "fixture_size": 1,
+          "unit": "adapter_call",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 5144,
+          "checkpoint_wal_insert_bytes": 208,
+          "kafka_all_apparent_bytes": 2122,
+          "kafka_all_allocated_bytes": 0,
+          "kafka_log_apparent_bytes": 2122
+        },
+        "delivery_drain": {
+          "fixture_size": 2,
+          "unit": "published_event",
+          "api_relation_bytes": 0,
+          "wal_insert_bytes": 6256,
+          "checkpoint_wal_insert_bytes": 232,
+          "kafka_all_apparent_bytes": 3885,
+          "kafka_all_allocated_bytes": 8192,
+          "kafka_log_apparent_bytes": 3884
+        }
+      }
+    }
+  },
+  "exploratory_runs": {
+    "run-a": "excluded: inconsistent synthetic quote revision",
+    "run-b": "excluded: inconsistent synthetic quote revision"
+  },
+  "qualification_blockers": [
+    "HTTP body/percent lexical length not finitely bounded",
+    "journal Append/whole-transaction relay batch not finitely bounded",
+    "pair and source/stream ID lengths not finitely bounded at trusted storage interfaces",
+    "Kafka device fsync unsupported",
+    "PostgreSQL temp peak/device IO unsupported",
+    "mandatory downstream continuations not yet measured"
+  ]
+}

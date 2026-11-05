@@ -1,0 +1,233 @@
+{
+  "format_version": 1,
+  "source_id": "OPS-024-api-v1",
+  "sources": [
+    "infra/measure/api_adapter.py",
+    "internal/tools/apimeasure/measure_test.go",
+    "internal/tools/apimeasure/tls_test.go",
+    "scripts/verify_api_measurement.py"
+  ],
+  "contract_versions": {
+    "adapter_protocol": 1,
+    "api_manifest": 1,
+    "event_envelope": 1,
+    "subscription_changed": 2,
+    "alert_triggered": 1
+  },
+  "identity_binding": "identities.json (resolved after verification, linked to this manifest SHA256)",
+  "fixture": {
+    "pair": "BTCUSDT",
+    "price": "100",
+    "quote_true": "101",
+    "quote_false": "99",
+    "http_body_bytes": 49,
+    "permit_ttl_us": 60000000,
+    "request_ids": [
+      "wait",
+      "permit-0",
+      "permit-1",
+      "permit-2",
+      "permit-3"
+    ],
+    "quote_revisions": {
+      "initial_true": 1,
+      "wait_false": 2,
+      "admission_true": 3,
+      "trade_time": "immutable setup time for all three revisions"
+    }
+  },
+  "phases": [
+    {
+      "phase_id": "empty",
+      "unit": "adapter_call",
+      "size": 0,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "create",
+      "unit": "adapter_call",
+      "size": 5,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "workflow",
+      "unit": "adapter_call",
+      "size": 4,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "workflow_replay",
+      "unit": "adapter_call",
+      "size": 4,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "cancel",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "cancel_replay",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "prepare",
+      "unit": "adapter_call",
+      "size": 4,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "admission_wait",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "admission",
+      "unit": "adapter_call",
+      "size": 4,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "admission_replay",
+      "unit": "adapter_call",
+      "size": 4,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "succeeded",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "retryable",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "uncertain",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "blocked",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "results_replay",
+      "unit": "adapter_call",
+      "size": 4,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "subscription_first",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "subscription_lost",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "subscription_retry",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "subscription_drain",
+      "unit": "published_event",
+      "size": 17,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "delivery_first",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "delivery_lost",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "delivery_retry",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "delivery_drain",
+      "unit": "published_event",
+      "size": 2,
+      "max_batch": 1,
+      "links": []
+    }
+  ],
+  "qualification": {
+    "qualified": false,
+    "coverage": "measured fixture, not maxima; matcher/notifications/market-data continuations pending",
+    "blockers": [
+      "HTTP body/percent lexical length not finitely bounded",
+      "journal Append/whole-transaction relay batch not finitely bounded",
+      "pair and source/stream ID lengths not finitely bounded at trusted storage interfaces",
+      "Kafka device fsync unsupported",
+      "PostgreSQL temp peak/device IO unsupported",
+      "mandatory downstream continuations not yet measured"
+    ]
+  },
+  "limits": {
+    "price": "18 integer and 18 fraction digits; no rounding",
+    "active_subscriptions_per_owner": 15,
+    "request_id_bytes": 200,
+    "permit_ttl_us": [
+      1,
+      60000000
+    ],
+    "versions": "positive signed bigint",
+    "journal_read_max_transactions": 1000,
+    "http_create_max_batch": 1,
+    "request_delivery_max_batch": 1,
+    "admission_max_batch": 1,
+    "result_max_batch": 1,
+    "delivery_relay_max_batch": 1,
+    "journal_append_max_batch": null,
+    "subscription_relay_max_batch": null,
+    "notes": "phase max_batch=1 is the fixture SQL transaction size, not a new product bound; drain runs individual Step calls and a final idle Step"
+  }
+}

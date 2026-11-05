@@ -206,7 +206,7 @@
 | [OPS-020](tickets/OPS-020.md) | Собрать физические метрики Kafka на disposable стенде | SET-009, DEC-008 | done |
 | [OPS-022](tickets/OPS-022.md) | Измерить manifest источника market-data и свести покрытие затрат | OPS-019, OPS-020, OPS-026, MKT-014 | planned |
 | [OPS-023](tickets/OPS-023.md) | Подключить внешние фазы к совместному измерительному runner | OPS-019, OPS-020 | done |
-| [OPS-024](tickets/OPS-024.md) | Измерить manifest операций владельца API | OPS-023, SUB-009, SUB-020, SUB-027 | planned |
+| [OPS-024](tickets/OPS-024.md) | Измерить manifest операций владельца API | OPS-023, SUB-009, SUB-020, SUB-027 | done |
 | [OPS-025](tickets/OPS-025.md) | Измерить продолжение API в matcher | OPS-024, MAT-011 | planned |
 | [OPS-026](tickets/OPS-026.md) | Измерить продолжение API в notifications и свести цепочку | OPS-025, NTF-013, NTF-014, NTF-015 | planned |
 

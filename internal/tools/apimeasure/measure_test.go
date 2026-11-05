@@ -1,0 +1,461 @@
+// Package apimeasure is an opt-in infrastructure driver, not a functional suite.
+// A compiled test executable reuses testing.TB loopback helpers and owns cleanup.
+package apimeasure
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/account"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/admissionrpc"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/auth"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/deliveryrelay"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/deliveryrpc"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/relay"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/resultrpc"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/session"
+	sub "github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/subscription"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/priceobserved"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/domain/price"
+	pb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/api/v1"
+	market "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/marketdata/v1"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/catalog"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/latest"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafka"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/postgres"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/serviceauth"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/grpctest"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/kafkafault"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/twmb/franz-go/pkg/kgo"
+	"google.golang.org/grpc"
+)
+
+const sourceID = "OPS-024-api-v1"
+const apiURI = "spiffe://binance.test/api"
+const matcherURI = "spiffe://binance.test/matcher"
+const notificationsURI = "spiffe://binance.test/notifications"
+const createBody = `{"pair":"BTCUSDT","price":"100","direction":"up"}`
+
+type catalogFixture struct{}
+
+func (catalogFixture) Fetch(context.Context) (catalog.Snapshot, error) {
+	return catalog.Snapshot{Pairs: []catalog.Pair{{Symbol: "BTCUSDT"}}, UpdatedAt: time.Now().UTC()}, nil
+}
+
+type quoteFixture struct {
+	value     string
+	tradeTime time.Time
+	sequence  uint64
+}
+
+func (q *quoteFixture) Latest(context.Context, string) (priceobserved.Observed, error) {
+	p, e := price.Parse(q.value)
+	now := q.tradeTime
+	return priceobserved.Observed{SchemaVersion: 1, Pair: "BTCUSDT", Price: &p, SourceID: sourceID, Revision: priceobserved.Revision{StreamID: sourceID, Generation: 1, Sequence: q.sequence}, TradeTime: now, ReceivedAt: now, StreamState: priceobserved.Live}, e
+}
+
+type identity struct {
+	Owner        string `json:"owner_id"`
+	Subscription string `json:"subscription_id"`
+	Workflow     string `json:"trigger_id"`
+	Attempt      string `json:"attempt_id"`
+	Request      string `json:"request_id"`
+}
+type driver struct {
+	t                          *testing.T
+	pool                       *pgxpool.Pool
+	url, token, broker, prefix string
+	delivery                   *deliveryrpc.Client
+	admission                  *admissionrpc.Client
+	results                    *resultrpc.Client
+	quote                      *quoteFixture
+	ids                        []identity
+	phases                     []map[string]any
+	prepared                   []*pb.Recipient
+}
+
+func must[T any](t *testing.T, v T, e error) T {
+	t.Helper()
+	if e != nil {
+		t.Fatal(e)
+	}
+	return v
+}
+func check(t *testing.T, e error) {
+	t.Helper()
+	if e != nil {
+		t.Fatal(e)
+	}
+}
+func connect(t *testing.T, ca authority, cert pair, uri string, grants map[string][]string, register func(*grpc.Server)) *grpc.ClientConn {
+	client := ca.issue(t, []string{uri}, false, false)
+	opts, e := serviceauth.ServerOptions(cert.cert, cert.key, ca.pem, grants)
+	check(t, e)
+	return grpctest.StartWithClientOptions(t, register, []grpc.DialOption{grpc.WithTransportCredentials(clientCreds(t, client, ca.pem)), grpc.WithAuthority("market.test")}, opts...)
+}
+func setup(t *testing.T) *driver {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	pool, e := postgres.Open(ctx, os.Getenv("DATABASE_URL"))
+	check(t, e)
+	t.Cleanup(pool.Close)
+	var role string
+	check(t, pool.QueryRow(ctx, "SELECT current_user").Scan(&role))
+	if role != "api_runtime" {
+		t.Fatal("wrong SQL role")
+	}
+	a, e := account.New(pool).Create(ctx, "ops024@example.test", "fixture-hash")
+	check(t, e)
+	_, e = pool.Exec(ctx, `UPDATE app.users SET telegram_chat_id=24001,telegram_version=1 WHERE id=$1`, a.ID)
+	check(t, e)
+	sessions := session.New(pool, nil)
+	cred, e := sessions.Issue(ctx, a.ID)
+	check(t, e)
+	d := &driver{t: t, pool: pool, token: cred.AccessToken, broker: os.Getenv("KAFKA_BROKERS"), prefix: os.Getenv("KAFKA_PREFIX"), quote: &quoteFixture{value: "101", tradeTime: time.Now().UTC().Truncate(time.Microsecond), sequence: 1}, ids: make([]identity, 5), prepared: make([]*pb.Recipient, 4)}
+	for i := range d.ids {
+		d.ids[i].Owner = a.ID
+	}
+	ca := newAuthority(t)
+	cert := ca.issue(t, nil, true, false)
+	marketConn := connect(t, ca, cert, apiURI, map[string][]string{apiURI: {market.Quotes_Latest_FullMethodName}}, func(s *grpc.Server) { market.RegisterQuotesServer(s, latest.NewServer(d.quote, time.Now)) })
+	quotes := latest.NewClient(marketConn)
+	admission, e := admissionrpc.NewServer(admissionrpc.NewPostgres(pool), quotes, time.Minute, time.Now)
+	check(t, e)
+	grants := map[string][]string{matcherURI: {pb.Delivery_RequestDelivery_FullMethodName}, notificationsURI: {pb.Admission_PrepareRecipient_FullMethodName, pb.Admission_AdmitDelivery_FullMethodName, pb.DeliveryResults_SaveDeliveryResult_FullMethodName}}
+	register := func(s *grpc.Server) {
+		pb.RegisterDeliveryServer(s, deliveryrpc.NewServer(deliveryrpc.NewPostgres(pool), quotes, time.Now))
+		pb.RegisterAdmissionServer(s, admission)
+		pb.RegisterDeliveryResultsServer(s, resultrpc.NewServer(resultrpc.NewPostgres(pool)))
+	}
+	matcher := connect(t, ca, cert, matcherURI, grants, register)
+	notifications := connect(t, ca, cert, notificationsURI, grants, register)
+	d.delivery = deliveryrpc.NewClient(matcher)
+	d.admission = admissionrpc.NewClient(notifications)
+	d.results = resultrpc.NewClient(notifications)
+	mux := http.NewServeMux()
+	mux.Handle("POST /v1/subscriptions", sub.NewHandler(pool, catalogFixture{}, quotes, time.Now))
+	mux.Handle("DELETE /v1/subscriptions/", sub.NewCancelHandler(pool))
+	server := httptest.NewServer(auth.New(sessions, mux))
+	t.Cleanup(server.Close)
+	d.url = server.URL
+	// Establish HTTP and TLS transports outside baseline using read-only/rejected calls.
+	d.http("GET", "/v1/subscriptions", "", 405)
+	_, _ = quotes.Latest(ctx, "BTCUSDT")
+	_, _ = d.delivery.RequestDelivery(ctx, a.ID, "00000000-0000-4000-8000-000000000001", 1)
+	_, _ = d.admission.PrepareRecipient(ctx, a.ID, "00000000-0000-4000-8000-000000000001", "00000000-0000-4000-8000-000000000002")
+	// Initialize all stable producer IDs without creating business messages.
+	for _, suffix := range []string{"subscription-relay", "delivery-relay"} {
+		p, e := kafka.New(ctx, kafka.Config{Brokers: []string{d.broker}, TransactionalID: d.prefix + "-" + suffix})
+		check(t, e)
+		p.Close()
+	}
+	return d
+}
+func (d *driver) http(method, path, body string, want int) map[string]any {
+	req, e := http.NewRequest(method, d.url+path, strings.NewReader(body))
+	check(d.t, e)
+	req.Header.Set("Authorization", "Bearer "+d.token)
+	req.Header.Set("Content-Type", "application/json")
+	client := http.Client{Timeout: 5 * time.Second}
+	resp, e := client.Do(req)
+	check(d.t, e)
+	defer resp.Body.Close()
+	b, e := io.ReadAll(resp.Body)
+	check(d.t, e)
+	if resp.StatusCode != want {
+		d.t.Fatalf("HTTP %d want %d: %s", resp.StatusCode, want, b)
+	}
+	out := map[string]any{}
+	if want != 405 {
+		check(d.t, json.Unmarshal(b, &out))
+	}
+	return out
+}
+func (d *driver) admit(ctx context.Context, i int, request string) *pb.AdmitDeliveryResponse {
+	id := &d.ids[i]
+	v, e := d.admission.AdmitDelivery(ctx, id.Owner, id.Subscription, id.Workflow, request, d.prepared[i])
+	check(d.t, e)
+	if v.Attempt != nil {
+		id.Attempt = v.Attempt.AttemptId
+	}
+	id.Request = request
+	return v
+}
+func (d *driver) result(ctx context.Context, i int, outcome string) *pb.SaveDeliveryResultResponse {
+	id := d.ids[i]
+	req := &pb.SaveDeliveryResultRequest{OwnerId: id.Owner, SubscriptionId: id.Subscription, WorkflowId: id.Workflow, AttemptId: id.Attempt, Outcome: outcome}
+	if outcome == "succeeded" {
+		req.MessageId = 24001
+	}
+	if outcome == "blocked" {
+		req.BlockReason = "permanent_failure"
+	}
+	v, e := d.results.SaveDeliveryResult(ctx, req)
+	check(d.t, e)
+	return v
+}
+func (d *driver) publish(ctx context.Context, kind string, fault bool) map[string]any {
+	suffix, topic := "subscription-relay", "subscription-changes"
+	if kind == "delivery" {
+		suffix, topic = "delivery-relay", "delivery-requests"
+	}
+	cfg := kafka.Config{Brokers: []string{d.broker}, TransactionalID: d.prefix + "-" + suffix}
+	var proxy *kafkafault.Proxy
+	if fault {
+		proxy = kafkafault.New(d.broker)
+		defer proxy.Close()
+		proxy.Arm()
+		cfg.Dialer = proxy.DialContext
+	}
+	var worked bool
+	var e error
+	if kind == "delivery" {
+		r, err := deliveryrelay.New(d.pool, cfg, d.prefix+"-"+topic)
+		check(d.t, err)
+		worked, e = r.Step(ctx)
+	} else {
+		r, err := relay.New(d.pool, cfg, d.prefix+"-"+topic)
+		check(d.t, err)
+		worked, e = r.Step(ctx)
+	}
+	out := map[string]any{"worked": worked, "commit": "confirmed"}
+	if fault {
+		if !errors.Is(e, kafka.ErrCommitUnknown) {
+			d.t.Fatalf("expected unknown commit: %v", e)
+		}
+		select {
+		case code := <-proxy.Observed:
+			if code != 0 {
+				d.t.Fatal("broker rejected EndTxn")
+			}
+			out["broker_endtxn_code"] = code
+		case <-time.After(time.Second):
+			d.t.Fatal("no observed EndTxn")
+		}
+		out["commit"] = "unknown-to-client-broker-committed"
+	} else {
+		check(d.t, e)
+	}
+	return out
+}
+func (d *driver) operation(phase string) any {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	switch phase {
+	case "empty":
+		return map[string]any{"operations": 0}
+	case "create":
+		var out []any
+		for i := range d.ids {
+			v := d.http("POST", "/v1/subscriptions", createBody, 201)
+			d.ids[i].Subscription = v["id"].(string)
+			out = append(out, v)
+		}
+		return out
+	case "workflow", "workflow_replay":
+		var out []any
+		for i := 0; i < 4; i++ {
+			id := &d.ids[i]
+			v, e := d.delivery.RequestDelivery(ctx, id.Owner, id.Subscription, 1)
+			check(d.t, e)
+			if v.Workflow == nil {
+				d.t.Fatal("no workflow")
+			}
+			if id.Workflow != "" && id.Workflow != v.Workflow.TriggerId {
+				d.t.Fatal("changed workflow")
+			}
+			id.Workflow = v.Workflow.TriggerId
+			out = append(out, v)
+		}
+		return out
+	case "cancel", "cancel_replay":
+		return d.http("DELETE", "/v1/subscriptions/"+d.ids[4].Subscription, "", 200)
+	case "prepare":
+		var out []any
+		for i := 0; i < 4; i++ {
+			id := d.ids[i]
+			v, e := d.admission.PrepareRecipient(ctx, id.Owner, id.Subscription, id.Workflow)
+			check(d.t, e)
+			if v.Outcome != "recipient_ready" {
+				d.t.Fatal("recipient not ready")
+			}
+			d.prepared[i] = v.Recipient
+			out = append(out, v)
+		}
+		return out
+	case "admission_wait":
+		d.quote.value = "99"
+		d.quote.sequence = 2
+		v := d.admit(ctx, 0, "wait")
+		d.quote.value = "101"
+		d.quote.sequence = 3
+		if v.Outcome != "wait_condition" {
+			d.t.Fatal("no wait")
+		}
+		return v
+	case "admission", "admission_replay":
+		var out []any
+		for i := 0; i < 4; i++ {
+			v := d.admit(ctx, i, fmt.Sprintf("permit-%d", i))
+			if v.Outcome != "admitted" {
+				d.t.Fatal("no admission")
+			}
+			out = append(out, v)
+		}
+		return out
+	case "succeeded", "retryable", "uncertain", "blocked":
+		i := map[string]int{"succeeded": 0, "retryable": 1, "uncertain": 2, "blocked": 3}[phase]
+		return d.result(ctx, i, phase)
+	case "results_replay":
+		var out []any
+		for i, o := range []string{"succeeded", "retryable", "uncertain", "blocked"} {
+			out = append(out, d.result(ctx, i, o))
+		}
+		return out
+	case "subscription_first", "subscription_lost", "subscription_retry", "delivery_first", "delivery_lost", "delivery_retry":
+		parts := strings.Split(phase, "_")
+		return d.publish(ctx, parts[0], parts[1] == "lost")
+	case "subscription_drain", "delivery_drain":
+		kind := strings.Split(phase, "_")[0]
+		n := 0
+		for {
+			v := d.publish(ctx, kind, false)
+			if !v["worked"].(bool) {
+				break
+			}
+			n++
+			if n > 100 {
+				d.t.Fatal("unexpected backlog")
+			}
+		}
+		return map[string]any{"published": n}
+	default:
+		d.t.Fatal("unknown phase")
+		return nil
+	}
+}
+func (d *driver) sqlJSON(ctx context.Context, sql string) json.RawMessage {
+	var b []byte
+	check(d.t, d.pool.QueryRow(ctx, sql).Scan(&b))
+	return b
+}
+func (d *driver) verify() any {
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+	defer cancel()
+	// Own SQL only, after all measured snapshots. Original bytea are exported as hex.
+	journal := d.sqlJSON(ctx, `SELECT coalesce(json_agg(x ORDER BY position),'[]') FROM (SELECT position,transaction_end,event_id::text,encode(body,'hex') body_hex FROM app.api_journal) x`)
+	outbox := d.sqlJSON(ctx, `SELECT coalesce(json_agg(x ORDER BY subscription_id),'[]') FROM (SELECT subscription_id::text,trigger_id::text,event_id::text,encode(body,'hex') body_hex FROM app.delivery_outbox) x`)
+	admissions := d.sqlJSON(ctx, `SELECT coalesce(json_agg(x),'[]') FROM (SELECT subscription_id::text,request_id,attempt_id::text,fence,response FROM app.delivery_admissions) x`)
+	var entries []struct {
+		EventID string `json:"event_id"`
+		Body    string `json:"body_hex"`
+	}
+	check(d.t, json.Unmarshal(journal, &entries))
+	var works []struct {
+		EventID string `json:"event_id"`
+		Body    string `json:"body_hex"`
+	}
+	check(d.t, json.Unmarshal(outbox, &works))
+	if len(entries) != 19 || len(works) != 4 {
+		d.t.Fatalf("journal/outbox counts: %d/%d", len(entries), len(works))
+	}
+	// Lost response repeats the second identity for each relay, with unchanged bytes.
+	read := func(topic string, expected map[string]string) []map[string]any {
+		c, e := kgo.NewClient(kgo.SeedBrokers(d.broker), kgo.ConsumeTopics(d.prefix+"-"+topic), kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()), kgo.FetchIsolationLevel(kgo.ReadCommitted()), kgo.FetchMaxWait(100*time.Millisecond))
+		check(d.t, e)
+		defer c.Close()
+		records := []map[string]any{}
+		seen := map[string][]string{}
+		for len(records) < len(expected)+1 {
+			fs := c.PollFetches(ctx)
+			if es := fs.Errors(); len(es) > 0 {
+				d.t.Fatal(es[0].Err)
+			}
+			for _, r := range fs.Records() {
+				var env struct {
+					ID  string `json:"event_id"`
+					Key string `json:"ordering_key"`
+				}
+				check(d.t, json.Unmarshal(r.Value, &env))
+				want, ok := expected[env.ID]
+				if !ok || fmt.Sprintf("%x", r.Value) != want || !bytes.Equal(r.Key, []byte(env.Key)) {
+					d.t.Fatal("altered/unexpected event")
+				}
+				address := fmt.Sprintf("%d/%d", r.Partition, r.Offset)
+				for _, old := range seen[env.ID] {
+					if old == address {
+						d.t.Fatal("same physical offset")
+					}
+				}
+				seen[env.ID] = append(seen[env.ID], address)
+				records = append(records, map[string]any{"event_id": env.ID, "key": string(r.Key), "partition": r.Partition, "offset": r.Offset, "body_hex": want})
+			}
+		}
+		duplicates := 0
+		for _, v := range seen {
+			if len(v) == 2 {
+				duplicates++
+			} else if len(v) != 1 {
+				d.t.Fatal("bad multiplicity")
+			}
+		}
+		if len(seen) != len(expected) || duplicates != 1 || len(records) != len(expected)+1 {
+			d.t.Fatal("missing events or duplicates")
+		}
+		return records
+	}
+	changes := map[string]string{}
+	for _, v := range entries {
+		changes[v.EventID] = v.Body
+	}
+	deliveries := map[string]string{}
+	for _, v := range works {
+		deliveries[v.EventID] = v.Body
+	}
+	records := map[string]any{"subscription-changes": read("subscription-changes", changes), "delivery-requests": read("delivery-requests", deliveries)}
+	var cursor, count int
+	check(d.t, d.pool.QueryRow(ctx, "SELECT position FROM app.subscription_relay").Scan(&cursor))
+	check(d.t, d.pool.QueryRow(ctx, "SELECT count(*) FROM app.delivery_published").Scan(&count))
+	if cursor != len(entries) || count != 4 {
+		d.t.Fatal("incomplete SQL acknowledgements")
+	}
+	return map[string]any{"format_version": 1, "source_id": sourceID, "sql_role": "api_runtime", "identities": d.ids, "phases": d.phases, "journal": journal, "outbox": outbox, "admissions": admissions, "read_committed": records, "relay_cursor": cursor, "delivery_published": count}
+}
+func TestMeasurementDriver(t *testing.T) {
+	if os.Getenv("OPS024_MEASURE") != "1" {
+		t.Skip("opt-in phase driver; use infra/measure/api_adapter.py")
+	}
+	scanner := bufio.NewScanner(os.Stdin)
+	enc := json.NewEncoder(os.Stdout)
+	var d *driver
+	for scanner.Scan() {
+		var req struct {
+			Phase string `json:"phase_id"`
+		}
+		check(t, json.Unmarshal(scanner.Bytes(), &req))
+		var evidence any
+		if req.Phase == "setup" {
+			d = setup(t)
+			evidence = map[string]any{"sql_role": "api_runtime"}
+		} else if req.Phase == "verification" {
+			evidence = d.verify()
+		} else {
+			evidence = d.operation(req.Phase)
+			d.phases = append(d.phases, map[string]any{"phase_id": req.Phase, "result": evidence})
+		}
+		check(t, enc.Encode(map[string]any{"phase_id": req.Phase, "status": "ok", "evidence": evidence}))
+	}
+	check(t, scanner.Err())
+}

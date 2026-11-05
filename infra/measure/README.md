@@ -107,3 +107,5 @@ python3 scripts/verify_joint_measurement.py /tmp/joint-a /tmp/joint-b --failed /
 
 `--failed` проверяет именно контрольный отказ на write после setup/empty,
 оба failed collector reports и подтверждённое отсутствие disposable ресурсов.
+
+Бизнес-manifest API и продолжения по устойчивым ID: [OPS-024](API.md).
