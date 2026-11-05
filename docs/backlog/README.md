@@ -208,8 +208,9 @@
 | [OPS-023](tickets/OPS-023.md) | Подключить внешние фазы к совместному измерительному runner | OPS-019, OPS-020 | done |
 | [OPS-024](tickets/OPS-024.md) | Измерить manifest операций владельца API | OPS-023, SUB-009, SUB-020, SUB-027 | done |
 | [OPS-025](tickets/OPS-025.md) | Измерить продолжение API в matcher | OPS-024, MAT-011 | done |
-| [OPS-026](tickets/OPS-026.md) | Измерить продолжение API в notifications и свести цепочку | OPS-025, NTF-013, NTF-014, NTF-015 | planned |
+| [OPS-026](tickets/OPS-026.md) | Измерить продолжение API в notifications и свести цепочку | OPS-025, NTF-013, NTF-014, NTF-015, OPS-028 | planned |
 | [OPS-027](tickets/OPS-027.md) | Устранить гонку описи временных Kafka-файлов | OPS-020, OPS-023 | planned |
+| [OPS-028](tickets/OPS-028.md) | Подготовить API fixture продолжения notifications с исходными ID | OPS-024, OPS-025, NTF-014, NTF-012 | done |
 
 ### Сквозная проверка
 

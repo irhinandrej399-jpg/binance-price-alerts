@@ -1,0 +1,16 @@
+=== RUN   TestNotificationFixtureSource
+=== RUN   TestNotificationFixtureSource/owner
+=== RUN   TestNotificationFixtureSource/trigger
+=== RUN   TestNotificationFixtureSource/event
+=== RUN   TestNotificationFixtureSource/response
+=== RUN   TestNotificationFixtureSource/matcher
+--- PASS: TestNotificationFixtureSource (0.11s)
+    --- PASS: TestNotificationFixtureSource/owner (0.02s)
+    --- PASS: TestNotificationFixtureSource/trigger (0.01s)
+    --- PASS: TestNotificationFixtureSource/event (0.02s)
+    --- PASS: TestNotificationFixtureSource/response (0.02s)
+    --- PASS: TestNotificationFixtureSource/matcher (0.02s)
+=== RUN   TestNotificationFixture
+--- PASS: TestNotificationFixture (0.35s)
+PASS
+ok  	github.com/irhinandrej399-jpg/binance-price-alerts/internal/tools/apimeasure	2.384s

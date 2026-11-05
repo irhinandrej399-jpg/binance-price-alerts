@@ -1,0 +1,18 @@
+=== RUN   TestNotificationFixtureSource
+=== RUN   TestNotificationFixtureSource/owner
+=== RUN   TestNotificationFixtureSource/trigger
+=== RUN   TestNotificationFixtureSource/event
+=== RUN   TestNotificationFixtureSource/response
+=== RUN   TestNotificationFixtureSource/matcher
+--- PASS: TestNotificationFixtureSource (0.11s)
+    --- PASS: TestNotificationFixtureSource/owner (0.01s)
+    --- PASS: TestNotificationFixtureSource/trigger (0.01s)
+    --- PASS: TestNotificationFixtureSource/event (0.02s)
+    --- PASS: TestNotificationFixtureSource/response (0.02s)
+    --- PASS: TestNotificationFixtureSource/matcher (0.02s)
+=== RUN   TestNotificationFixture
+    notifications_fixture_test.go:461: rpc error: code = InvalidArgument desc = one expected recipient required
+--- FAIL: TestNotificationFixture (0.14s)
+FAIL
+FAIL	github.com/irhinandrej399-jpg/binance-price-alerts/internal/tools/apimeasure	0.832s
+FAIL
