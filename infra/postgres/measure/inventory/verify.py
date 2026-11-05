@@ -85,9 +85,9 @@ def replay(rows, lifecycle=False):
     require(rows[0]['schema'] == ('ops039-ptrace-lifecycle-v1' if lifecycle else SCHEMA), 'missing OPS-038 schema')
     # Reuse the unchanged ancillary/lifecycle validation, with its declared old
     # schema only in an in-memory view. Original preserved raw is never rewritten.
-    view = list(rows)
-    view[0] = dict(rows[0], schema='ops033-ptrace-ancillary-v1')
     if not lifecycle:
+        view = list(rows)
+        view[0] = dict(rows[0], schema='ops033-ptrace-ancillary-v1')
         ancillary.replay(view)
     envs = [r for r in rows if r['kind'] == 'inventory_environment']
     require(len(envs) == 1, 'environment missing/duplicate')
@@ -104,6 +104,8 @@ def replay(rows, lifecycle=False):
         require({'io_method','tablespaces','settings'} <= pg.keys(), 'PG input witness contract')
     alive = set()
     snapshots = []
+    changed = census_errors = fd_errors = map_errors = 0
+    identities = []
     for i, r in enumerate(rows):
         kind, pid = r['kind'], r.get('pid')
         if kind == 'root':
@@ -163,14 +165,16 @@ def replay(rows, lifecycle=False):
                 inode(e, e['path'])
         text(r['read_probe'], env['read_probe'])
         require(r['consistency']['status'] == 'unknown' and r['consistency']['complete'] is False and r['consistency']['reason'], 'false atomicity/completeness')
-        snapshots.append(r)
+        # Retain summaries rather than whole inode inventories. PG captures can
+        # contain gigabytes of repeated procfs witnesses; validation stays full.
+        snapshots.append({'phase':r['phase'], 'seq':r['seq']})
+        changed += before != after
+        census_errors += sum(bool(t[k]['error']) for when in ('census_before','census_after') for p in r[when]['processes'] for t in p['threads'] for k in ('stat','status'))
+        fd_errors += sum(bool(e['error'] or e['link']['error']) for o in r['owners'] for e in o['fd_entries'])
+        map_errors += sum(bool(e['evidence']['error'] or e['evidence']['link']['error']) for o in r['owners'] for e in o['map_entries'])
+        identities.append(set(v[1] for v in before.values() if v[1]))
     require(snapshots[0]['phase'] == 'initial' and snapshots[-1]['phase'] == 'final' and
-            rows[-2] is snapshots[-1], 'initial/final checkpoint missing')
-    changed = sum(census(r['census_before']) != census(r['census_after']) for r in snapshots)
-    census_errors = sum(bool(t[k]['error']) for r in snapshots for when in ('census_before','census_after') for p in r[when]['processes'] for t in p['threads'] for k in ('stat','status'))
-    fd_errors = sum(bool(e['error'] or e['link']['error']) for r in snapshots for o in r['owners'] for e in o['fd_entries'])
-    map_errors = sum(bool(e['evidence']['error'] or e['evidence']['link']['error']) for r in snapshots for o in r['owners'] for e in o['map_entries'])
-    identities = [set(v[1] for v in census(r['census_before']).values() if v[1]) for r in snapshots]
+            rows[-2]['seq'] == snapshots[-1]['seq'], 'initial/final checkpoint missing')
     return {'checkpoints':len(snapshots), 'census_changed_checkpoints':changed, 'census_read_errors':census_errors, 'fd_read_errors':fd_errors, 'map_read_errors':map_errors, 'consistency':'unknown', 'pg_coverage':'blocked: external aliases/custom tablespaces not certified', 'new_identities': sorted(set.union(*identities)-identities[0]),
             'vanished_identities':sorted(set.union(*identities)-identities[-1]),
             'temp_peak_live_bytes':None,'lower_bytes':None,'upper_bytes':None,'qualification_blocked':True}

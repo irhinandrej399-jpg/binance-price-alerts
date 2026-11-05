@@ -1,0 +1,508 @@
+{
+  "project": "binance-ops033-3bfdbfbd69",
+  "commands": [
+    [
+      "env",
+      "GOCACHE=/tmp/binance-ops038-gocache",
+      "GOMODCACHE=/tmp/binance-ops039-modcache",
+      "GOOS=linux",
+      "GOARCH=arm64",
+      "CGO_ENABLED=0",
+      "GOTOOLCHAIN=local",
+      "go",
+      "build",
+      "-o",
+      "/tmp/ops033-capture",
+      "./infra/postgres/measure/ancillary"
+    ],
+    [
+      "env",
+      "GOCACHE=/tmp/binance-ops038-gocache",
+      "GOMODCACHE=/tmp/binance-ops039-modcache",
+      "GOOS=linux",
+      "GOARCH=arm64",
+      "CGO_ENABLED=0",
+      "GOTOOLCHAIN=local",
+      "go",
+      "build",
+      "-o",
+      "/tmp/ops033-control",
+      "./infra/postgres/measure/ancillary/control"
+    ],
+    [
+      "docker",
+      "image",
+      "inspect",
+      "--format",
+      "{{.Id}}",
+      "postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc"
+    ],
+    [
+      "docker",
+      "volume",
+      "create",
+      "--label",
+      "com.docker.compose.project=binance-ops033-3bfdbfbd69",
+      "binance-ops033-3bfdbfbd69-data"
+    ],
+    [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "binance-ops033-3bfdbfbd69",
+      "--label",
+      "com.docker.compose.project=binance-ops033-3bfdbfbd69",
+      "--network",
+      "none",
+      "--cpus",
+      "1",
+      "--memory",
+      "1g",
+      "--cap-add",
+      "SYS_PTRACE",
+      "--security-opt",
+      "seccomp=unconfined",
+      "-e",
+      "POSTGRES_HOST_AUTH_METHOD=trust",
+      "-v",
+      "binance-ops033-3bfdbfbd69-data:/var/lib/postgresql",
+      "--entrypoint",
+      "sh",
+      "postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc",
+      "-c",
+      "docker-entrypoint.sh postgres -c io_method=sync & wait; sleep infinity"
+    ],
+    [
+      "docker",
+      "logs",
+      "binance-ops033-3bfdbfbd69"
+    ],
+    [
+      "docker",
+      "logs",
+      "binance-ops033-3bfdbfbd69"
+    ],
+    [
+      "docker",
+      "logs",
+      "binance-ops033-3bfdbfbd69"
+    ],
+    [
+      "docker",
+      "logs",
+      "binance-ops033-3bfdbfbd69"
+    ],
+    [
+      "docker",
+      "logs",
+      "binance-ops033-3bfdbfbd69"
+    ],
+    [
+      "docker",
+      "logs",
+      "binance-ops033-3bfdbfbd69"
+    ],
+    [
+      "docker",
+      "logs",
+      "binance-ops033-3bfdbfbd69"
+    ],
+    [
+      "docker",
+      "logs",
+      "binance-ops033-3bfdbfbd69"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops033-3bfdbfbd69",
+      "pg_isready",
+      "-U",
+      "postgres"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops033-3bfdbfbd69",
+      "psql",
+      "-XAt",
+      "-U",
+      "postgres",
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-c",
+      "SELECT json_object_agg(name,setting) FROM pg_settings WHERE name IN ('server_version','io_method','fsync','synchronous_commit','full_page_writes','data_directory','temp_tablespaces');"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops033-3bfdbfbd69",
+      "psql",
+      "-XAt",
+      "-U",
+      "postgres",
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-c",
+      "SELECT json_agg(t) FROM (SELECT oid,spcname,pg_tablespace_location(oid) AS location FROM pg_tablespace) t"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops033-3bfdbfbd69",
+      "mkdir",
+      "-p",
+      "/tmp/work/custom"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops033-3bfdbfbd69",
+      "chown",
+      "-R",
+      "postgres:postgres",
+      "/tmp/work"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops033-3bfdbfbd69",
+      "psql",
+      "-XAt",
+      "-U",
+      "postgres",
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-c",
+      "CREATE TABLESPACE ops040_custom LOCATION '/tmp/work/custom'"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops033-3bfdbfbd69",
+      "psql",
+      "-XAt",
+      "-U",
+      "postgres",
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-c",
+      "SELECT json_agg(t) FROM (SELECT oid,spcname,pg_tablespace_location(oid) AS location FROM pg_tablespace) t"
+    ],
+    [
+      "docker",
+      "cp",
+      "/Users/andrey/Desktop/Binance/docs/measurements/OPS-040/run-c/pg-witness.json",
+      "binance-ops033-3bfdbfbd69:/tmp/pg-witness.json"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops033-3bfdbfbd69",
+      "psql",
+      "-XAt",
+      "-U",
+      "postgres",
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-c",
+      "CREATE TABLE gate_input AS SELECT i,repeat(md5(i::text),4) payload FROM generate_series(1,2000) i; ANALYZE gate_input;"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops033-3bfdbfbd69",
+      "gosu",
+      "postgres",
+      "pg_ctl",
+      "-D",
+      "/var/lib/postgresql/18/docker",
+      "stop",
+      "-m",
+      "fast",
+      "-w"
+    ],
+    [
+      "docker",
+      "cp",
+      "/tmp/ops033-capture",
+      "binance-ops033-3bfdbfbd69:/tmp/capture"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops033-3bfdbfbd69",
+      "chmod",
+      "755",
+      "/tmp/capture"
+    ],
+    [
+      "docker",
+      "cp",
+      "/tmp/ops033-control",
+      "binance-ops033-3bfdbfbd69:/tmp/control"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops033-3bfdbfbd69",
+      "chmod",
+      "755",
+      "/tmp/control"
+    ],
+    [
+      "docker",
+      "exec",
+      "-e",
+      "OPS038_INVENTORY=1",
+      "-e",
+      "OPS039_LIFECYCLE=1",
+      "-e",
+      "OPS038_PATH_SCOPE=/tmp/work",
+      "-e",
+      "OPS038_PG_WITNESS=/tmp/pg-witness.json",
+      "binance-ops033-3bfdbfbd69",
+      "/tmp/capture",
+      "/tmp/work",
+      "/tmp/fs.gz",
+      "--",
+      "/tmp/control",
+      "references040"
+    ],
+    [
+      "docker",
+      "cp",
+      "binance-ops033-3bfdbfbd69:/tmp/fs.gz",
+      "/Users/andrey/Desktop/Binance/docs/measurements/OPS-040/run-c/filesystem.jsonl.gz"
+    ],
+    [
+      "docker",
+      "exec",
+      "-e",
+      "OPS038_INVENTORY=1",
+      "-e",
+      "OPS039_LIFECYCLE=1",
+      "-e",
+      "OPS038_PATH_SCOPE=/tmp/work",
+      "-e",
+      "OPS038_PG_WITNESS=/tmp/pg-witness.json",
+      "--user",
+      "postgres",
+      "binance-ops033-3bfdbfbd69",
+      "/tmp/capture",
+      "/var/lib/postgresql/18/docker/base/pgsql_tmp",
+      "/tmp/pg.gz",
+      "--",
+      "postgres",
+      "-D",
+      "/var/lib/postgresql/18/docker",
+      "-c",
+      "io_method=sync",
+      "-c",
+      "log_temp_files=0"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops033-3bfdbfbd69",
+      "psql",
+      "-XAt",
+      "-U",
+      "postgres",
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-c",
+      "SET temp_tablespaces=''; SET work_mem='64kB'; SET max_parallel_workers_per_gather=0; SELECT count(*) FROM (SELECT * FROM gate_input ORDER BY payload OFFSET 0) t;"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops033-3bfdbfbd69",
+      "sh",
+      "-c",
+      "for p in /proc/[0-9]*/status; do if test \"$(sed -n 's/^Name:[[:space:]]*//p' \"$p\")\" = postgres; then sed -n '/^Name:/p;/^Pid:/p;/^PPid:/p;/^TracerPid:/p;/^Threads:/p' \"$p\"; fi; done"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops033-3bfdbfbd69",
+      "psql",
+      "-XAt",
+      "-U",
+      "postgres",
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-c",
+      "SET temp_tablespaces=ops040_custom; SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT * FROM gate_input ORDER BY payload;"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops033-3bfdbfbd69",
+      "sh",
+      "-c",
+      "for p in /proc/[0-9]*/status; do if test \"$(sed -n 's/^Name:[[:space:]]*//p' \"$p\")\" = postgres; then sed -n '/^Name:/p;/^Pid:/p;/^PPid:/p;/^TracerPid:/p;/^Threads:/p' \"$p\"; fi; done"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops033-3bfdbfbd69",
+      "gosu",
+      "postgres",
+      "pg_ctl",
+      "-D",
+      "/var/lib/postgresql/18/docker",
+      "stop",
+      "-m",
+      "fast",
+      "-w"
+    ],
+    [
+      "docker",
+      "cp",
+      "binance-ops033-3bfdbfbd69:/tmp/pg.gz",
+      "/Users/andrey/Desktop/Binance/docs/measurements/OPS-040/run-c/postgres.jsonl.gz"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops033-3bfdbfbd69",
+      "uname",
+      "-a"
+    ],
+    [
+      "docker",
+      "rm",
+      "-f",
+      "binance-ops033-3bfdbfbd69"
+    ],
+    [
+      "docker",
+      "volume",
+      "rm",
+      "binance-ops033-3bfdbfbd69-data"
+    ],
+    [
+      "docker",
+      "container",
+      "ls",
+      "-a",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-ops033-3bfdbfbd69"
+    ],
+    [
+      "docker",
+      "volume",
+      "ls",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-ops033-3bfdbfbd69"
+    ],
+    [
+      "docker",
+      "network",
+      "ls",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-ops033-3bfdbfbd69"
+    ]
+  ],
+  "status": "ancillary-captured-not-qualified",
+  "temp_peak_live_bytes": null,
+  "qualification_blocked": true,
+  "lower_bytes": null,
+  "upper_bytes": null,
+  "mode": "ops040-references-v1",
+  "binary_sha256": "2dc2f92f44c4e9d7beded83cee34cd6f1fd09fefe02c99f3bd965dcadc2010a3",
+  "source_sha256": "f143365284fa56d425bc02e08ad7ec4a35720478b587d0a734e208fc5429580f",
+  "image": "sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc",
+  "settings": {
+    "data_directory": "/var/lib/postgresql/18/docker",
+    "fsync": "on",
+    "full_page_writes": "on",
+    "io_method": "sync",
+    "server_version": "18.6 (Debian 18.6-1.pgdg12+2)",
+    "synchronous_commit": "on",
+    "temp_tablespaces": ""
+  },
+  "tablespaces": [
+    {
+      "oid": "1663",
+      "spcname": "pg_default",
+      "location": ""
+    },
+    {
+      "oid": "1664",
+      "spcname": "pg_global",
+      "location": ""
+    },
+    {
+      "oid": "16384",
+      "spcname": "ops040_custom",
+      "location": "/tmp/work/custom"
+    }
+  ],
+  "row_count": 2000,
+  "filesystem_traced_seconds": 2.32564675,
+  "control_binary_sha256": "b48237756052af82626782b0e7f97057661659646b2b636b7556d42c7e101529",
+  "ordinary_result": "SET\nSET\nSET\n2000\n",
+  "ordinary_traced_seconds": 13.940265458000006,
+  "parallel_traced_seconds": 10.907076250000003,
+  "capture_exit": 0,
+  "kernel": "Linux 7501ddb4a824 6.12.76-linuxkit #1 SMP Wed May 13 14:27:18 UTC 2026 aarch64 GNU/Linux",
+  "cleanup": {
+    "container": [],
+    "volume": [],
+    "network": []
+  },
+  "sha256": {
+    "lifecycle-verifier.py.txt": "8e0673bcbfb617c159972ad3b87823f8b1fee2d09eb03e129f09f529ef330318",
+    "filesystem.txt": "74ab3c260d8d67892a8d8a300ac783f76094f99958a4221c674528a46c3f64ab",
+    "inventory_linux.go.txt": "bdf5cec58243df7bf2478ad708843dde6be2a3b571ac1ceeb1ea3c9d4039c7a8",
+    "control-main_linux.go.txt": "c2d3d2fd26e5a82b12f9d8167346cda4549fc84c2be34984c8f25222ca44cc2d",
+    "filesystem.jsonl.gz": "377b9708789cf6e9809d8ae8296094ce5eea119d0dcf423644530ae7656cce3b",
+    "control-references_linux.go.txt": "8befdf8da14285e7bbf9ba1c06a6b58e9a7deabdd0012f41343716871da33087",
+    "verifier-source.py.txt": "715e30ac5ebd7a88f83eb5cafc138df72691112eb6e073d845e9523f16bebdbf",
+    "after-parallel-processes.txt": "cf779fef0b27ec79eefa6f163d1840e173db8753a6adbd8d8a7fe23c2e5ed956",
+    "pg-witness.json": "5cb3e6b557a710d711fdb2add9fd034f0861192fc252889f635b43a8f8f40e2c",
+    "ordinary-processes.txt": "aca4b93e47d79e4584866d463c16cb214720c09bea3f2f98eed2ae5c7025ade9",
+    "main_linux.go.txt": "f143365284fa56d425bc02e08ad7ec4a35720478b587d0a734e208fc5429580f",
+    "message_linux.go.txt": "8cbb27c705f5fae43dfa401e50a8786b1464ad670b050f69ed0a499b923d57ba",
+    "postgres.stderr": "92bbc9343dd250182ba8a8507708923be54af64da3874ef641d622f7586a52fa",
+    "inventory-verifier.py.txt": "41ef316f18b7dfa04d24d3a2aaabe0c28c61669b2095741708879c5f1624217d",
+    "gate-source.py.txt": "371ffbef3478de1c949980cb510117c0080d63e33d5633b7c1e32561b801d76e",
+    "references-verifier.py.txt": "f6f2eb302d3afa8bd413017c5111e6815fba3a6387a8cb56e50899e304247a73",
+    "postgres.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "postgres.jsonl.gz": "92fe4526a42fb26cc8414bec8197d1d1e37fd8300b7afe2a676b27eadd5fc0a8",
+    "lifecycle_linux.go.txt": "6543942b0db3fe94f9d5ce144199ec276d6e42973c1b3489ee84cf6fcaa6156f",
+    "parallel-plan.txt": "760d0713c4249404f773321a45a7f8802b7f159b6cbea80c1a22296eaa86fb07",
+    "dependencies.json": "bd0ec5cbf540add2f51e5ec9bef915358bc3f25f9eb8078635a1f69ef07d1db4",
+    "full-inventory-verifier.py.txt": "d511f92e4d19ad7320a8b76c79f5ffd4b8b12343fb9d50833cc61b1caf76721d",
+    "postgres.jsonl.gz.part-002": "ac4131e22e77159e75f457180a28cbdec6f3c78323529360944748d96256997f",
+    "postgres.jsonl.gz.part-005": "9b93a2e5fa8a0667837d98e8e8a6c1247fcc8ed8c2d7187d5bd804290bbd21b2",
+    "artifact-transport.py.txt": "30a3258715c8381282c69591b8d6617c9e2d26dc9a24c66ba5635739c3716ebd",
+    "postgres.jsonl.gz.part-004": "768b58f1a1285c7629ac5716449f13a05e42ae70f508b988c66140ecaa89cb19",
+    "postgres.jsonl.gz.part-003": "fa04f5524b62cfd16b0ad1f5f05f79e0ded3c5bdc736b8a70a4b328828dfd897",
+    "full-verifier.py.txt": "7a5455ec4be5d3f2454be4e0cbbdab8fafdb259abac331f0241c6cde2f4d3e38",
+    "postgres.jsonl.gz.part-001": "c5af4f1107502820fbd81b4ac7d5fb75e515c7b4cc269eb7b046e74d2930e752",
+    "postgres.jsonl.gz.part-000": "73a4b38f709c2fb387b27aba368c5fef6726d151efc4af65c165e90a76d84853",
+    "full-lifecycle-verifier.py.txt": "4ab3bbacb98400d6f93b44c14b18236bbef8db7b9aea59a18b914d0d55aa6f16"
+  },
+  "archives": {
+    "postgres.jsonl.gz": {
+      "encoding": "concatenated-bytes",
+      "parts": [
+        "postgres.jsonl.gz.part-000",
+        "postgres.jsonl.gz.part-001",
+        "postgres.jsonl.gz.part-002",
+        "postgres.jsonl.gz.part-003",
+        "postgres.jsonl.gz.part-004",
+        "postgres.jsonl.gz.part-005"
+      ],
+      "size": 184614103
+    }
+  },
+  "post_capture_verification": "dependencies plus lossless PG chunks and full-* verifier snapshots; original capture sources preserved"
+}

@@ -46,7 +46,7 @@ def replay(rows):
     require(rows[-1]['kind']=='footer','missing footer')
     entries={};tasks={};groups={};active=0;queue=[];early=set();journal=set();pending_event=None
     info=None;stop=None;clock=-1;root=None;transitions=0;inherited=0;incomplete=0
-    last={};returns=[];births=[];stops={}
+    last={};returns=[];births=[];stops={};terminal_identity_races=[]
     for seq,r in enumerate(rows,1):
         require(r['seq']==seq and r['ns']>=clock,'sequence/clock');clock=r['ns']
         k=r['kind'];pid=r.get('pid')
@@ -61,7 +61,22 @@ def replay(rows):
             status=inv.text(r['identity'],f'/proc/{pid}/status');stat=inv.text(r['stat'],f'/proc/{pid}/stat')
             if r['identity']['error'] or r['stat']['error']: incomplete+=1
             else:
-                group,start=identity(status,stat,pid)
+                try:
+                    group,start=identity(status,stat,pid)
+                except ValueError:
+                    # Final wait status can precede procfs Z -> X teardown.
+                    # status/stat are separate reads: retain the contradiction
+                    # as incomplete, never reinterpret it as an atomic identity.
+                    parsed=dict(x.split(':',1) for x in status.splitlines() if ':' in x)
+                    tid,ppid,start=inv.stat_identity(stat)
+                    terminal=(r['status']&127)!=127
+                    state=stat[stat.rfind(')')+2:].split()[0]
+                    require(terminal and pid in last and tid==pid==int(parsed['Pid']) and
+                            int(parsed['Tgid'])==last[pid][0] and start==last[pid][1] and
+                            state=='X' and parsed['State'].strip().startswith('Z') and ppid==0,
+                            'stop identity')
+                    group=last[pid][0];incomplete+=1
+                    terminal_identity_races.append({'seq':r['seq'],'pid':pid,'status_ppid':int(parsed['PPid']),'stat_ppid':ppid,'status_state':parsed['State'].strip(),'stat_state':state})
                 if pid in groups and (r['status']>>16)!=4: require(group==groups[pid],'task group differs from procfs')
                 last[pid]=(group,start)
             if pid not in tasks and (r['status']&0xffff)==4991:
@@ -149,7 +164,7 @@ def replay(rows):
         else: require(k in ('header','footer','inventory','inventory_environment','signal'),'unhandled record '+k)
     require(root and not tasks and not queue and active==0 and not early and pending_event is None,'incomplete lifecycle')
     f=rows[-1];require(f['root_exit']==0 and f['status']=='unknown' and f['qualification_blocked'] and f['temp_peak_live_bytes'] is None and set(f['issues'])==journal,'footer/issue journal')
-    return {'transitions':transitions,'births':births,'inherited_returns':inherited,'incomplete_evidence':incomplete,'returns':returns,'inventory':inv.replay(rows,lifecycle=True)}
+    return {'terminal_identity_races':terminal_identity_races,'transitions':transitions,'births':births,'inherited_returns':inherited,'incomplete_evidence':incomplete,'returns':returns,'inventory':inv.replay(rows,lifecycle=True)}
 
 # Entries belong to a replay invocation, not module state.
 

@@ -93,6 +93,10 @@ func call(tag string, nr uintptr, socket int, hs []mhdr, flags uintptr) {
 	runtime.KeepAlive(hs)
 }
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "references040" {
+		referenceControls()
+		return
+	}
 	runtime.LockOSThread()
 	if len(os.Args) > 1 && os.Args[1] == "receive" {
 		b := []byte{'x'}

@@ -111,3 +111,7 @@ snapshots also include `inventory_linux.go`, required by the capture build.
 OPS-039 adds an opt-in [lifecycle journal](../lifecycle/README.md) over the
 OPS-038 inventories, including clone3/shared-state evidence and nonleader exec
 TID/gate transitions. Legacy schemas and historical raw remain unchanged.
+
+OPS-040 adds [reference controls/full artifact verification](../references/README.md)
+and ordinary/parallel PG via `OPS040_REFERENCES=1` in this same runner. The raw
+OPS-039/038 schemas and all legacy capture modes remain unchanged.

@@ -1,0 +1,17 @@
+2026-11-05 19:05:48.184 UTC [180] LOG:  starting PostgreSQL 18.6 (Debian 18.6-1.pgdg12+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
+2026-11-05 19:05:48.248 UTC [180] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2026-11-05 19:05:48.249 UTC [180] LOG:  listening on IPv6 address "::", port 5432
+2026-11-05 19:05:48.351 UTC [180] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2026-11-05 19:05:49.133 UTC [185] LOG:  database system was shut down at 2026-11-05 19:05:04 UTC
+2026-11-05 19:05:50.422 UTC [180] LOG:  database system is ready to accept connections
+2026-11-05 19:06:04.508 UTC [195] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp195.0", size 303104
+2026-11-05 19:06:04.508 UTC [195] STATEMENT:  SET temp_tablespaces=''; SET work_mem='64kB'; SET max_parallel_workers_per_gather=0; SELECT count(*) FROM (SELECT * FROM gate_input ORDER BY payload OFFSET 0) t;
+2026-11-05 19:06:15.478 UTC [224] LOG:  temporary file: path "pg_tblspc/16384/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0", size 303104
+2026-11-05 19:06:15.478 UTC [224] STATEMENT:  SET temp_tablespaces=ops040_custom; SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT * FROM gate_input ORDER BY payload;
+2026-11-05 19:06:15.610 UTC [180] LOG:  received fast shutdown request
+2026-11-05 19:06:15.752 UTC [180] LOG:  aborting any active transactions
+2026-11-05 19:06:15.823 UTC [180] LOG:  background worker "logical replication launcher" (PID 188) exited with exit code 1
+2026-11-05 19:06:15.901 UTC [183] LOG:  shutting down
+2026-11-05 19:06:15.963 UTC [183] LOG:  checkpoint starting: shutdown immediate
+2026-11-05 19:06:18.292 UTC [183] LOG:  checkpoint complete: wrote 45 buffers (0.3%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=1.629 s, sync=0.086 s, total=2.392 s; sync files=7, longest=0.043 s, average=0.013 s; distance=345 kB, estimate=345 kB; lsn=0/1849828, redo lsn=0/1849828
+2026-11-05 19:06:19.204 UTC [180] LOG:  database system is shut down

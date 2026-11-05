@@ -6,12 +6,14 @@ Output must be new; all Docker resources are disposable and labelled.
 import gzip
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
 import time
 import uuid
 
+OPS040 = os.environ.get("OPS040_REFERENCES") == "1"
 HERE = Path(__file__).resolve().parent
 OUT = Path(sys.argv[1]).resolve()
 OUT.mkdir(parents=True, exist_ok=False)
@@ -22,6 +24,8 @@ DATA = "/var/lib/postgresql/18/docker"
 report = {"project": PROJECT, "commands": [], "status": "running",
           "temp_peak_live_bytes": None, "qualification_blocked": True}
 clients = []
+if OPS040:
+    report.update(lower_bytes=None, upper_bytes=None, mode="ops040-references-v1")
 
 
 def run(args, check=True, timeout=60, **kwargs):
@@ -37,7 +41,7 @@ def ex(*args, **kwargs):
 
 
 def sql(query):
-    return ex("psql", "-XAt", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-c", query)
+    return ex("psql", "-XAt", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-c", query, timeout=180 if OPS040 else 60)
 
 
 def collect(name, remote):
@@ -51,10 +55,21 @@ def process_evidence():
 
 
 try:
-    for name in ("main_linux.go", "message_linux.go", "inventory_linux.go", "lifecycle_linux.go", "control/main_linux.go"):
+    for name in ("main_linux.go", "message_linux.go", "inventory_linux.go", "lifecycle_linux.go", "control/main_linux.go", "control/references_linux.go"):
         (OUT / (name.replace("/", "-") + ".txt")).write_bytes((HERE / name).read_bytes())
     (OUT / "gate-source.py.txt").write_bytes(Path(__file__).read_bytes())
     (OUT / "verifier-source.py.txt").write_bytes((HERE / "verify.py").read_bytes())
+    if OPS040:
+        dependencies = {}
+        for ticket, run_name in (("OPS-038", "run-c"), ("OPS-039", "run-f")):
+            directory = Path("docs/measurements") / ticket / run_name
+            dependencies[ticket] = {"directory": str(directory), "report_sha256": hashlib.sha256((directory / "report.json").read_bytes()).hexdigest()}
+        (OUT / "dependencies.json").write_text(json.dumps(dependencies, indent=2) + "\n")
+        for source, target in (("inventory", "inventory-verifier.py.txt"), ("lifecycle", "lifecycle-verifier.py.txt"), ("references", "references-verifier.py.txt")):
+            (OUT / target).write_bytes((HERE.parent / source / "verify.py").read_bytes())
+        env = ["env", "GOCACHE=/tmp/binance-ops038-gocache", "GOMODCACHE=/tmp/binance-ops039-modcache", "GOOS=linux", "GOARCH=arm64", "CGO_ENABLED=0", "GOTOOLCHAIN=local"]
+        for name, source in (("capture", "./infra/postgres/measure/ancillary"), ("control", "./infra/postgres/measure/ancillary/control")):
+            run(env + ["go", "build", "-o", "/tmp/ops033-" + name, source])
     report["binary_sha256"] = hashlib.sha256(Path("/tmp/ops033-capture").read_bytes()).hexdigest()
     report["source_sha256"] = hashlib.sha256((HERE / "main_linux.go").read_bytes()).hexdigest()
     report["image"] = run(["docker", "image", "inspect", "--format", "{{.Id}}", IMAGE]).strip()
@@ -78,41 +93,64 @@ try:
     report["tablespaces"] = json.loads(sql("SELECT json_agg(t) FROM (SELECT oid,spcname,pg_tablespace_location(oid) AS location FROM pg_tablespace) t"))
     assert report["settings"]["io_method"] == "sync"
     assert all(not t["location"] for t in report["tablespaces"])
-    sql("CREATE TABLE gate_input AS SELECT i,repeat(md5(i::text),4) payload FROM generate_series(1,20000) i; ANALYZE gate_input;")
+    if OPS040:
+        ex("mkdir", "-p", "/tmp/work/custom")
+        ex("chown", "-R", "postgres:postgres", "/tmp/work")
+        sql("CREATE TABLESPACE ops040_custom LOCATION '/tmp/work/custom'")
+        report["tablespaces"] = json.loads(sql("SELECT json_agg(t) FROM (SELECT oid,spcname,pg_tablespace_location(oid) AS location FROM pg_tablespace) t"))
+        witness = dict(io_method=report["settings"]["io_method"], settings=report["settings"], tablespaces=report["tablespaces"])
+        (OUT / "pg-witness.json").write_text(json.dumps(witness))
+        run(["docker", "cp", str(OUT / "pg-witness.json"), PROJECT + ":/tmp/pg-witness.json"])
+    capture_env = ["-e", "OPS038_INVENTORY=1", "-e", "OPS039_LIFECYCLE=1", "-e", "OPS038_PATH_SCOPE=/tmp/work", "-e", "OPS038_PG_WITNESS=/tmp/pg-witness.json"] if OPS040 else []
+    row_count = 2000 if OPS040 else 20000
+    report["row_count"] = row_count
+    sql(f"CREATE TABLE gate_input AS SELECT i,repeat(md5(i::text),4) payload FROM generate_series(1,{row_count}) i; ANALYZE gate_input;")
     ex("gosu", "postgres", "pg_ctl", "-D", DATA, "stop", "-m", "fast", "-w")
     run(["docker", "cp", "/tmp/ops033-capture", PROJECT + ":/tmp/capture"])
     ex("chmod", "755", "/tmp/capture")
     run(["docker", "cp", "/tmp/ops033-control", PROJECT + ":/tmp/control"])
     ex("chmod", "755", "/tmp/control")
     started = time.monotonic()
-    (OUT / "filesystem.txt").write_text(ex("/tmp/capture", "/tmp/work", "/tmp/fs.gz", "--", "/tmp/control"))
+    mode = ["references040"] if OPS040 else []
+    (OUT / "filesystem.txt").write_text(run(["docker", "exec", *capture_env, PROJECT, "/tmp/capture", "/tmp/work", "/tmp/fs.gz", "--", "/tmp/control", *mode], timeout=180 if OPS040 else 60))
     report["filesystem_traced_seconds"] = time.monotonic() - started
     collect("filesystem.jsonl.gz", "/tmp/fs.gz")
-    started = time.monotonic()
-    ex("/tmp/control")
-    report["filesystem_untraced_seconds"] = time.monotonic() - started
+    if not OPS040:
+        started = time.monotonic()
+        ex("/tmp/control")
+        report["filesystem_untraced_seconds"] = time.monotonic() - started
     report["control_binary_sha256"] = hashlib.sha256(Path("/tmp/ops033-control").read_bytes()).hexdigest()
     # Trace the final postmaster from exec, not an attachment after its children exist.
-    p = subprocess.Popen(["docker", "exec", "--user", "postgres", PROJECT,
+    pg_command = ["docker", "exec", *capture_env, "--user", "postgres", PROJECT,
         "/tmp/capture", DATA + "/base/pgsql_tmp", "/tmp/pg.gz", "--",
-        "postgres", "-D", DATA, "-c", "io_method=sync", "-c", "log_temp_files=0"],
+        "postgres", "-D", DATA, "-c", "io_method=sync", "-c", "log_temp_files=0"]
+    report["commands"].append(pg_command)
+    p = subprocess.Popen(pg_command,
         stdout=open(OUT / "postgres.stdout", "w"), stderr=open(OUT / "postgres.stderr", "w"))
     clients.append(p)
-    for _ in range(300):
+    for _ in range(600 if OPS040 else 300):
         if p.poll() is not None:
             raise RuntimeError("capture exited during startup")
-        if "accepting connections" in ex("pg_isready", "-U", "postgres", check=False):
+        if OPS040:
+            ready = "database system is ready to accept connections" in (OUT / "postgres.stderr").read_text()
+        else:
+            ready = "accepting connections" in ex("pg_isready", "-U", "postgres", check=False)
+        if ready:
             break
-        time.sleep(.1)
+        time.sleep(.5 if OPS040 else .1)
     else:
         raise RuntimeError("traced postgres readiness timeout")
     query = "SET work_mem='64kB'; SET max_parallel_workers_per_gather=0; SELECT count(*) FROM (SELECT * FROM gate_input ORDER BY payload OFFSET 0) t;"
     started = time.monotonic()
+    if OPS040:
+        query = "SET temp_tablespaces=''; " + query
     report["ordinary_result"] = sql(query)
     report["ordinary_traced_seconds"] = time.monotonic() - started
     (OUT / "ordinary-processes.txt").write_text(process_evidence())
     query = "SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);"
     started = time.monotonic()
+    if OPS040:
+        query = "SET temp_tablespaces=ops040_custom; " + query.replace("SELECT count(*) FROM gate_input a JOIN gate_input b USING (i)", "SELECT * FROM gate_input ORDER BY payload")
     (OUT / "parallel-plan.txt").write_text(sql(query))
     report["parallel_traced_seconds"] = time.monotonic() - started
     (OUT / "after-parallel-processes.txt").write_text(process_evidence())
@@ -142,5 +180,9 @@ finally:
     report["cleanup"] = {kind: run(["docker", kind, "ls", *(["-a"] if kind == "container" else []),
         "-q", "--filter", "label=" + LABEL]).splitlines() for kind in ("container", "volume", "network")}
     report["sha256"] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in OUT.iterdir() if p.is_file() and p.name != "report.json"}
+    if OPS040 and report["status"] == "ancillary-captured-not-qualified":
+        sys.path.insert(0, str(HERE.parent / "references"))
+        from artifacts import seal
+        seal(OUT, report)
     (OUT / "report.json").write_text(json.dumps(report, indent=2) + "\n")
 print(report["status"])
