@@ -1,0 +1,16 @@
+{
+  "unknown_wal": "rejected",
+  "missing_phase": "rejected",
+  "changed_body": "rejected",
+  "same_duplicate_offset": "rejected",
+  "missing_sql_mark": "rejected",
+  "bad_boundary_size": "rejected",
+  "kafka_fsync_zero": "rejected",
+  "unsupported_fsync_count_zero": "rejected",
+  "claim_token_reused": "rejected",
+  "summary_unknown_as_zero": "rejected",
+  "summary_qualified": "rejected",
+  "unmeasured_component_as_zero": "rejected",
+  "missing_component": "rejected",
+  "unsupported_fsync_as_observed": "rejected"
+}

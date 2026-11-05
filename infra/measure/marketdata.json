@@ -1,0 +1,307 @@
+{
+  "format_version": 1,
+  "source_id": "OPS-022-market-data-v1",
+  "sources": [
+    "infra/measure/marketdata_adapter.py",
+    "internal/tools/marketmeasure/main.go",
+    "scripts/verify_marketdata_measurement.py",
+    "scripts/measure_joint.py",
+    "scripts/measure_postgres.py",
+    "scripts/measure_kafka.py"
+  ],
+  "contract_versions": {
+    "adapter_protocol": 1,
+    "event_envelope": 1,
+    "price_observed": 1
+  },
+  "limits": {
+    "event_bytes": 4096,
+    "relay_max_batch": 1,
+    "resident_records": 1,
+    "retained_history_bound": null,
+    "total_publish_attempts_bound": null
+  },
+  "qualification": {
+    "qualified": false,
+    "blockers": [
+      "PostgreSQL temp peak/device IO unsupported",
+      "Kafka fsync unsupported",
+      "finite retained history/repeat bounds absent",
+      "DEC-008 load profile not measured"
+    ],
+    "uncovered": [
+      "all admissible field shapes/price lengths/generation digit counts",
+      "TOAST worst case/incompressible maximum payload",
+      "multi-pair contention and scans at scale",
+      "rollback/unknown SQL commit/crash/fencing variants",
+      "segment roll and full retention profile",
+      "market-data price downstream matcher Prefix/candidate/workflow continuation"
+    ]
+  },
+  "phases": [
+    {
+      "phase_id": "empty",
+      "unit": "operation",
+      "size": 0,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "begin",
+      "unit": "operation",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "status_live",
+      "unit": "operation",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "accept_small",
+      "unit": "operation",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "ops022-price-1",
+          "trigger_id": null,
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "repeat",
+      "unit": "operation",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "ops022-price-1",
+          "trigger_id": null,
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "old",
+      "unit": "operation",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "ops022-price-1",
+          "trigger_id": null,
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "accept_4095_gap",
+      "unit": "operation",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "ops022-price-2",
+          "trigger_id": null,
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "accept_4096",
+      "unit": "operation",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "ops022-price-3",
+          "trigger_id": null,
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "begin_again",
+      "unit": "operation",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "stale_generation",
+      "unit": "operation",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "ops022-price-4",
+          "trigger_id": null,
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "accept_generation2",
+      "unit": "operation",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "ops022-price-4",
+          "trigger_id": null,
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "reject_4097",
+      "unit": "operation",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "ops022-price-5",
+          "trigger_id": null,
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "status_gap",
+      "unit": "operation",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "status_sticky",
+      "unit": "operation",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "claim_first",
+      "unit": "operation",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "ops022-price-1",
+          "trigger_id": null,
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "publish_first",
+      "unit": "operation",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "ops022-price-1",
+          "trigger_id": null,
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "mark_first",
+      "unit": "operation",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "ops022-price-1",
+          "trigger_id": null,
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "claim_lost",
+      "unit": "operation",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "ops022-price-2",
+          "trigger_id": null,
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "publish_lost",
+      "unit": "operation",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "ops022-price-2",
+          "trigger_id": null,
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "reclaim",
+      "unit": "operation",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "ops022-price-2",
+          "trigger_id": null,
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "publish_retry",
+      "unit": "operation",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "ops022-price-2",
+          "trigger_id": null,
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "mark_retry",
+      "unit": "operation",
+      "size": 1,
+      "max_batch": 1,
+      "links": [
+        {
+          "event_id": "ops022-price-2",
+          "trigger_id": null,
+          "attempt_id": null
+        }
+      ]
+    },
+    {
+      "phase_id": "relay_tail",
+      "unit": "operation",
+      "size": 2,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "claim_empty",
+      "unit": "operation",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    }
+  ]
+}
