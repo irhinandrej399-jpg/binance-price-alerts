@@ -156,3 +156,4 @@
 144. [LOAD-008](tickets/LOAD-008.md) — Проверить восстановление notifications под нагрузкой.
 145. [SUB-024](tickets/SUB-024.md) — Исследовать нестабильный expiry в SQL snapshot RPC тестах.
 146. [NTF-017](tickets/NTF-017.md) — Закрыть изменение исторических свидетельств ролью notifications.
+147. [OPS-027](tickets/OPS-027.md) — Устранить гонку описи временных Kafka-файлов.

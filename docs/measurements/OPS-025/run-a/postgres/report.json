@@ -1,0 +1,42 @@
+{
+  "format_version": 1,
+  "project": "binance-pg-measure-f883b9a995d9",
+  "status": "failed",
+  "rows": 1000,
+  "source_commit": "9b02a19e8fe4745796e47d0bee5bc49ecafff3a8",
+  "source_dirty": true,
+  "commands": [
+    [
+      "docker",
+      "compose",
+      "-p",
+      "binance-pg-measure-f883b9a995d9",
+      "-f",
+      "/Users/andrey/Desktop/Binance/infra/postgres/compose.yaml",
+      "-f",
+      "/var/folders/xc/2mfv79815f37g7lxmgt3bvnc0000gn/T/pg-measure-xo4g695i/override.yaml",
+      "up",
+      "-d",
+      "--wait",
+      "--wait-timeout",
+      "120"
+    ],
+    [
+      "docker",
+      "compose",
+      "-p",
+      "binance-pg-measure-f883b9a995d9",
+      "-f",
+      "/Users/andrey/Desktop/Binance/infra/postgres/compose.yaml",
+      "-f",
+      "/var/folders/xc/2mfv79815f37g7lxmgt3bvnc0000gn/T/pg-measure-xo4g695i/override.yaml",
+      "down",
+      "--volumes",
+      "--remove-orphans"
+    ]
+  ],
+  "phases": {},
+  "override": "services:\n  postgres:\n    env_file: !override [\"<ephemeral-secret-file>\"]\n    ports: !override [\"127.0.0.1::5432\"]\n    command: [postgres, -c, fsync=on, -c, synchronous_commit=on, -c, full_page_writes=on, -c, track_io_timing=on, -c, track_wal_io_timing=on]\n",
+  "error": "CalledProcessError",
+  "cleanup_error": "cleanup failed; inspect resources with report project label"
+}

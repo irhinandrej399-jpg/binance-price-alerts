@@ -1,0 +1,739 @@
+{
+  "format_version": 1,
+  "qualified": false,
+  "accepted": [
+    "run-a3",
+    "run-b3"
+  ],
+  "exploratory": {
+    "run-a": "sandbox Docker denied; no successful experiment",
+    "run-a1": "control before separate diagnostic windows, not final comparison",
+    "run-a2": "failed concurrent Kafka temporary-file inventory, OPS-027; both cleanups verified"
+  },
+  "runs": {
+    "run-a3": {
+      "phases": {
+        "empty": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 238584,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "snapshot_load": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 40960,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 186176,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "snapshot_repeat": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 480,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "assign": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 57344,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 2648,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "assign_repeat": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 832,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "initialize": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 16384,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 1928,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "initialize_repeat": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 440,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "replay_first": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 16384,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 3608,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "replay_repeat": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 568,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "live_sql_duplicate": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 672,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 4096
+        },
+        "live_first": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 2048,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "observe_first": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 1576,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "live_physical_duplicate": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 912,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "observe_duplicate": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 744,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "live_creates": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 4680,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "work_accept": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 40960,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 3296,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "work_accept_repeat": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 1232,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "work_results": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 3616,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "work_results_repeat": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 7784,
+          "kafka_log_apparent_bytes": 360,
+          "kafka_all_apparent_bytes": 360,
+          "kafka_all_allocated_bytes": 0
+        },
+        "work_complete": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 5384,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 4096
+        },
+        "work_complete_repeat": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 6264,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "live_tail": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 12760,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "live_old_version": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 3576,
+          "kafka_log_apparent_bytes": 360,
+          "kafka_all_apparent_bytes": 360,
+          "kafka_all_allocated_bytes": 0
+        },
+        "takeover": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 2960,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "stale_write": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 976,
+          "kafka_log_apparent_bytes": 360,
+          "kafka_all_apparent_bytes": 360,
+          "kafka_all_allocated_bytes": 0
+        },
+        "revoke": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 1056,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        }
+      },
+      "checkpoint": {
+        "C": 19,
+        "NextOffset": 39
+      },
+      "source_sha256": "60187b1c96bab46ddc9009a6853e43c0780099659470c60fdfd67a97fcd85106",
+      "cleanup": {
+        "postgres": {
+          "container": [],
+          "volume": [],
+          "network": []
+        },
+        "kafka": {
+          "verified": true,
+          "leftovers": {
+            "container": "",
+            "volume": "",
+            "network": ""
+          }
+        }
+      },
+      "commands": [
+        "python3",
+        "infra/measure/matcher_adapter.py",
+        "docs/measurements/OPS-025/run-a3/identities.json",
+        "docs/measurements/OPS-024/run-a2/identities.json"
+      ],
+      "source_hashes_match_current_files": true
+    },
+    "run-b3": {
+      "phases": {
+        "empty": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 184,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 1725,
+          "kafka_all_allocated_bytes": 8192
+        },
+        "snapshot_load": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 16384,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 920,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "snapshot_repeat": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 480,
+          "kafka_log_apparent_bytes": 360,
+          "kafka_all_apparent_bytes": 360,
+          "kafka_all_allocated_bytes": 4096
+        },
+        "assign": {
+          "relation_bytes": {
+            "api": 32768,
+            "market_data": 0,
+            "matcher": 57344,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 241912,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "assign_repeat": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 832,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "initialize": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 16384,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 1984,
+          "kafka_log_apparent_bytes": 360,
+          "kafka_all_apparent_bytes": 360,
+          "kafka_all_allocated_bytes": 0
+        },
+        "initialize_repeat": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 440,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "replay_first": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 16384,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 3552,
+          "kafka_log_apparent_bytes": 360,
+          "kafka_all_apparent_bytes": 360,
+          "kafka_all_allocated_bytes": 0
+        },
+        "replay_repeat": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 568,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "live_sql_duplicate": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 672,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "live_first": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 2048,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "observe_first": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 1576,
+          "kafka_log_apparent_bytes": 360,
+          "kafka_all_apparent_bytes": 360,
+          "kafka_all_allocated_bytes": 0
+        },
+        "live_physical_duplicate": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 912,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "observe_duplicate": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 744,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "live_creates": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 4680,
+          "kafka_log_apparent_bytes": 360,
+          "kafka_all_apparent_bytes": 360,
+          "kafka_all_allocated_bytes": 0
+        },
+        "work_accept": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 40960,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 3296,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "work_accept_repeat": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 1232,
+          "kafka_log_apparent_bytes": 360,
+          "kafka_all_apparent_bytes": 360,
+          "kafka_all_allocated_bytes": 0
+        },
+        "work_results": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 3616,
+          "kafka_log_apparent_bytes": 360,
+          "kafka_all_apparent_bytes": 360,
+          "kafka_all_allocated_bytes": 0
+        },
+        "work_results_repeat": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 7784,
+          "kafka_log_apparent_bytes": 360,
+          "kafka_all_apparent_bytes": 360,
+          "kafka_all_allocated_bytes": 0
+        },
+        "work_complete": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 5384,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 4096
+        },
+        "work_complete_repeat": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 6264,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "live_tail": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 12760,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "live_old_version": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 3576,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "takeover": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 2960,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "stale_write": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 976,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        },
+        "revoke": {
+          "relation_bytes": {
+            "api": 0,
+            "market_data": 0,
+            "matcher": 0,
+            "notifications": 0
+          },
+          "cluster_wal_bytes": 1056,
+          "kafka_log_apparent_bytes": 432,
+          "kafka_all_apparent_bytes": 432,
+          "kafka_all_allocated_bytes": 0
+        }
+      },
+      "checkpoint": {
+        "C": 19,
+        "NextOffset": 39
+      },
+      "source_sha256": "60187b1c96bab46ddc9009a6853e43c0780099659470c60fdfd67a97fcd85106",
+      "cleanup": {
+        "postgres": {
+          "container": [],
+          "volume": [],
+          "network": []
+        },
+        "kafka": {
+          "verified": true,
+          "leftovers": {
+            "container": "",
+            "volume": "",
+            "network": ""
+          }
+        }
+      },
+      "commands": [
+        "python3",
+        "infra/measure/matcher_adapter.py",
+        "docs/measurements/OPS-025/run-b3/identities.json",
+        "docs/measurements/OPS-024/run-a2/identities.json"
+      ],
+      "source_hashes_match_current_files": true
+    }
+  },
+  "source": {
+    "path": "docs/measurements/OPS-024/run-a2/identities.json",
+    "sha256": "60187b1c96bab46ddc9009a6853e43c0780099659470c60fdfd67a97fcd85106"
+  },
+  "source_wire_bytes": {
+    "count": 19,
+    "total": 12862,
+    "minimum": 619,
+    "maximum": 708
+  },
+  "qualification": {
+    "qualified": false,
+    "covered": [
+      "empty snapshot staging/repeat",
+      "fenced initialize/repeat",
+      "mTLS SQL replay/ack",
+      "first version and physical duplicate Kafka Handle",
+      "full after-images/tombstones",
+      "assignment/repeat/takeover/stale/revoke",
+      "pricework Accept/Record/Complete and exact repeats using source canonical outcomes"
+    ],
+    "uncovered": [
+      "nonempty snapshot pages",
+      "live coordinator/group/handler automatic flow",
+      "real delivery RPC and new canonical workflow",
+      "price Kafka prefix and broker OffsetCommit",
+      "superseded/pending restart/errors/rollback",
+      "maximal payloads/candidates/batches/TOAST"
+    ],
+    "blockers": [
+      "PostgreSQL device IO/temp peak unsupported",
+      "Kafka fsync unsupported",
+      "missing finite input/batch bounds",
+      "uncovered write classes",
+      "fixture is not DEC-008 load profile",
+      "notifications and market-data continuations remain separate"
+    ]
+  }
+}

@@ -109,3 +109,5 @@ python3 scripts/verify_joint_measurement.py /tmp/joint-a /tmp/joint-b --failed /
 оба failed collector reports и подтверждённое отсутствие disposable ресурсов.
 
 Бизнес-manifest API и продолжения по устойчивым ID: [OPS-024](API.md).
+
+Продолжение исходных событий API в matcher: [OPS-025](MATCHER.md).

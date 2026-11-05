@@ -1,0 +1,226 @@
+{
+  "format_version": 1,
+  "source_id": "OPS-025-matcher-v1",
+  "sources": [
+    "infra/measure/matcher_adapter.py",
+    "internal/tools/apimeasure/matcher_test.go",
+    "internal/tools/apimeasure/tls_test.go",
+    "scripts/verify_matcher_measurement.py",
+    "docs/measurements/OPS-024/run-a2/identities.json"
+  ],
+  "contract_versions": {
+    "adapter_protocol": 1,
+    "matcher_manifest": 1,
+    "subscription_changed": 2
+  },
+  "source": {
+    "path": "docs/measurements/OPS-024/run-a2/identities.json",
+    "sha256": "60187b1c96bab46ddc9009a6853e43c0780099659470c60fdfd67a97fcd85106"
+  },
+  "phases": [
+    {
+      "phase_id": "empty",
+      "unit": "adapter_call",
+      "size": 0,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "snapshot_load",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "snapshot_repeat",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "assign",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "assign_repeat",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "initialize",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "initialize_repeat",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "replay_first",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "replay_repeat",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "live_sql_duplicate",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "live_first",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "live_physical_duplicate",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "live_creates",
+      "unit": "adapter_call",
+      "size": 3,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "work_accept",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 4,
+      "links": []
+    },
+    {
+      "phase_id": "work_accept_repeat",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 4,
+      "links": []
+    },
+    {
+      "phase_id": "work_results",
+      "unit": "adapter_call",
+      "size": 4,
+      "max_batch": 4,
+      "links": []
+    },
+    {
+      "phase_id": "work_results_repeat",
+      "unit": "adapter_call",
+      "size": 4,
+      "max_batch": 4,
+      "links": []
+    },
+    {
+      "phase_id": "work_complete",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 4,
+      "links": []
+    },
+    {
+      "phase_id": "work_complete_repeat",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 4,
+      "links": []
+    },
+    {
+      "phase_id": "live_tail",
+      "unit": "adapter_call",
+      "size": 14,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "live_old_version",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "takeover",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "stale_write",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    },
+    {
+      "phase_id": "revoke",
+      "unit": "adapter_call",
+      "size": 1,
+      "max_batch": 1,
+      "links": []
+    }
+  ],
+  "limits": {
+    "replay_max_transactions": 1000,
+    "replay_max_page_bytes": 3145728,
+    "snapshot_page_rows": 1000,
+    "pricework_max_candidates": null,
+    "snapshot_total_rows": null,
+    "fixture_candidates": 4
+  },
+  "qualification": {
+    "qualified": false,
+    "covered": [
+      "empty snapshot staging/repeat",
+      "fenced initialize/repeat",
+      "mTLS SQL replay/ack",
+      "first version and physical duplicate Kafka Handle",
+      "full after-images/tombstones",
+      "assignment/repeat/takeover/stale/revoke",
+      "pricework Accept/Record/Complete and exact repeats using source canonical outcomes"
+    ],
+    "uncovered": [
+      "nonempty snapshot pages",
+      "live coordinator/group/handler automatic flow",
+      "real delivery RPC and new canonical workflow",
+      "price Kafka prefix and broker OffsetCommit",
+      "superseded/pending restart/errors/rollback",
+      "maximal payloads/candidates/batches/TOAST"
+    ],
+    "blockers": [
+      "PostgreSQL device IO/temp peak unsupported",
+      "Kafka fsync unsupported",
+      "missing finite input/batch bounds",
+      "uncovered write classes",
+      "fixture is not DEC-008 load profile",
+      "notifications and market-data continuations remain separate"
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "missing_phase": "rejected",
+  "unknown_numeric_metric": "rejected",
+  "same_physical_offset": "rejected",
+  "mixed_source_hash": "rejected",
+  "changed_after_image": "rejected",
+  "false_snapshot_complete": "rejected",
+  "changed_canonical_trigger": "rejected",
+  "changed_duplicate_diagnostic": "rejected"
+}
