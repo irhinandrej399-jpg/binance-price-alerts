@@ -1,0 +1,129 @@
+{
+  "results": {
+    "filesystem": {
+      "status": "unknown",
+      "temp_peak_live_bytes": null,
+      "lower_bytes": null,
+      "upper_bytes": null,
+      "qualification_blocked": true,
+      "diagnostic_snapshot_max_bytes": 16384,
+      "snapshots": 698,
+      "inode_generations": 2,
+      "events": {
+        "header": 1,
+        "unsupported": 1,
+        "root": 1,
+        "snapshot": 698,
+        "enter": 1389,
+        "leave": 1370,
+        "dispatch": 348,
+        "release": 348,
+        "event": 55,
+        "child_stop": 18,
+        "exit": 19,
+        "signal": 18,
+        "queued": 1,
+        "footer": 1
+      },
+      "issues": [
+        "complete syscall classification and monotonic-per-operation proof pending"
+      ]
+    },
+    "postgres": {
+      "status": "unknown",
+      "temp_peak_live_bytes": null,
+      "lower_bytes": null,
+      "upper_bytes": null,
+      "qualification_blocked": true,
+      "diagnostic_snapshot_max_bytes": 2899968,
+      "snapshots": 9052,
+      "inode_generations": 32,
+      "events": {
+        "header": 1,
+        "unsupported": 2,
+        "root": 1,
+        "snapshot": 9052,
+        "enter": 7837,
+        "leave": 7825,
+        "dispatch": 4525,
+        "release": 4525,
+        "event": 23,
+        "child_stop": 11,
+        "queued": 269,
+        "exit": 12,
+        "signal": 30,
+        "footer": 1
+      },
+      "issues": [
+        "SCM_RIGHTS not audited",
+        "complete syscall classification and monotonic-per-operation proof pending"
+      ]
+    },
+    "killed-tracee": {
+      "status": "unknown",
+      "temp_peak_live_bytes": null,
+      "lower_bytes": null,
+      "upper_bytes": null,
+      "qualification_blocked": true,
+      "diagnostic_snapshot_max_bytes": 0,
+      "snapshots": 10,
+      "inode_generations": 0,
+      "events": {
+        "header": 1,
+        "unsupported": 3,
+        "root": 1,
+        "snapshot": 10,
+        "enter": 46,
+        "leave": 45,
+        "dispatch": 4,
+        "release": 4,
+        "event": 1,
+        "exit": 1,
+        "footer": 1
+      },
+      "issues": [
+        "complete syscall classification and monotonic-per-operation proof pending",
+        "exit outside serialized syscall",
+        "tracee killed by signal"
+      ]
+    },
+    "unsupported-mmap": {
+      "status": "unknown",
+      "temp_peak_live_bytes": null,
+      "lower_bytes": null,
+      "upper_bytes": null,
+      "qualification_blocked": true,
+      "diagnostic_snapshot_max_bytes": 1651408,
+      "snapshots": 22,
+      "inode_generations": 1,
+      "events": {
+        "header": 1,
+        "unsupported": 2,
+        "root": 1,
+        "snapshot": 22,
+        "enter": 58,
+        "leave": 57,
+        "dispatch": 10,
+        "release": 10,
+        "event": 2,
+        "exit": 1,
+        "footer": 1
+      },
+      "issues": [
+        "complete syscall classification and monotonic-per-operation proof pending",
+        "work inode mmap"
+      ]
+    }
+  },
+  "negative_checks": [
+    "missing-footer",
+    "missing-entry",
+    "missing-process-lineage",
+    "conflicting-inode",
+    "false-zero",
+    "actual-tracer-interruption",
+    "tampered-raw-hash"
+  ],
+  "qualification_blocked": true,
+  "temp_peak_live_bytes": null
+}

@@ -1,0 +1,151 @@
+{
+  "project": "binance-ops031-a89c8a7138",
+  "commands": [
+    [
+      "docker",
+      "image",
+      "inspect",
+      "--format",
+      "{{.Id}}",
+      "postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc"
+    ],
+    [
+      "docker",
+      "volume",
+      "create",
+      "--label",
+      "com.docker.compose.project=binance-ops031-a89c8a7138",
+      "binance-ops031-a89c8a7138-data"
+    ],
+    [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "binance-ops031-a89c8a7138",
+      "--label",
+      "com.docker.compose.project=binance-ops031-a89c8a7138",
+      "--network",
+      "none",
+      "--cpus",
+      "1",
+      "--memory",
+      "1g",
+      "--cap-add",
+      "SYS_PTRACE",
+      "--security-opt",
+      "seccomp=unconfined",
+      "-e",
+      "POSTGRES_HOST_AUTH_METHOD=trust",
+      "-v",
+      "binance-ops031-a89c8a7138-data:/var/lib/postgresql",
+      "--entrypoint",
+      "sh",
+      "postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc",
+      "-c",
+      "docker-entrypoint.sh postgres -c io_method=sync & wait; sleep infinity"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops031-a89c8a7138",
+      "pg_isready",
+      "-U",
+      "postgres"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops031-a89c8a7138",
+      "pg_isready",
+      "-U",
+      "postgres"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops031-a89c8a7138",
+      "pg_isready",
+      "-U",
+      "postgres"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops031-a89c8a7138",
+      "pg_isready",
+      "-U",
+      "postgres"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops031-a89c8a7138",
+      "sh",
+      "-c",
+      "cat /proc/[0-9]*/comm"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops031-a89c8a7138",
+      "psql",
+      "-XAt",
+      "-U",
+      "postgres",
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-c",
+      "SELECT json_object_agg(name,setting) FROM pg_settings WHERE name IN ('server_version','io_method','fsync','synchronous_commit','full_page_writes','data_directory','temp_tablespaces');"
+    ],
+    [
+      "docker",
+      "rm",
+      "-f",
+      "binance-ops031-a89c8a7138"
+    ],
+    [
+      "docker",
+      "volume",
+      "rm",
+      "binance-ops031-a89c8a7138-data"
+    ],
+    [
+      "docker",
+      "container",
+      "ls",
+      "-a",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-ops031-a89c8a7138"
+    ],
+    [
+      "docker",
+      "volume",
+      "ls",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-ops031-a89c8a7138"
+    ],
+    [
+      "docker",
+      "network",
+      "ls",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-ops031-a89c8a7138"
+    ]
+  ],
+  "status": "running",
+  "temp_peak_live_bytes": null,
+  "qualification_blocked": true,
+  "binary_sha256": "e1fd09b824a8d5b9605128c2612e576909bef52aa9993564fb5bf1595138fa91",
+  "source_sha256": "d56f9999132b16c46be59c284d79416e5b873414f03cf397d7647b5217bb88fe",
+  "image": "sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc",
+  "cleanup": {
+    "container": [],
+    "volume": [],
+    "network": []
+  },
+  "sha256": {}
+}

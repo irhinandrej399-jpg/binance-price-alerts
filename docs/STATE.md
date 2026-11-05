@@ -4,8 +4,9 @@
 
 ## Активная работа
 
-- Активная реализация: нет.
-- Последний завершённый тикет: [OPS-029](backlog/tickets/OPS-029.md). [Observer Kafka](../infra/kafka/measure/FSYNC.md): fsync/fdatasync по потокам JVM, raw/границы/суммы времени; два чистых empty/Publish/repeat, чужой процесс, недоступность/обрыв, совместный runner и cleanup проверены. [Отчёт](measurements/OPS-029/README.md). Это syscall elapsed с tracing overhead, не device flush; остальные предпосылки OPS-018 не закрыты.
+- Активная реализация: нет. OPS-033 завершён; следующий по очереди — [OPS-034](backlog/tickets/OPS-034.md), identity/references. OPS-031 split; peak/lower/upper=null, gate не пройден.
+- Последний завершённый тикет: [OPS-033](backlog/tickets/OPS-033.md). [Ancillary raw capture/replay](../infra/postgres/measure/ancillary/README.md), реальные SCM_RIGHTS/partial mmsg/truncation/restart/межпроцессный unlink-open FD; три чистых ordinary/parallel PG capture, 10 rehashed tamper controls, cleanup проверены. [Отчёт](measurements/OPS-033/README.md). Полнота observer не утверждается; socket queues — OPS-034.
+- [OPS-029](backlog/tickets/OPS-029.md). [Observer Kafka](../infra/kafka/measure/FSYNC.md): fsync/fdatasync по потокам JVM, raw/границы/суммы времени; два чистых empty/Publish/repeat, чужой процесс, недоступность/обрыв, совместный runner и cleanup проверены. [Отчёт](measurements/OPS-029/README.md). Это syscall elapsed с tracing overhead, не device flush; остальные предпосылки OPS-018 не закрыты.
 - [OPS-022](backlog/tickets/OPS-022.md). [Market-data manifest](../infra/measure/MARKETDATA.md): по 24 окна в двух чистых PostgreSQL/Kafka опытах, Accept 531/4095/4096 B и отказ 4097 B, generation/gap/repeat, lost EndTxn/reclaim/дубль и настоящий relay с max batch=1 проверены. [Отчёт, 25 классов/11 компонентов и 10 исходных отчётов](measurements/OPS-022/README.md). Qualified=false: unsupported, finite bounds, непокрытое продолжение цены/ledger/full fixture блокируют OPS-018; OPS-015/016 planned.
 - [OPS-026](backlog/tickets/OPS-026.md). [Manifest notifications](../infra/measure/NOTIFICATIONS.md): 38 reports и 17 handler окон, по два чистых PostgreSQL/Kafka опыта каждой границы. Исходные ID/bytes, четыре outcome, потеря ответа/replay/ack, новые permits, PendingWrite без второго HTTP, recovery/worker sweep и cleanup проверены. [Отчёт и сводка покрытия цепочки](measurements/OPS-026/README.md). Qualified=false: bounds/непокрытые варианты/unsupported блокируют OPS-018; источник market-data измерен отдельно OPS-022.
 - [OPS-028](backlog/tickets/OPS-028.md). [API-owned fixture](../infra/measure/NOTIFICATIONS_FIXTURE.md): source OPS-024/run-a2 → OPS-025/run-a3, четыре исходных события/пять records, reports и handler в отдельных чистых datasets. По два PostgreSQL/mTLS/race прогона каждой границы, исходные attempts/reply loss, новые permits, rollback/identity/cleanup проверены. [Отчёт](measurements/OPS-028/README.md). Его setup подключён к измерениям OPS-026.
@@ -114,7 +115,7 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [OPS-018](backlog/tickets/OPS-018.md), только после нового поручения и сессионной проверки. OPS-029 завершил broker-scoped syscall observer; включать его явно в будущих фазовых измерениях. Старые qualified=false отчёты не переквалифицированы. До ready OPS-018 проверить и выделить узкие предпосылки для PostgreSQL temp/device IO, finite bounds, максимальных write variants, price downstream, ledger и полного DEC-008 fixture по [coverage](measurements/OPS-022/coverage.json). Недостающий harness внутри OPS-018 не создавать; OPS-015/016 planned. Подготовка OPS-018/029 из предыдущей сессии сохранена вместе с результатом OPS-029.
+По очереди следующий — [OPS-034](backlog/tickets/OPS-034.md), только по новому поручению: identity/generations/references, включая socket queues и shared FD tables/memory. OPS-033 дал [message raw contract](../infra/postgres/measure/ancillary/README.md) и реальные controls; общий observer ещё не готов. Затем OPS-035 (classifier/bounds), OPS-036 (самостоятельный observer/PG gate), OPS-032 (фазы). OPS-018 ждёт OPS-032; остальные блокеры [coverage](measurements/OPS-022/coverage.json) сохраняются, OPS-015/016 planned. Старые qualified=false/unknown отчёты не переквалифицированы; peak/lower/upper=null.
 
 NTF-013 подготовил `worker.New(Config)` / `Run(ctx)` над готовыми jobs.Store и handler.Handler. Discovery выбирает due jobs/checks, pending reports всех четырёх видов также у stopped/terminal jobs и не назначенные current-fence channel blocks. Настройки concurrency/interval/timeout/write timeout/recovery interval обязательны; handler отдельно требует Policy/ReportLimit/RecoveryInterval. Контракты — worker/README.md и handler/README.md. Worker хранит не записанный PendingWrite между Run и завершает Retry до новой выборки. После потери процесса сохраняется риск внешнего дубля; signals/HTTP shutdown — OPS-011. SQL scan/нагрузка ещё не измерялись. SUB-027 обеспечивает CAS адресата; старый admission без CAS для отправки не использовать.
 
@@ -129,7 +130,7 @@ NTF-006 рассчитывает retry Plan и бюджет доказанных
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show OPS-018` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show OPS-034` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

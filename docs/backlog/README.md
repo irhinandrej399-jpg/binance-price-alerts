@@ -201,7 +201,7 @@
 | [OPS-014](tickets/OPS-014.md) | Удалить безопасный префикс журнала Kafka | SET-005, SUB-022, MAT-011, NTF-001, DEC-007 | planned |
 | [OPS-015](tickets/OPS-015.md) | Остановить новый приём API при исчерпании бюджета | SUB-003, SUB-005, SUB-020, SUB-007, SUB-009, DEC-008, OPS-018 | planned |
 | [OPS-016](tickets/OPS-016.md) | Остановить приём рынка при исчерпании бюджета | MKT-017, MKT-014, DEC-008, OPS-018 | planned |
-| [OPS-018](tickets/OPS-018.md) | Квалифицировать таблицу стоимости и квоты durable приёма | OPS-022, DEC-008, OPS-029 | planned |
+| [OPS-018](tickets/OPS-018.md) | Квалифицировать таблицу стоимости и квоты durable приёма | OPS-022, DEC-008, OPS-029, OPS-032 | planned |
 | [OPS-019](tickets/OPS-019.md) | Собрать физические метрики PostgreSQL на disposable стенде | SET-006, DEC-008 | done |
 | [OPS-020](tickets/OPS-020.md) | Собрать физические метрики Kafka на disposable стенде | SET-009, DEC-008 | done |
 | [OPS-022](tickets/OPS-022.md) | Измерить manifest источника market-data и свести покрытие затрат | OPS-019, OPS-020, OPS-026, MKT-014 | done |
@@ -212,6 +212,16 @@
 | [OPS-027](tickets/OPS-027.md) | Устранить гонку описи временных Kafka-файлов | OPS-020, OPS-023 | planned |
 | [OPS-028](tickets/OPS-028.md) | Подготовить API fixture продолжения notifications с исходными ID | OPS-024, OPS-025, NTF-014, NTF-012 | done |
 | [OPS-029](tickets/OPS-029.md) | Измерить количество и время fsync процесса Kafka | OPS-020, OPS-023 | done |
+| [OPS-032](tickets/OPS-032.md) | Подключить и проверить temp peak observer в фазовом runner | OPS-036, OPS-023 | planned |
+| [OPS-033](tickets/OPS-033.md) | Сохранять и проверять передачу FD через ancillary data | OPS-019 | done |
+| [OPS-034](tickets/OPS-034.md) | Замкнуть модель ссылок и идентичности work inode | OPS-033 | planned |
+| [OPS-035](tickets/OPS-035.md) | Восстановить доказанные границы apparent peak из raw | OPS-034 | planned |
+| [OPS-036](tickets/OPS-036.md) | Проверить самостоятельный observer на PostgreSQL | OPS-035 | planned |
+
+[OPS-031](tickets/OPS-031.md) разделён на OPS-033–036: ancillary raw →
+identity/references → classifier/bounds → самостоятельный PG gate.
+[Старые raw](../measurements/OPS-031/README.md) остаются unknown, peak=null;
+OPS-032/018 ждут готового observer.
 
 ### Сквозная проверка
 
@@ -257,3 +267,5 @@
 | [LOAD-005](tickets/LOAD-005.md) | [LOAD-010](tickets/LOAD-010.md), [LOAD-011](tickets/LOAD-011.md), [LOAD-012](tickets/LOAD-012.md), [LOAD-013](tickets/LOAD-013.md) | split |
 | [OPS-017](tickets/OPS-017.md) | [OPS-019](tickets/OPS-019.md), [OPS-020](tickets/OPS-020.md), [OPS-021](tickets/OPS-021.md), [OPS-022](tickets/OPS-022.md) | split |
 | [OPS-021](tickets/OPS-021.md) | [OPS-023](tickets/OPS-023.md), [OPS-024](tickets/OPS-024.md), [OPS-025](tickets/OPS-025.md), [OPS-026](tickets/OPS-026.md) | split |
+| [OPS-030](tickets/OPS-030.md) | [OPS-031](tickets/OPS-031.md), [OPS-032](tickets/OPS-032.md) | split |
+| [OPS-031](tickets/OPS-031.md) | [OPS-033](tickets/OPS-033.md), [OPS-034](tickets/OPS-034.md), [OPS-035](tickets/OPS-035.md), [OPS-036](tickets/OPS-036.md) | split |

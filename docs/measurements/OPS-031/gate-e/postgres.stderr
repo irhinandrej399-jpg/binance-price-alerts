@@ -1,0 +1,77 @@
+2026-11-05 16:16:15.866 UTC [197] LOG:  starting PostgreSQL 18.6 (Debian 18.6-1.pgdg12+2) on aarch64-unknown-linux-gnu, compiled by gcc (Debian 12.2.0-14+deb12u1) 12.2.0, 64-bit
+2026-11-05 16:16:16.003 UTC [197] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2026-11-05 16:16:16.039 UTC [197] LOG:  listening on IPv6 address "::", port 5432
+2026-11-05 16:16:16.193 UTC [197] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2026-11-05 16:16:16.218 UTC [304] LOG:  database system was shut down at 2026-11-05 16:16:12 UTC
+2026-11-05 16:16:16.237 UTC [197] LOG:  database system is ready to accept connections
+2026-11-05 16:16:17.101 UTC [321] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp321.0", size 2899968
+2026-11-05 16:16:17.101 UTC [321] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=0; SELECT count(*) FROM (SELECT * FROM gate_input ORDER BY payload OFFSET 0) t;
+2026-11-05 16:16:17.431 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o6of8.p1.0", size 65536
+2026-11-05 16:16:17.431 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.432 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o1of8.p2.0", size 32768
+2026-11-05 16:16:17.432 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.432 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/i3of8.p0.0", size 65536
+2026-11-05 16:16:17.432 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.433 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o4of8.p1.0", size 32768
+2026-11-05 16:16:17.433 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.434 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o6of8.p2.0", size 32768
+2026-11-05 16:16:17.434 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.434 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o5of8.p0.0", size 32768
+2026-11-05 16:16:17.434 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.435 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o2of8.p2.0", size 32768
+2026-11-05 16:16:17.435 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.436 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o2of8.p0.0", size 32768
+2026-11-05 16:16:17.436 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.437 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o7of8.p0.0", size 32768
+2026-11-05 16:16:17.437 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.437 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/i4of8.p0.0", size 65536
+2026-11-05 16:16:17.437 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.438 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o3of8.p1.0", size 32768
+2026-11-05 16:16:17.438 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.438 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o1of8.p1.0", size 32768
+2026-11-05 16:16:17.438 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.439 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/i7of8.p0.0", size 65536
+2026-11-05 16:16:17.439 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.440 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/i5of8.p0.0", size 65536
+2026-11-05 16:16:17.440 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.440 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/i2of8.p0.0", size 65536
+2026-11-05 16:16:17.440 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.441 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/i6of8.p0.0", size 65536
+2026-11-05 16:16:17.441 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.442 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o5of8.p1.0", size 32768
+2026-11-05 16:16:17.442 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.442 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o0of8.p2.0", size 32768
+2026-11-05 16:16:17.442 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.443 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o0of8.p0.0", size 32768
+2026-11-05 16:16:17.443 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.443 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o3of8.p2.0", size 32768
+2026-11-05 16:16:17.443 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.444 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o6of8.p0.0", size 32768
+2026-11-05 16:16:17.444 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.445 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/i1of8.p0.0", size 65536
+2026-11-05 16:16:17.445 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.445 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o5of8.p2.0", size 32768
+2026-11-05 16:16:17.445 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.446 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o0of8.p1.0", size 32768
+2026-11-05 16:16:17.446 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.446 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o1of8.p0.0", size 32768
+2026-11-05 16:16:17.446 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.447 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o2of8.p1.0", size 32768
+2026-11-05 16:16:17.447 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.447 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o4of8.p2.0", size 32768
+2026-11-05 16:16:17.447 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.448 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o7of8.p2.0", size 32768
+2026-11-05 16:16:17.448 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.449 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o3of8.p0.0", size 32768
+2026-11-05 16:16:17.449 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.449 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o4of8.p0.0", size 32768
+2026-11-05 16:16:17.449 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.450 UTC [328] LOG:  temporary file: path "base/pgsql_tmp/pgsql_tmp328.0.fileset/o7of8.p1.0", size 32768
+2026-11-05 16:16:17.450 UTC [328] STATEMENT:  SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);
+2026-11-05 16:16:17.528 UTC [197] LOG:  received fast shutdown request
+2026-11-05 16:16:17.532 UTC [197] LOG:  aborting any active transactions
+2026-11-05 16:16:17.537 UTC [197] LOG:  background worker "logical replication launcher" (PID 307) exited with exit code 1
+2026-11-05 16:16:17.537 UTC [302] LOG:  shutting down
+2026-11-05 16:16:17.539 UTC [302] LOG:  checkpoint starting: shutdown immediate
+2026-11-05 16:16:17.624 UTC [302] LOG:  checkpoint complete: wrote 413 buffers (2.5%), wrote 3 SLRU buffers; 0 WAL file(s) added, 0 removed, 0 recycled; write=0.074 s, sync=0.004 s, total=0.087 s; sync files=7, longest=0.004 s, average=0.001 s; distance=3263 kB, estimate=3263 kB; lsn=0/1E6F2F8, redo lsn=0/1E6F2F8
+2026-11-05 16:16:17.633 UTC [197] LOG:  database system is shut down

@@ -1,0 +1,7 @@
+grown 64 206996 16384 1
+alias 64 206996 16384 2
+linked_alias 64 206996 16384 1
+unlinked_open 64 206996 16384 0
+shrunken 64 206996 4096 0
+regrown 64 206996 12288 0
+closed_empty

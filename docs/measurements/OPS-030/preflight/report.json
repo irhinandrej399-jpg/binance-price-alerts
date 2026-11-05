@@ -1,0 +1,357 @@
+{
+  "project": "binance-ops030-preflight-9d718c5ac6",
+  "status": "preflight-collected-not-qualified",
+  "commands": [
+    [
+      "docker",
+      "volume",
+      "create",
+      "--label",
+      "com.docker.compose.project=binance-ops030-preflight-9d718c5ac6",
+      "binance-ops030-preflight-9d718c5ac6-data"
+    ],
+    [
+      "docker",
+      "image",
+      "inspect",
+      "--format",
+      "{{json .Id}}",
+      "postgres:18.6-bookworm"
+    ],
+    [
+      "docker",
+      "image",
+      "inspect",
+      "--format",
+      "{{json .Id}}",
+      "binance-fsync-observer:ops029"
+    ],
+    [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "binance-ops030-preflight-9d718c5ac6-pg",
+      "--label",
+      "com.docker.compose.project=binance-ops030-preflight-9d718c5ac6",
+      "--network",
+      "none",
+      "--cpus",
+      "1",
+      "--memory",
+      "1g",
+      "-e",
+      "POSTGRES_HOST_AUTH_METHOD=trust",
+      "-v",
+      "binance-ops030-preflight-9d718c5ac6-data:/var/lib/postgresql",
+      "postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc",
+      "postgres",
+      "-c",
+      "fsync=on",
+      "-c",
+      "synchronous_commit=on",
+      "-c",
+      "full_page_writes=on"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops030-preflight-9d718c5ac6-pg",
+      "cat",
+      "/proc/1/comm"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops030-preflight-9d718c5ac6-pg",
+      "cat",
+      "/proc/1/comm"
+    ],
+    [
+      "docker",
+      "exec",
+      "-i",
+      "binance-ops030-preflight-9d718c5ac6-pg",
+      "psql",
+      "-XAt",
+      "-U",
+      "postgres",
+      "-v",
+      "ON_ERROR_STOP=1"
+    ],
+    [
+      "docker",
+      "exec",
+      "-i",
+      "binance-ops030-preflight-9d718c5ac6-pg",
+      "psql",
+      "-XAt",
+      "-U",
+      "postgres",
+      "-v",
+      "ON_ERROR_STOP=1"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops030-preflight-9d718c5ac6-pg",
+      "uname",
+      "-a"
+    ],
+    [
+      "docker",
+      "run",
+      "-d",
+      "--name",
+      "binance-ops030-preflight-9d718c5ac6-trace",
+      "--label",
+      "com.docker.compose.project=binance-ops030-preflight-9d718c5ac6",
+      "--pid=container:binance-ops030-preflight-9d718c5ac6-pg",
+      "--network",
+      "none",
+      "--cap-drop",
+      "ALL",
+      "--cap-add",
+      "SYS_PTRACE",
+      "--cap-add",
+      "KILL",
+      "--security-opt",
+      "seccomp=unconfined",
+      "--entrypoint",
+      "sh",
+      "binance-fsync-observer:ops029",
+      "-c",
+      "mkdir /trace; strace -V >/trace/version; args=\"\"; for p in /proc/[0-9]*; do exe=$(readlink \"$p/exe\" || true); case \"$exe\" in */postgres) args=\"$args -p ${p##*/}\";; esac; done; echo \"$args\" >/trace/attach; strace -f -yy -ttt -T -s 64 -e trace=openat,close,write,writev,pwrite64,pwritev,pwritev2,lseek,ftruncate,truncate,unlink,unlinkat,rename,renameat,renameat2,fallocate,mmap,munmap,msync,io_uring_setup,io_uring_enter,clone,clone3,fork,vfork,exit,exit_group -o /trace/raw $args 2>/trace/diagnostics & t=$!; echo \"$t\" >/trace/pid; wait \"$t\"; echo \"$?\" >/trace/exit; while :; do sleep 1; done"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops030-preflight-9d718c5ac6-trace",
+      "cat",
+      "/trace/attach"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops030-preflight-9d718c5ac6-trace",
+      "sh",
+      "-c",
+      "for p in /proc/[0-9]*; do exe=$(readlink \"$p/exe\" || true); case \"$exe\" in */postgres) echo \"$p $exe\"; awk '/^Pid:|^TracerPid:/ {print}' \"$p/status\";; esac; done"
+    ],
+    [
+      "docker",
+      "exec",
+      "-i",
+      "binance-ops030-preflight-9d718c5ac6-pg",
+      "psql",
+      "-XAt",
+      "-U",
+      "postgres",
+      "-v",
+      "ON_ERROR_STOP=1"
+    ],
+    [
+      "docker",
+      "exec",
+      "-i",
+      "binance-ops030-preflight-9d718c5ac6-pg",
+      "psql",
+      "-XAt",
+      "-U",
+      "postgres",
+      "-v",
+      "ON_ERROR_STOP=1"
+    ],
+    [
+      "docker",
+      "exec",
+      "-i",
+      "binance-ops030-preflight-9d718c5ac6-pg",
+      "psql",
+      "-XAt",
+      "-U",
+      "postgres",
+      "-v",
+      "ON_ERROR_STOP=1"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops030-preflight-9d718c5ac6-trace",
+      "sh",
+      "-c",
+      "kill -INT \"$(cat /trace/pid)\"; for i in $(seq 1 100); do test -f /trace/exit && exit 0; sleep .1; done; exit 1"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops030-preflight-9d718c5ac6-trace",
+      "cat",
+      "/trace/raw"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops030-preflight-9d718c5ac6-trace",
+      "cat",
+      "/trace/diagnostics"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops030-preflight-9d718c5ac6-trace",
+      "cat",
+      "/trace/exit"
+    ],
+    [
+      "docker",
+      "exec",
+      "binance-ops030-preflight-9d718c5ac6-trace",
+      "cat",
+      "/trace/version"
+    ],
+    [
+      "docker",
+      "rm",
+      "-f",
+      "binance-ops030-preflight-9d718c5ac6-trace"
+    ],
+    [
+      "docker",
+      "rm",
+      "-f",
+      "binance-ops030-preflight-9d718c5ac6-pg"
+    ],
+    [
+      "docker",
+      "volume",
+      "rm",
+      "binance-ops030-preflight-9d718c5ac6-data"
+    ],
+    [
+      "docker",
+      "container",
+      "ls",
+      "-a",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-ops030-preflight-9d718c5ac6"
+    ],
+    [
+      "docker",
+      "network",
+      "ls",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-ops030-preflight-9d718c5ac6"
+    ],
+    [
+      "docker",
+      "volume",
+      "ls",
+      "-q",
+      "--filter",
+      "label=com.docker.compose.project=binance-ops030-preflight-9d718c5ac6"
+    ]
+  ],
+  "pg_image": "\"sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc\"",
+  "observer_image": "\"sha256:e268780b91edb6afd48fac8563370c35a9363c3da7102a8f3d6dfe2f43e8727e\"",
+  "settings": {
+    "data_directory": "/var/lib/postgresql/18/docker",
+    "fsync": "on",
+    "full_page_writes": "on",
+    "io_method": "worker",
+    "server_version": "18.6 (Debian 18.6-1.pgdg12+2)",
+    "synchronous_commit": "on",
+    "temp_tablespaces": "",
+    "work_mem": "4096"
+  },
+  "tablespaces": [
+    {
+      "oid": "1663",
+      "spcname": "pg_default",
+      "location": ""
+    },
+    {
+      "oid": "1664",
+      "spcname": "pg_global",
+      "location": ""
+    }
+  ],
+  "kernel": "Linux a4988a5272f3 6.12.76-linuxkit #1 SMP Wed May 13 14:27:18 UTC 2026 aarch64 GNU/Linux\n",
+  "attach": " -p 1 -p 100 -p 101 -p 102 -p 94 -p 95 -p 96 -p 97 -p 98\n",
+  "traced_processes": "/proc/1 /usr/lib/postgresql/18/bin/postgres\nPid:\t1\nTracerPid:\t166\n/proc/100 /usr/lib/postgresql/18/bin/postgres\nPid:\t100\nTracerPid:\t166\n/proc/101 /usr/lib/postgresql/18/bin/postgres\nPid:\t101\nTracerPid:\t166\n/proc/102 /usr/lib/postgresql/18/bin/postgres\nPid:\t102\nTracerPid:\t166\n/proc/94 /usr/lib/postgresql/18/bin/postgres\nPid:\t94\nTracerPid:\t166\n/proc/95 /usr/lib/postgresql/18/bin/postgres\nPid:\t95\nTracerPid:\t166\n/proc/96 /usr/lib/postgresql/18/bin/postgres\nPid:\t96\nTracerPid:\t166\n/proc/97 /usr/lib/postgresql/18/bin/postgres\nPid:\t97\nTracerPid:\t166\n/proc/98 /usr/lib/postgresql/18/bin/postgres\nPid:\t98\nTracerPid:\t166\n",
+  "before": {
+    "files": [],
+    "stats": {
+      "temp_files": 0,
+      "temp_bytes": 0
+    }
+  },
+  "held": {
+    "files": [
+      {
+        "name": "pgsql_tmp232.0",
+        "size": 840000,
+        "modification": "2026-11-05T15:29:49+00:00"
+      },
+      {
+        "name": "pgsql_tmp233.0",
+        "size": 840000,
+        "modification": "2026-11-05T15:29:49+00:00"
+      },
+      {
+        "name": "pgsql_tmp233.1",
+        "size": 16556032,
+        "modification": "2026-11-05T15:29:50+00:00"
+      },
+      {
+        "name": "pgsql_tmp232.1",
+        "size": 16556032,
+        "modification": "2026-11-05T15:29:50+00:00"
+      }
+    ],
+    "activity": [
+      {
+        "pid": 232,
+        "wait_event_type": "Timeout",
+        "wait_event": "PgSleep"
+      },
+      {
+        "pid": 233,
+        "wait_event_type": "Timeout",
+        "wait_event": "PgSleep"
+      },
+      {
+        "pid": 240,
+        "wait_event_type": null,
+        "wait_event": null
+      }
+    ]
+  },
+  "after": {
+    "files": [],
+    "stats": {
+      "temp_files": 4,
+      "temp_bytes": 34792064
+    }
+  },
+  "diagnostics": "strace: Process 1 attached\nstrace: Process 100 attached\nstrace: Process 101 attached\nstrace: Process 102 attached\nstrace: Process 94 attached\nstrace: Process 95 attached\nstrace: Process 96 attached\nstrace: Process 97 attached\nstrace: Process 98 attached\nstrace: Process 219 attached\nstrace: Process 232 attached\nstrace: Process 233 attached\nstrace: Process 240 attached\nstrace: Process 247 attached\nstrace: Process 1 detached\nstrace: Process 96 detached\nstrace: Process 98 detached\nstrace: Process 97 detached\nstrace: Process 95 detached\nstrace: Process 94 detached\nstrace: Process 102 detached\nstrace: Process 101 detached\nstrace: Process 100 detached\n",
+  "tracer_exit": "130",
+  "strace_version": "strace -- version 6.19\nCopyright (c) 1991-2026 The strace developers <https://strace.io>.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\nOptional features enabled: stack-trace=libdw stack-demangle no-m32-mpers\n",
+  "cleanup": {
+    "container": [],
+    "network": [],
+    "volume": []
+  },
+  "qualification_blocked": true,
+  "temp_peak_live_bytes": null,
+  "conclusion": "Trace access and a held spill were observed; complete reconstruction of peak live bytes has not been proved. This preflight is not a supported observer.",
+  "source_sha256": {
+    "preflight-source.py": "6be94541374fc8723538baf9addc89218cebb29193f8711717d298f408e1cc79"
+  },
+  "raw_sha256": {
+    "syscalls.trace.gz": "b00e6159481fe31ae0de51856bcf34472458519ac374fa57b951b00845c7dc57"
+  },
+  "held_visible_apparent_bytes": 34792064
+}

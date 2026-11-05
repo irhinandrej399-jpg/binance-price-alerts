@@ -1,0 +1,54 @@
+{
+  "status": "research-checks-passed-not-observer-qualification",
+  "qualification_blocked": true,
+  "checks": {
+    "replay_matches_saved": true,
+    "conditional_bounds_match_independent_held": true,
+    "peak_remains_unknown": true,
+    "missing_unlink_rejected": true,
+    "missing_resume_rejected": true,
+    "killed_process_rejected": true,
+    "real_alias_unlink_open_shrink_regrow_evidence": true,
+    "prototype_rejects_lifecycle_control": true
+  },
+  "conditional_bounds_bytes": [
+    34792064,
+    34792064
+  ],
+  "lifecycle_rejection_reasons": {
+    "reopen/shared file unsupported": 1,
+    "unresolved unlink": 2,
+    "unsupported operation brk": 30,
+    "unsupported operation chdir": 2,
+    "unsupported operation dup3": 6,
+    "unsupported operation execve": 15,
+    "unsupported operation fchdir": 2,
+    "unsupported operation fcntl": 87,
+    "unsupported operation fstat": 70,
+    "unsupported operation ftruncate": 2,
+    "unsupported operation getcwd": 1,
+    "unsupported operation getdents64": 2,
+    "unsupported operation linkat": 1,
+    "unsupported operation mkdirat": 3,
+    "unsupported operation mprotect": 100,
+    "unsupported operation newfstatat": 9,
+    "unsupported operation pipe2": 1,
+    "unsupported operation read": 77,
+    "unsupported operation statx": 7,
+    "unsupported operation wait4": 14,
+    "unsupported operation write": 4,
+    "unsupported operation writev": 16
+  },
+  "sha256": {
+    "preflight/report.json": "29df438ec252eefd368c47c4e2c8486befef1af69feccbc396b0267092aa5fde",
+    "preflight/syscalls.trace.gz": "b00e6159481fe31ae0de51856bcf34472458519ac374fa57b951b00845c7dc57",
+    "preflight-source.py": "6be94541374fc8723538baf9addc89218cebb29193f8711717d298f408e1cc79",
+    "reconstruction-source.py": "c85a70c1ea74bcbc0bdeec97912f12c0e9df59957b9c3b3899e9cd25db6adc31",
+    "reconstruction/conditional.json.gz": "d8ab4a70d89831c8e0454a3c17909547502c410611d41c0e842c498e1358054e",
+    "lifecycle-probe.py": "2d0f8306d7f6661fa8c7ba2fcb72689e5fa4da20a396c3934b6d6f7badf3198c",
+    "lifecycle/report.json": "8d70e297642f68c5beed15dcad485e73bf8340bd2aeef12350a31b32404e9587",
+    "lifecycle/control.txt": "a43c4f2421349f8db5ea6fc2d4c33eb9f6c972483e0fe601ce53f26c73d9ab53",
+    "lifecycle/syscalls.trace.gz": "1611ad9999221101fc49913f66b381e87a6f14c4a30e9ce59a6260a3f5958edb",
+    "verify-research.py": "b74684f55c78046068a80217242429e0263066b40fddb56b68ba40ea4e478851"
+  }
+}
