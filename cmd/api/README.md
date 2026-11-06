@@ -1,4 +1,4 @@
-# Минимальный локальный API (OPS-046, OPS-004)
+# Минимальный локальный API (OPS-046, OPS-004, OPS-013)
 
 Сборка и запуск из корня репозитория:
 
@@ -37,7 +37,15 @@ DSN других сервисов не читает.
 | --- | --- |
 | GET /healthz | Liveness, без запроса к БД |
 | GET /readyz | После startup — API pool.Ping, бюджет 1 с |
+| POST /v1/accounts | Регистрация, общий auth limit |
+| POST /v1/sessions | Вход, общий auth limit |
 | DELETE /v1/subscriptions/{id} | Bearer session/auth, каноническая отмена с journal |
+
+Вход и регистрация используют [общую квоту PostgreSQL](../../internal/api/authlimit/README.md):
+20 попыток на IP за фиксированную минуту совместно для всех реплик и обоих
+маршрутов. IP — TCP peer, proxy headers игнорируются; за proxy/NAT квота общая.
+429 содержит Retry-After, отказ хранилища даёт 503 до credentials. Нужна
+миграция API 015; production-время берётся из БД. Очистка строк IP пока отсутствует.
 
 Весь HTTP mux обёрнут в [bodylimit](../../internal/api/bodylimit/README.md):
 максимум 64 КиБ тела, включая chunked; превышение даёт 413

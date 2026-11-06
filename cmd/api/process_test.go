@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -85,6 +86,42 @@ func TestAPIProcess(t *testing.T) {
 			if code, e := request("GET", path, ""); e != nil || code != 200 {
 				return fmt.Errorf("probe failed: %d", code)
 			}
+		}
+		// Keep the test in one quota window even if wall time crosses a minute.
+		// Both POST routes must share the direct TCP peer's API-owned row.
+		if _, e := pool.Exec(ctx, `INSERT INTO app.auth_limits(ip,window_start,used) VALUES('127.0.0.1',date_trunc('minute',clock_timestamp())+interval '1 minute',0) ON CONFLICT(ip) DO UPDATE SET window_start=EXCLUDED.window_start,used=0`); e != nil {
+			return errors.New("auth quota fixture failed")
+		}
+		for i := 0; i < 21; i++ {
+			path := "/v1/accounts"
+			if i%2 == 0 {
+				path = "/v1/sessions"
+			}
+			r, e := http.NewRequestWithContext(ctx, "POST", p.URL+path, strings.NewReader("{"))
+			if e != nil {
+				return e
+			}
+			r.Header.Set("Content-Type", "application/json")
+			r.Header.Set("X-Forwarded-For", fmt.Sprintf("192.0.2.%d", i))
+			resp, e := client.Do(r)
+			if e != nil {
+				return errors.New("auth HTTP request failed")
+			}
+			body, readErr := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			want := 400
+			if i == 20 {
+				want = 429
+			}
+			if readErr != nil || resp.StatusCode != want {
+				return fmt.Errorf("auth route %d: %d %s", i, resp.StatusCode, body)
+			}
+			if i == 20 && resp.Header.Get("Retry-After") == "" {
+				return errors.New("auth quota missing retry header")
+			}
+		}
+		if code, e := request("GET", "/healthz", ""); e != nil || code != 200 {
+			return errors.New("auth quota blocked health")
 		}
 		path := "/v1/subscriptions/" + f.Active.ID
 		if code, e := request("DELETE", path, ""); e != nil || code != 401 {

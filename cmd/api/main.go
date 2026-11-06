@@ -16,10 +16,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/account"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/auth"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/authlimit"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/bodylimit"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/deliveryrelay"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/health"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/login"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/registration"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/relay"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/session"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/subscription"
@@ -114,7 +118,7 @@ func run(ctx context.Context, c config) error {
 	}
 	defer pool.Close()
 	// Check the HTTP storage contract as well as relay tables before readiness.
-	rows, err := pool.Query(startup, `SELECT s.token_hash,u.id,x.id FROM app.sessions s JOIN app.users u ON u.id=s.user_id JOIN app.subscriptions x ON x.owner_id=u.id LIMIT 0`)
+	rows, err := pool.Query(startup, `SELECT s.token_hash,u.id,x.id,l.used FROM app.sessions s JOIN app.users u ON u.id=s.user_id JOIN app.subscriptions x ON x.owner_id=u.id CROSS JOIN app.auth_limits l LIMIT 0`)
 	if err != nil {
 		return errors.New("api: API schema unavailable; run migrations separately")
 	}
@@ -138,6 +142,9 @@ func run(ctx context.Context, c config) error {
 	done()
 	h := health.New(pool.Ping, time.Second)
 	mux := http.NewServeMux()
+	limits := authlimit.New(pool, nil)
+	mux.Handle("POST /v1/accounts", limits.Handler(registration.New(account.New(pool))))
+	mux.Handle("POST /v1/sessions", limits.Handler(login.New(account.New(pool), session.New(pool, nil))))
 	mux.Handle("/healthz", h)
 	mux.Handle("/readyz", h)
 	mux.Handle("/v1/subscriptions/", auth.New(session.New(pool, nil), subscription.NewCancelHandler(pool)))

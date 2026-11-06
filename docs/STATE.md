@@ -5,8 +5,9 @@
 ## Активная работа
 
 - Активная реализация: нет. Незавершённые raw/code исследований сохранены по DEC-010; kernel/capacity квалификация локальный запуск не блокирует.
+- Последний завершённый тикет: [OPS-013](backlog/tickets/OPS-013.md), [общая квота аутентификации](../internal/api/authlimit/README.md). PostgreSQL API: 20 попыток/мин на IP совместно для входа и регистрации всех реплик; оба маршрута подключены в cmd/api. Новые PostgreSQL/race и процессные PostgreSQL/Kafka проверки прошли, vet/build прошли; общая регрессия повторила известную NTF-018. Миграция 015 нужна перед запуском; очистка IP и нагрузка не проверены.
 - Последнее решение: [DEC-010](decisions/DEC-010.md), локальный функциональный профиль. Минимальный cmd/api собран в OPS-046; запуск четырёх процессов ещё не подтверждён.
-- Последний завершённый тикет: [OPS-012](backlog/tickets/OPS-012.md), [предел тела публичного HTTP](../internal/api/bodylimit/README.md). Middleware до auth/обработки, 64 КиБ включительно, стабильный 413 для Content-Length и chunked, ограниченное чтение и воспроизведение допустимых байтов. Подключён к mux cmd/api. HTTP boundary/error tests и общая race-регрессия/vet/build прошли; PostgreSQL/Kafka opt-in в этом прогоне пропущены. Полный API ещё впереди.
+- Предыдущий завершённый тикет: [OPS-012](backlog/tickets/OPS-012.md), [предел тела публичного HTTP](../internal/api/bodylimit/README.md). Middleware до auth/обработки, 64 КиБ включительно, стабильный 413 для Content-Length и chunked, ограниченное чтение и воспроизведение допустимых байтов. Подключён к mux cmd/api. HTTP boundary/error tests и общая race-регрессия/vet/build прошли; PostgreSQL/Kafka opt-in в этом прогоне пропущены. Полный API ещё впереди.
 - Предыдущий завершённый тикет: [OPS-004](backlog/tickets/OPS-004.md), [graceful shutdown API](../cmd/api/README.md). SIGTERM/SIGINT закрывают HTTP admission, дают handlers 5 с, затем отменяют SQL contexts; relay и handlers присоединяются перед pool.Close, общий предел выхода 10 с. На disposable PostgreSQL/Kafka проверены commit/rollback state/quota/journal, восстановление subscription bytes и прерывание delivery после Kafka commit до ack с исходными key/value после рестарта; два чистых успешных прогона и cleanup. Общая race-регрессия/vet/build прошли. Неоднозначный claim может удерживать lease до 30 с; полный API/четыре процесса ещё впереди.
 - Предыдущий завершённый тикет: [OPS-046](backlog/tickets/OPS-046.md), [минимальный cmd/api](../cmd/api/README.md). HTTP-отмена через auth/session, health и два relay в одном executable. На disposable API PostgreSQL/Kafka проверены durable cancelled, точные read_committed key/value, terminal выход владельца и startup failure; cleanup подтверждён. Общая race-регрессия/vet/build прошли. SIGTERM/drain добавлен в OPS-004; полный API/четыре процесса ещё впереди.
 - Предыдущий завершённый тикет: [OPS-047](backlog/tickets/OPS-047.md), [disposable API process harness](../internal/testutil/apiprocess/README.md). Изолированные PostgreSQL/Kafka, API-only DSN, штатная fixture session/квоты/workflow/outbox; child readiness/exit/timeout/cancel и cleanup, включая аварийный выход владельца, проверены. Реальный read_committed сохранил key/value/event_id; два положительных прогона, общая race-регрессия/vet/build прошли. Настоящий cmd/api проверен в OPS-046.
@@ -129,9 +130,10 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-[OPS-013](backlog/tickets/OPS-013.md): распределённое ограничение частоты входа и регистрации.
+[OPS-006](backlog/tickets/OPS-006.md): health и readiness market-data.
+OPS-013 завершил общую квоту входа и регистрации и подключил оба endpoint в cmd/api.
 Предел тела публичного запроса завершён в OPS-012 и подключён к минимальному API.
-Минимальный [cmd/api](../cmd/api/README.md) подключает HTTP-отмену/auth/session,
+Минимальный [cmd/api](../cmd/api/README.md) подключает регистрацию/вход с общей квотой, HTTP-отмену/auth/session,
 health и два relay; SIGTERM/drain завершён в OPS-004. Процессный harness OPS-047
 проверяет остановку и восстановление на disposable PostgreSQL/Kafka. Полный API
 для E2E этим минимальным процессом не подменяется. Метрики OPS-003 пока компонент;
@@ -157,7 +159,7 @@ NTF-006 рассчитывает retry Plan и бюджет доказанных
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show OPS-013` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show OPS-006` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

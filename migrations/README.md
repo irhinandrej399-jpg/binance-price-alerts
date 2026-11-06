@@ -30,6 +30,7 @@ python3 scripts/migrate.py --owner notifications
 `api/012_delivery_relay.sql` — lease/token и отдельные подтверждения публикации delivery_outbox SUB-009 ([контракт](../internal/api/deliveryrelay/README.md));
 `api/013_subscription_snapshots.sql` — неизменяемые страницы S/C, ресурс снимка и durable replay-pins SUB-015 ([контракт](../internal/api/subscription/README.md));
 `api/014_subscription_snapshot_requests.sql` — постоянные ключи идемпотентного создания снимка SUB-023, runtime только SELECT/INSERT; удаление ресурса не удаляет ключ;
+`api/015_auth_limits.sql` — общая квота входа/регистрации OPS-013, одна переиспользуемая строка на IP ([контракт](../internal/api/authlimit/README.md));
 `matcher/001_subscription_projection.sql` — durable проекция и C/NextOffset MAT-001;
 `matcher/002_snapshot_generations.sql` — изолированные поколения снимка MAT-007,
 полные immutable after-images и атомарная отметка завершения загрузки;

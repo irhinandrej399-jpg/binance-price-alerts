@@ -4,7 +4,8 @@
 `POST /v1/accounts`. Его можно подключить к основному mux через
 `mux.Handle("/v1/accounts", registration.New(account.New(pool)))`.
 Передаётся repository на pool с самостоятельным commit INSERT, а не на внешней
-транзакции. Runtime-конфигурация и запуск `cmd/api` пока не реализованы.
+транзакции. В `cmd/api` подключён через общий
+[auth limit OPS-013](../authlimit/README.md) внутри bodylimit.
 
 Запрос — `application/json` (допустим параметр charset):
 

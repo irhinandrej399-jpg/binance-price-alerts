@@ -1,7 +1,8 @@
 # Вход — IAM-004
 
 `login.New(account.New(pool), session.New(pool, nil))` возвращает подключаемый
-HTTP handler для `POST /v1/sessions`. Runtime cmd/api пока не подключён.
+HTTP handler для `POST /v1/sessions`. В cmd/api подключён через общий
+[auth limit OPS-013](../authlimit/README.md) внутри bodylimit.
 
 Запрос: `Content-Type: application/json`, объект только с `email` и `password`.
 Email нормализуется account.NormalizeEmail, пароль проверяется без trim/изменений.
