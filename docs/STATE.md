@@ -4,8 +4,9 @@
 
 ## Активная работа
 
-- Активная реализация: нет. OPS-041 завершён; следующий — [OPS-034](backlog/tickets/OPS-034.md), lifetime/identity replay. Незавершённый локальный draft OPS-034 сохранён вне коммита OPS-041. Peak/lower/upper=null, qualification blocked.
-- Последний результат: [OPS-041](backlog/tickets/OPS-041.md). [Shared-fileset capture/вход OPS-034](measurements/OPS-041/README.md): Parallel Hash с двумя workers/4 batches; 11 fileset paths и 6 identities наблюдены у разных PG владельцев, PID/starttime/lineage и independent role logs связаны. Полный verifier, 15+5 rehashed controls, финальный replay и регрессия OPS-040 прошли; cleanup пуст. Все procfs/shared-state/external alias gaps сохранены; lifetime/bounds не квалифицированы.
+- Активная реализация: нет. OPS-034 остаётся planned: supported lifetime envelope не доказан, bounds=null. Его диагностический draft сохранён в рабочем дереве; завершающий commit не создавался.
+- Последний результат: [OPS-042](backlog/tickets/OPS-042.md). [Proof contract и независимый raw audit](measurements/OPS-042/README.md): 17 PG numeric candidates, ни одного work exclusive-create binding, 65025:208045 у разных PID/имён; 13 FS stages, шесть creates/три reuse и девять semantic challenges. Поддержанного envelope нет. Первым недостающим capture механизмом выделен OPS-043; P0–P5 остаются gate для OPS-034.
+- [OPS-041](backlog/tickets/OPS-041.md). [Shared-fileset capture/вход OPS-034](measurements/OPS-041/README.md): Parallel Hash с двумя workers/4 batches; 11 fileset paths и 6 identities наблюдены у разных PG владельцев, PID/starttime/lineage и independent role logs связаны. Полный verifier, 15+5 rehashed controls, финальный replay и регрессия OPS-040 прошли; cleanup пуст. Все procfs/shared-state/external alias gaps сохранены; lifetime/bounds не квалифицированы.
 - Предыдущий завершённый тикет: [OPS-040](backlog/tickets/OPS-040.md). [Reference/full verifier](../infra/postgres/measure/references/README.md): queue-only receive/drop после source close, mapping-only, фактический pathname/FD/inode reuse; ordinary/default и parallel/custom PG18.6 с двумя worker. 314 FS/5660 PG checkpoints и 15 rehashed controls прошли; dependency regressions по 17 прошли, cleanup пуст. [Отчёт/вход OPS-034](measurements/OPS-040/README.md). Terminal Z → X procfs race явно incomplete, все census/FD/maps ошибки сохранены; all-owner/shared-state/queue/external aliases completeness не доказана.
 - [OPS-039](backlog/tickets/OPS-039.md). [Lifecycle raw](../infra/postgres/measure/lifecycle/README.md): clone/clone3 flags/bytes/returns, shared FD/VM, ранние child stops и nonleader exec transition. Диагноз timeout подтверждён stale former-TID gate; точный /bin/true теперь exit=0 за 0,255222 s. Run-f: 19 ранних stops, 212 checkpoints, полный verifier и 17 rehashed controls прошли, cleanup пуст. [Отчёт](measurements/OPS-039/README.md). Shared-state/owner completeness unknown, inherited-return stops не наблюдались, PG/queues/lifetime не проверялись; qualification blocked.
 - [OPS-038](backlog/tickets/OPS-038.md). [Inventory/census](../infra/postgres/measure/inventory/README.md): все видимые FD/maps/path witnesses, независимый process/thread census, rename/growth/unlink/mapping-only/external controls; run-c 448 checkpoints и 17 rehashed tamper controls прошли, cleanup пуст. [Отчёт](measurements/OPS-038/README.md). Consistency unknown/complete=false, ошибки procfs сохранены; PG/aliases/shared-state полнота не доказана, qualification blocked.
@@ -119,14 +120,14 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-По очереди следующий — [OPS-034](backlog/tickets/OPS-034.md), только по новому
-поручению: lifetime/identity replay по [новому shared-fileset входу OPS-041](measurements/OPS-041/README.md)
-и linked OPS-038/039 controls. Локальный draft `infra/postgres/measure/lifetime/`
-незавершён и не коммитился; сначала прочитать сохранённый diff, заменить старый
-input и закончить проверку ownership/generations/references. Затем OPS-035 →
-OPS-036 → OPS-032. Matching census не all-owner barrier; queue/shared-state/
-external aliases и procfs races unresolved. OPS-018 и OPS-015/016 блокированы,
-старые отчёты не переквалифицированы, peak/lower/upper=null.
+По очереди следующий — [OPS-043](backlog/tickets/OPS-043.md), только по новому
+поручению: проверить и сохранить incarnation binding/terminal retirement witness
+на disposable Linux FS с независимыми existing helper controls. Это первая
+предпосылка P1/P5 [proof contract OPS-042](measurements/OPS-042/README.md),
+не готовность all-owner/shared-state/kernel coverage. Затем OPS-034 повторяет
+readiness по всем P0–P5 → OPS-035 → OPS-036 → OPS-032. Bounds=null;
+qualification blocked. Незавершённые diagnostics/code OPS-034 и два исходных
+untracked stdout OPS-030 сохранены вне завершающего коммита OPS-042.
 
 NTF-013 подготовил `worker.New(Config)` / `Run(ctx)` над готовыми jobs.Store и handler.Handler. Discovery выбирает due jobs/checks, pending reports всех четырёх видов также у stopped/terminal jobs и не назначенные current-fence channel blocks. Настройки concurrency/interval/timeout/write timeout/recovery interval обязательны; handler отдельно требует Policy/ReportLimit/RecoveryInterval. Контракты — worker/README.md и handler/README.md. Worker хранит не записанный PendingWrite между Run и завершает Retry до новой выборки. После потери процесса сохраняется риск внешнего дубля; signals/HTTP shutdown — OPS-011. SQL scan/нагрузка ещё не измерялись. SUB-027 обеспечивает CAS адресата; старый admission без CAS для отправки не использовать.
 
@@ -141,7 +142,7 @@ NTF-006 рассчитывает retry Plan и бюджет доказанных
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show OPS-034` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show OPS-043` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

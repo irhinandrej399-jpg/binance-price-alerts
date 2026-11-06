@@ -1,0 +1,360 @@
+{
+  "schema": "ops042-proof-audit-v1",
+  "source_report_sha256": "4d2045bbb290aa2616bae76c567f28eb6d69d3e4aa5e1b6d75e3b58c228310aa",
+  "input_hashes": {
+    "filesystem.txt": "9d494400e8ef3e73fb7730200ae74370f2a572085d8e49c7589bb834a27b4d99",
+    "filesystem.jsonl.gz": "f2c4611b0db862cefb233a133a3c23327c116dd2490b3429fedd5c0d13eb8119",
+    "postgres.jsonl.gz.part-000": "1aeab36937db45020c219bc55abb1d504c8d8fedd83935d620dd8815acd43566",
+    "postgres.jsonl.gz.part-001": "05f0dcc31a0711979e58efc2baf73e2f6efece165031f1e2a473c728140b0d32",
+    "postgres.jsonl.gz.part-002": "73c368f826eca07e3e0b322cb25c0c476799e987afe9a1a4de491064a755c7b9",
+    "postgres.jsonl.gz.part-003": "5bcafec0ce7da8df3d52c2823e2e8657a51532dec07232de3ffab658fbf85590",
+    "postgres.jsonl.gz.part-004": "ba279954d397d7c195093a7c274ba6dfec6ba251db00a650c4f0609d7d29fa68",
+    "postgres.jsonl.gz.part-005": "09c67df801336eb11e3eaf1f45f432f3caa3f5a810491bc3b5ae89a6470c8958",
+    "postgres.jsonl.gz.part-006": "e8707842bdc8291f3b789604887c610ce88c125434e99e4cb03f1a5fa70cd5aa",
+    "postgres.jsonl.gz.part-007": "5642b2a988e9850084b757a007cdb24cff3eeafe568d7888a507f7e88e00501a"
+  },
+  "pg_candidates": 17,
+  "successful_exclusive_open_adjacent_bindings": [],
+  "repeated_numeric_identity": {
+    "paths": [
+      "/var/lib/postgresql/18/docker/base/pgsql_tmp/pgsql_tmp195.0",
+      "/var/lib/postgresql/18/docker/base/pgsql_tmp/pgsql_tmp234.1"
+    ],
+    "owners": [
+      [
+        195,
+        3996605
+      ],
+      [
+        234,
+        4001156
+      ]
+    ],
+    "witnesses": {
+      "195": {
+        "seq": 43222,
+        "starttime": 3996605,
+        "path": "/var/lib/postgresql/18/docker/base/pgsql_tmp/pgsql_tmp195.0"
+      },
+      "234": {
+        "seq": 64186,
+        "starttime": 4001156,
+        "path": "/var/lib/postgresql/18/docker/base/pgsql_tmp/pgsql_tmp234.1"
+      }
+    }
+  },
+  "fs_creations": [
+    {
+      "identity": "64:208041",
+      "entry_seq": 1329,
+      "return_seq": 1337,
+      "stat_seq": 1338
+    },
+    {
+      "identity": "64:208041",
+      "entry_seq": 4184,
+      "return_seq": 4192,
+      "stat_seq": 4193
+    },
+    {
+      "identity": "64:208041",
+      "entry_seq": 4997,
+      "return_seq": 5005,
+      "stat_seq": 5006
+    },
+    {
+      "identity": "64:208041",
+      "entry_seq": 7200,
+      "return_seq": 7208,
+      "stat_seq": 7209
+    },
+    {
+      "identity": "64:208041",
+      "entry_seq": 7984,
+      "return_seq": 7992,
+      "stat_seq": 7993
+    },
+    {
+      "identity": "64:208041",
+      "entry_seq": 10181,
+      "return_seq": 10189,
+      "stat_seq": 10190
+    }
+  ],
+  "stages": [
+    {
+      "tag": "receive-opened",
+      "identity": "64:208041",
+      "gate_seq": 2075,
+      "inventory_seq": 2076,
+      "fd_views": 6,
+      "path_views": 1,
+      "mapped": false,
+      "queued_bytes": 0,
+      "observation": "held",
+      "last_reference": "unknown"
+    },
+    {
+      "tag": "receive-queue-only",
+      "identity": "64:208041",
+      "gate_seq": 2815,
+      "inventory_seq": 2816,
+      "fd_views": 0,
+      "path_views": 0,
+      "mapped": false,
+      "queued_bytes": 1,
+      "observation": "held",
+      "last_reference": "unknown"
+    },
+    {
+      "tag": "receive-delivered",
+      "identity": "64:208041",
+      "gate_seq": 3502,
+      "inventory_seq": 3503,
+      "fd_views": 6,
+      "path_views": 0,
+      "mapped": false,
+      "queued_bytes": 0,
+      "observation": "held",
+      "last_reference": "unknown"
+    },
+    {
+      "tag": "receive-discharged",
+      "identity": "64:208041",
+      "gate_seq": 4168,
+      "inventory_seq": 4169,
+      "fd_views": 0,
+      "path_views": 0,
+      "mapped": false,
+      "queued_bytes": 0,
+      "observation": "absent-in-views",
+      "last_reference": "unknown"
+    },
+    {
+      "tag": "receive-reused",
+      "identity": "64:208041",
+      "gate_seq": 4905,
+      "inventory_seq": 4906,
+      "fd_views": 6,
+      "path_views": 1,
+      "mapped": false,
+      "queued_bytes": 0,
+      "observation": "held",
+      "last_reference": "unknown"
+    },
+    {
+      "tag": "drop-opened",
+      "identity": "64:208041",
+      "gate_seq": 5678,
+      "inventory_seq": 5679,
+      "fd_views": 6,
+      "path_views": 1,
+      "mapped": false,
+      "queued_bytes": 0,
+      "observation": "held",
+      "last_reference": "unknown"
+    },
+    {
+      "tag": "drop-queue-only",
+      "identity": "64:208041",
+      "gate_seq": 6433,
+      "inventory_seq": 6434,
+      "fd_views": 0,
+      "path_views": 0,
+      "mapped": false,
+      "queued_bytes": 1,
+      "observation": "held",
+      "last_reference": "unknown"
+    },
+    {
+      "tag": "drop-discharged",
+      "identity": "64:208041",
+      "gate_seq": 7184,
+      "inventory_seq": 7185,
+      "fd_views": 0,
+      "path_views": 0,
+      "mapped": false,
+      "queued_bytes": 0,
+      "observation": "absent-in-views",
+      "last_reference": "unknown"
+    },
+    {
+      "tag": "drop-reused",
+      "identity": "64:208041",
+      "gate_seq": 7892,
+      "inventory_seq": 7893,
+      "fd_views": 6,
+      "path_views": 1,
+      "mapped": false,
+      "queued_bytes": 0,
+      "observation": "held",
+      "last_reference": "unknown"
+    },
+    {
+      "tag": "mapping-opened",
+      "identity": "64:208041",
+      "gate_seq": 8718,
+      "inventory_seq": 8719,
+      "fd_views": 6,
+      "path_views": 1,
+      "mapped": false,
+      "queued_bytes": 0,
+      "observation": "held",
+      "last_reference": "unknown"
+    },
+    {
+      "tag": "mapping-only",
+      "identity": "64:208041",
+      "gate_seq": 9483,
+      "inventory_seq": 9484,
+      "fd_views": 0,
+      "path_views": 0,
+      "mapped": true,
+      "queued_bytes": 0,
+      "observation": "held",
+      "last_reference": "unknown"
+    },
+    {
+      "tag": "mapping-unmapped",
+      "identity": "64:208041",
+      "gate_seq": 10165,
+      "inventory_seq": 10166,
+      "fd_views": 0,
+      "path_views": 0,
+      "mapped": false,
+      "queued_bytes": 0,
+      "observation": "absent-in-views",
+      "last_reference": "unknown"
+    },
+    {
+      "tag": "mapping-reused",
+      "identity": "64:208041",
+      "gate_seq": 10859,
+      "inventory_seq": 10860,
+      "fd_views": 6,
+      "path_views": 1,
+      "mapped": false,
+      "queued_bytes": 0,
+      "observation": "held",
+      "last_reference": "unknown"
+    }
+  ],
+  "reuses": [
+    {
+      "mode": "receive",
+      "identity": "64:208041",
+      "birth": {
+        "identity": "64:208041",
+        "entry_seq": 4184,
+        "return_seq": 4192,
+        "stat_seq": 4193
+      },
+      "conclusion": "distinct-exclusive-creation; no exact retirement event"
+    },
+    {
+      "mode": "drop",
+      "identity": "64:208041",
+      "birth": {
+        "identity": "64:208041",
+        "entry_seq": 7200,
+        "return_seq": 7208,
+        "stat_seq": 7209
+      },
+      "conclusion": "distinct-exclusive-creation; no exact retirement event"
+    },
+    {
+      "mode": "mapping",
+      "identity": "64:208041",
+      "birth": {
+        "identity": "64:208041",
+        "entry_seq": 10181,
+        "return_seq": 10189,
+        "stat_seq": 10190
+      },
+      "conclusion": "distinct-exclusive-creation; no exact retirement event"
+    }
+  ],
+  "semantic_challenges": [
+    {
+      "claim": "last FD absence ends receive-queue-only",
+      "rejected": true,
+      "witness": "receive-queue-only"
+    },
+    {
+      "claim": "last FD absence ends drop-queue-only",
+      "rejected": true,
+      "witness": "drop-queue-only"
+    },
+    {
+      "claim": "last FD absence ends mapping-only",
+      "rejected": true,
+      "witness": "mapping-only"
+    },
+    {
+      "claim": "same FD/path/dev/ino implies same creation: receive",
+      "rejected": true,
+      "witness": {
+        "identity": "64:208041",
+        "entry_seq": 4184,
+        "return_seq": 4192,
+        "stat_seq": 4193
+      }
+    },
+    {
+      "claim": "same FD/path/dev/ino implies same creation: drop",
+      "rejected": true,
+      "witness": {
+        "identity": "64:208041",
+        "entry_seq": 7200,
+        "return_seq": 7208,
+        "stat_seq": 7209
+      }
+    },
+    {
+      "claim": "same FD/path/dev/ino implies same creation: mapping",
+      "rejected": true,
+      "witness": {
+        "identity": "64:208041",
+        "entry_seq": 10181,
+        "return_seq": 10189,
+        "stat_seq": 10190
+      }
+    },
+    {
+      "claim": "absence certifies retirement: receive-discharged",
+      "rejected": true,
+      "alternatives": [
+        "no reference",
+        "outside census or unobserved kernel reference"
+      ]
+    },
+    {
+      "claim": "absence certifies retirement: drop-discharged",
+      "rejected": true,
+      "alternatives": [
+        "no reference",
+        "outside census or unobserved kernel reference"
+      ]
+    },
+    {
+      "claim": "absence certifies retirement: mapping-unmapped",
+      "rejected": true,
+      "alternatives": [
+        "no reference",
+        "outside census or unobserved kernel reference"
+      ]
+    }
+  ],
+  "indistinguishable_fd_views": [
+    [
+      "receive-queue-only",
+      "receive-discharged"
+    ],
+    [
+      "drop-queue-only",
+      "drop-discharged"
+    ]
+  ],
+  "supported": false,
+  "bounds": null
+}
