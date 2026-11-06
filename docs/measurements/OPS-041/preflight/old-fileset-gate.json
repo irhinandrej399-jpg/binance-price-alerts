@@ -1,0 +1,6 @@
+{
+  "control": "old-OPS040-has-no-filesets",
+  "rejected": true,
+  "reason": "shared-fileset gate: no .fileset/ evidence; OPS-041 required",
+  "report_sha256": "e69b604d3f2261bc2bb295bb7e2d62eae26d2d6534673f2d0054958eccbe52eb"
+}

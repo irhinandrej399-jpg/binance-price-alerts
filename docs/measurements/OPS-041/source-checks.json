@@ -1,0 +1,14 @@
+{
+  "result": "PASS",
+  "snapshot_matches_current": {
+    "infra/postgres/measure/ancillary/run.py": "7a101c73259f3e5006e4696056d89308853469a6413c1c01fbb1c9dd12bf2ad2",
+    "infra/postgres/measure/references/verify.py": "d7cbc0ec534ba75dbe5af68d6796d69a4b868cd790f6eafbb301586d6acc6d19",
+    "infra/postgres/measure/references/artifacts.py": "30a3258715c8381282c69591b8d6617c9e2d26dc9a24c66ba5635739c3716ebd",
+    "infra/postgres/measure/ancillary/main_linux.go": "f143365284fa56d425bc02e08ad7ec4a35720478b587d0a734e208fc5429580f",
+    "infra/postgres/measure/ancillary/inventory_linux.go": "bdf5cec58243df7bf2478ad708843dde6be2a3b571ac1ceeb1ea3c9d4039c7a8",
+    "infra/postgres/measure/ancillary/lifecycle_linux.go": "6543942b0db3fe94f9d5ce144199ec276d6e42973c1b3489ee84cf6fcaa6156f",
+    "infra/postgres/measure/ancillary/message_linux.go": "8cbb27c705f5fae43dfa401e50a8786b1464ad670b050f69ed0a499b923d57ba",
+    "infra/postgres/measure/ancillary/control/main_linux.go": "c2d3d2fd26e5a82b12f9d8167346cda4549fc84c2be34984c8f25222ca44cc2d",
+    "infra/postgres/measure/ancillary/control/references_linux.go": "8befdf8da14285e7bbf9ba1c06a6b58e9a7deabdd0012f41343716871da33087"
+  }
+}

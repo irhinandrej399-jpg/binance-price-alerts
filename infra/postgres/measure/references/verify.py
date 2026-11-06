@@ -86,6 +86,79 @@ def points(directory, rows, replay):
     require('socket queue reference history pending OPS-034' in rows[-1]['issues'], 'unsupported queue not blocked')
     return result
 
+def shared_filesets(pg):
+    """Positive FD identities shared by PG descendants; no continuity claim.
+
+    This gate intentionally requires readable independent census identities and
+    corresponding ptrace births. Same dev/ino across checkpoints is evidence of
+    sharing in this controlled SQL, not proof of inode generations/lifetimes.
+    """
+    root = None
+    births = {}
+    identities = {}
+    opens = {}
+    entries = {}
+    references = {}
+    paths = set()
+    path_identity_checks = 0
+    for r in pg:
+        k = r['kind']
+        if k == 'root': root = r['pid']
+        if k == 'event' and r['event'] in (1, 2, 3):
+            births[r['message']] = (r['pid'], r['seq'])
+        if k == 'enter': entries[r['pid']] = r
+        if k == 'leave':
+            e = entries.pop(r['pid'], None)
+            if e and e['nr'] == 57 and r['ret'] == 0:
+                opens.pop((r['pid'], e['args'][0]), None)
+            if e and e['nr'] == 56 and r['ret'] >= 0:
+                opens.pop((r['pid'], r['ret']), None)
+                for path in e['lifecycle']['paths']:
+                    m = path['memory']
+                    if not m['error'] and '.fileset/' in bytes.fromhex(m['hex']).decode(errors='replace'):
+                        opens[(r['pid'], r['ret'])] = r['seq']
+        if k != 'inventory': continue
+        # Every fileset reference must bind to a readable stat and a traced PG
+        # owner. Racy unreadable references remain in raw; they are not used as
+        # positive witnesses or promoted to completeness.
+        before = None
+        path_stats = {e['path']: e['stat'] for e in r['paths'] if e.get('stat') and not e.get('error')}
+        for o in r['owners']:
+            for e in o['fd_entries']:
+                if '.fileset/' not in e['link']['text']: continue
+                paths.add(e['link']['text'])
+                st = e.get('stat')
+                require(st is not None and not e['error'], 'fileset stat missing: gate incomplete')
+                require(st['mode'] & 0o170000 == 0o100000, 'fileset regular identity')
+                independent = path_stats.get(e['link']['text'])
+                if independent:
+                    require((st['dev'],st['ino']) == (independent['dev'],independent['ino']), 'fileset FD/path identity contradiction: incomplete')
+                    path_identity_checks += 1
+                if before is None: before = inv.census(r['census_before'])
+                require(o['traced'] and o['tid'] in r['lineage'], 'fileset owner lineage missing')
+                require(o['tid'] in before and before[o['tid']][1], 'fileset owner identity incomplete')
+                group, ident = before[o['tid']]
+                require(group == o['pid'] == o['tid'], 'unexpected PG thread owner')
+                require(o['pid'] in births and births[o['pid']][0] == root and births[o['pid']][1] < r['seq'], 'fileset PG birth missing')
+                start = ident[1]
+                identities.setdefault(o['pid'], set()).add(start)
+                fd = int(e['path'].rsplit('/', 1)[1])
+                require((o['pid'], fd) in opens and opens[(o['pid'], fd)] < r['seq'], 'fileset successful open reference missing')
+                key = (st['dev'], st['ino'])
+                owners = references.setdefault(key, {})
+                # Keep first positive reference per owner, with full raw pointer.
+                owners.setdefault((o['pid'], start), dict(seq=r['seq'], fd=fd, open_return_seq=opens[(o['pid'], fd)], path=e['link']['text'], stat=st))
+    require(paths, 'shared-fileset gate: no .fileset/ evidence; OPS-041 required')
+    require(all(len(starts) == 1 for starts in identities.values()), 'PG PID reuse: shared identity gate incomplete')
+    shared = [dict(dev=dev, ino=ino, owners=[dict(pid=pid, starttime=start, parent=root, birth_seq=births[pid][1], **w) for (pid,start),w in owners.items()])
+              for (dev,ino),owners in references.items() if len(owners) >= 2]
+    require(shared, 'shared-fileset gate: no cross-owner identity evidence')
+    require(path_identity_checks > 0, 'fileset independent pathname stat missing')
+    return dict(path_identity_checks=path_identity_checks, paths=sorted(paths), identity_count=len(references), shared_identities=shared, owner_pids=sorted(identities), root_pid=root,
+                consistency='unknown', qualification_blocked=True,
+                temp_peak_live_bytes=None, lower_bytes=None, upper_bytes=None)
+
+
 def verify(directory):
     report=json.loads((directory/'report.json').read_text())
     require(report['status']=='ancillary-captured-not-qualified' and report['mode']=='ops040-references-v1', 'run status')
@@ -99,11 +172,11 @@ def verify(directory):
         if name not in report['archives']:require(digest(directory/name)==expected,'hash '+name)
     rows=a.load(directory/'filesystem.jsonl.gz');r=v.replay(rows);refs=points(directory,rows,r)
     with postgres_rows(directory,report) as pg:
-        pr=v.replay(pg)
+        shared = shared_filesets(pg) if report.get('scenario') == 'shared-fileset' else None
         env=next(x for x in pg if x['kind']=='inventory_environment')
         require(not env['pg_witness']['error'] and json.loads(env['pg_witness']['text'])==json.loads((directory/'pg-witness.json').read_text()), 'PG independent input binding')
         require(json.loads(env['pg_witness']['text'])==dict(io_method=report['settings']['io_method'],settings=report['settings'],tablespaces=report['tablespaces']), 'PG report/input binding')
-        require(report['settings']['io_method']=='sync' and report['settings']['fsync']=='on' and report['capture_exit']==0 and '2000' in report['ordinary_result'] and report['row_count']==2000, 'PG run/settings')
+        require(report['settings']['io_method']=='sync' and report['settings']['fsync']=='on' and report['capture_exit']==0 and str(report['row_count']) == report['ordinary_result'].splitlines()[-1] and report['row_count']==(8000 if shared else 2000), 'PG run/settings')
         spaces=report['tablespaces'];require({t['spcname'] for t in spaces}=={'pg_default','pg_global','ops040_custom'},'tablespace controls')
         require(next(t for t in spaces if t['spcname']=='ops040_custom')['location']=='/tmp/work/custom','custom location')
         plan_text=(directory/'parallel-plan.txt').read_text()
@@ -112,7 +185,27 @@ def verify(directory):
         def walk(n):
             nodes.append(n)
             for x in n.get('Plans',[]):walk(x)
-        walk(plan[0]['Plan']);require(any(n.get('Workers Launched',0)>0 for n in nodes),'no actual parallel worker')
+        walk(plan[0]['Plan'])
+        if shared:
+            require({'postgres.stderr','postgres.stdout'} <= report['sha256'].keys(), 'PG role log hashes missing')
+            require(report['settings']['server_version'].startswith('18.6'), 'PG18.6 profile')
+            require(any(n['Node Type']=='Hash' and n.get('Parallel Aware') and n.get('Hash Batches',0)>1 and n.get('Actual Loops',0)>0 for n in nodes), 'shared-fileset gate: no batched Parallel Hash')
+            require(any(n.get('Workers Launched')==2 for n in nodes), 'shared-fileset gate: two workers not launched')
+            sql = report['parallel_sql']
+            require(sql in (directory/'postgres.stderr').read_text(), 'independent logged SQL/settings')
+            require(sql.startswith('SELECT pg_backend_pid(); SET temp_tablespaces=ops040_custom; SET hash_mem_multiplier=1; ') and "SET work_mem='64kB'" in sql and 'SELECT count(*) FROM gate_input a JOIN gate_input b USING (i)' in sql, 'shared SQL/settings')
+            require(any(c[-1]==sql and 'psql' in c for c in report['commands']), 'SQL command binding')
+            leader = int(plan_text.splitlines()[0])
+            require(leader in shared['owner_pids'], 'backend/fileset binding')
+            logs=(directory/'postgres.stderr').read_text()
+            workers=sorted(pid for pid in shared['owner_pids'] if f'[{pid}] parallel worker ' in logs)
+            require(len(workers)==2 and f'[{leader}] client backend ' in logs, 'PG role/worker witnesses missing')
+            require(all(pid==leader or pid in workers for pid in shared['owner_pids']), 'unexpected fileset owner')
+            require(report['shared_result'].splitlines()[-1]==str(report['row_count']), 'shared join result')
+            require(any(c[-1]==report['shared_result_sql'] and 'psql' in c for c in report['commands']), 'result SQL command binding')
+            shared.update(backend_pid=leader, worker_pids=workers)
+        require(any(n.get('Workers Launched',0)>0 for n in nodes),'no actual parallel worker')
+        pr=v.replay(pg)
         root=next(x['pid'] for x in pg if x['kind']=='root')
         backends=set();custom=default=False
         for cp in pg:
@@ -132,7 +225,7 @@ def verify(directory):
         require(d['directory']==str(expected), 'unexpected dependency location')
         require(hashlib.sha256((expected/'report.json').read_bytes()).hexdigest()==d['report_sha256'], 'dependency preservation')
         (inv.verify if ticket=='OPS-038' else v.verify)(expected)
-    return dict(references=refs,filesystem=r,postgres=pr,backend_pids=sorted(backends),qualification_blocked=True)
+    return dict(references=refs,filesystem=r,postgres=pr,backend_pids=sorted(backends),shared_filesets=shared,qualification_blocked=True)
 
 def negative_checks(directory):
     checks=[]
@@ -174,8 +267,62 @@ def negative_checks(directory):
     reject('false-completeness',lambda rs:cp(rs,1)['consistency'].__setitem__('complete',True))
     return checks
 
+def shared_negative_checks(directory):
+    """Rehash/resequence mutated complete PG raw, then call full verifier."""
+    from artifacts import seal
+    original=json.loads((directory/'report.json').read_text())
+    if original.get('scenario') != 'shared-fileset': return []
+    leader=int((directory/'parallel-plan.txt').read_text().splitlines()[0])
+    checks=[]
+    mutations=('fileset-removal','worker-removal','fileset-stat-removal','fileset-lineage-removal','fileset-identity-substitution')
+    for name in mutations:
+        with tempfile.TemporaryDirectory(prefix='ops041-tamper-') as tmp:
+            dest=Path(tmp)/'data';shutil.copytree(directory,dest)
+            report=copy.deepcopy(original)
+            raw=dest/'postgres.jsonl.gz'
+            changed=0
+            with postgres_rows(directory,original) as pg, gzip.open(raw,'wt',compresslevel=1) as output:
+                for seq,r in enumerate(pg,1):
+                    r['seq']=seq
+                    if r['kind']=='inventory':
+                        had=False
+                        if name=='worker-removal':
+                            owners=r['owners']
+                            r['owners']=[o for o in owners if o['pid']==leader or not o['traced'] or not any('.fileset/' in e['link']['text'] for e in o['fd_entries'])]
+                            changed+=len(owners)-len(r['owners'])
+                        for o in r['owners']:
+                            for e in o['fd_entries']:
+                                if '.fileset/' not in e['link']['text']:continue
+                                had=True;changed+=1
+                                if name=='fileset-removal':e['link']['text']='/removed'
+                                if name=='fileset-stat-removal':e.pop('stat',None)
+                                if name=='fileset-identity-substitution' and e.get('stat'):e['stat']['ino']+=o['pid']*100000000
+                        if had and name=='fileset-lineage-removal':r.pop('lineage')
+                        if name=='fileset-removal':
+                            # Remove every other path/maps mention too. A plan
+                            # and temp bytes alone cannot pass the fileset gate.
+                            for e in r['paths']:
+                                if '.fileset/' in e.get('path',''):e['path']='/removed'
+                            for o in r['owners']:
+                                o['maps']['text']=o['maps']['text'].replace('.fileset/','.removed/')
+                                for e in o['map_entries']:e['line']=e['line'].replace('.fileset/','.removed/')
+                    output.write(json.dumps(r)+'\n')
+            require(changed>0,'mutation did not reach fileset evidence')
+            # seal preserves the new raw bytes and recalculates original/chunk
+            # hashes. This deliberately defeats checksum-only rejection.
+            for part in report['archives']['postgres.jsonl.gz']['parts']:
+                (dest/part).unlink();report['sha256'].pop(part)
+            report['sha256']['postgres.jsonl.gz']=digest(raw)
+            seal(dest,report)
+            (dest/'report.json').write_text(json.dumps(report))
+            try:verify(dest)
+            except (ValueError,KeyError,TypeError,IndexError,StopIteration) as error:
+                checks.append(dict(name=name,changed=changed,rejection=str(error)))
+            else:raise ValueError('PG tamper accepted '+name)
+    return checks
+
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('directory',type=Path);p.add_argument('--record',action='store_true');args=p.parse_args()
-    result={'result':verify(args.directory),'negative_checks':negative_checks(args.directory)}
+    result={'result':verify(args.directory),'negative_checks':negative_checks(args.directory),'shared_negative_checks':shared_negative_checks(args.directory)}
     if args.record:(args.directory/'checks.json').write_text(json.dumps(result,indent=2)+'\n')
     print(json.dumps(result,indent=2))

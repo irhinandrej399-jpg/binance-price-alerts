@@ -1,0 +1,10 @@
+{
+  "OPS-038": {
+    "directory": "docs/measurements/OPS-038/run-c",
+    "report_sha256": "0af386dff18ccf22a4a9365d38fd3b2421af88df6cdbea6c2c0621a4a4622d45"
+  },
+  "OPS-039": {
+    "directory": "docs/measurements/OPS-039/run-f",
+    "report_sha256": "2c7a3550613f157795ffdd21e28dd45c134d6fdd01c7184ce4baf0db9080385d"
+  }
+}

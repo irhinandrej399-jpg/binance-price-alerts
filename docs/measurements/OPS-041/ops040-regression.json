@@ -1,0 +1,360 @@
+{
+  "result": {
+    "references": {
+      "receive-reused": {
+        "inode_reused": true
+      },
+      "drop-reused": {
+        "inode_reused": true
+      },
+      "mapping-reused": {
+        "inode_reused": true
+      }
+    },
+    "filesystem": {
+      "terminal_identity_races": [],
+      "transitions": 0,
+      "inherited_returns": 0,
+      "incomplete_evidence": 7,
+      "inventory": {
+        "checkpoints": 314,
+        "census_changed_checkpoints": 1,
+        "census_read_errors": 0,
+        "fd_read_errors": 1873,
+        "map_read_errors": 104876,
+        "consistency": "unknown",
+        "pg_coverage": "blocked: external aliases/custom tablespaces not certified",
+        "new_identities": [
+          [
+            163,
+            3539596
+          ],
+          [
+            164,
+            3539601
+          ],
+          [
+            165,
+            3539601
+          ],
+          [
+            166,
+            3539602
+          ],
+          [
+            167,
+            3539602
+          ],
+          [
+            168,
+            3539602
+          ]
+        ],
+        "vanished_identities": [
+          [
+            162,
+            3539591
+          ],
+          [
+            164,
+            3539601
+          ],
+          [
+            165,
+            3539601
+          ],
+          [
+            166,
+            3539602
+          ],
+          [
+            167,
+            3539602
+          ],
+          [
+            168,
+            3539602
+          ]
+        ],
+        "temp_peak_live_bytes": null,
+        "lower_bytes": null,
+        "upper_bytes": null,
+        "qualification_blocked": true
+      },
+      "birth_count": 5
+    },
+    "postgres": {
+      "terminal_identity_races": [
+        {
+          "seq": 39059,
+          "pid": 186,
+          "status_ppid": 180,
+          "stat_ppid": 0,
+          "status_state": "Z (zombie)",
+          "stat_state": "X"
+        }
+      ],
+      "transitions": 0,
+      "inherited_returns": 0,
+      "incomplete_evidence": 2,
+      "inventory": {
+        "checkpoints": 5660,
+        "census_changed_checkpoints": 9,
+        "census_read_errors": 0,
+        "fd_read_errors": 38307,
+        "map_read_errors": 3440545,
+        "consistency": "unknown",
+        "pg_coverage": "blocked: external aliases/custom tablespaces not certified",
+        "new_identities": [
+          [
+            181,
+            3539833
+          ],
+          [
+            182,
+            3540802
+          ],
+          [
+            183,
+            3543973
+          ],
+          [
+            184,
+            3543975
+          ],
+          [
+            185,
+            3543977
+          ],
+          [
+            186,
+            3544150
+          ],
+          [
+            187,
+            3544152
+          ],
+          [
+            188,
+            3544156
+          ],
+          [
+            189,
+            3544161
+          ],
+          [
+            190,
+            3544161
+          ],
+          [
+            191,
+            3544161
+          ],
+          [
+            192,
+            3544161
+          ],
+          [
+            193,
+            3544161
+          ],
+          [
+            194,
+            3544161
+          ],
+          [
+            195,
+            3544181
+          ],
+          [
+            218,
+            3545561
+          ],
+          [
+            224,
+            3545566
+          ],
+          [
+            225,
+            3545753
+          ],
+          [
+            226,
+            3545764
+          ],
+          [
+            227,
+            3546652
+          ],
+          [
+            228,
+            3546652
+          ],
+          [
+            229,
+            3546652
+          ],
+          [
+            230,
+            3546652
+          ],
+          [
+            231,
+            3546652
+          ],
+          [
+            232,
+            3546652
+          ],
+          [
+            243,
+            3546655
+          ],
+          [
+            251,
+            3546658
+          ]
+        ],
+        "vanished_identities": [
+          [
+            180,
+            3539830
+          ],
+          [
+            183,
+            3543973
+          ],
+          [
+            184,
+            3543975
+          ],
+          [
+            185,
+            3543977
+          ],
+          [
+            186,
+            3544150
+          ],
+          [
+            187,
+            3544152
+          ],
+          [
+            188,
+            3544156
+          ],
+          [
+            189,
+            3544161
+          ],
+          [
+            190,
+            3544161
+          ],
+          [
+            191,
+            3544161
+          ],
+          [
+            192,
+            3544161
+          ],
+          [
+            193,
+            3544161
+          ],
+          [
+            194,
+            3544161
+          ],
+          [
+            195,
+            3544181
+          ],
+          [
+            218,
+            3545561
+          ],
+          [
+            224,
+            3545566
+          ],
+          [
+            225,
+            3545753
+          ],
+          [
+            226,
+            3545764
+          ],
+          [
+            227,
+            3546652
+          ],
+          [
+            228,
+            3546652
+          ],
+          [
+            229,
+            3546652
+          ],
+          [
+            230,
+            3546652
+          ],
+          [
+            231,
+            3546652
+          ],
+          [
+            232,
+            3546652
+          ],
+          [
+            243,
+            3546655
+          ]
+        ],
+        "temp_peak_live_bytes": null,
+        "lower_bytes": null,
+        "upper_bytes": null,
+        "qualification_blocked": true
+      },
+      "birth_count": 10
+    },
+    "backend_pids": [
+      183,
+      184,
+      185,
+      186,
+      187,
+      188,
+      195,
+      224,
+      225,
+      226
+    ],
+    "shared_filesets": null,
+    "qualification_blocked": true
+  },
+  "negative_checks": [
+    "missing-queue-only",
+    "missing-mapping-only",
+    "queue-census-omission",
+    "queue-owner-omission",
+    "mapping-omission",
+    "isolation-omission",
+    "lifecycle-omission",
+    "queue-send-omission",
+    "consistent-mapping-removal",
+    "missing-queued-right-stat",
+    "substituted-queued-inode",
+    "missing-paths",
+    "missing-namespaces",
+    "missing-unsupported-queue",
+    "false-completeness"
+  ],
+  "shared_negative_checks": []
+}

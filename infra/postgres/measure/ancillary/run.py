@@ -14,6 +14,12 @@ import time
 import uuid
 
 OPS040 = os.environ.get("OPS040_REFERENCES") == "1"
+SCENARIO = os.environ.get("OPS041_SCENARIO", "parallel-sort")
+if SCENARIO not in ("parallel-sort", "shared-fileset"):
+    raise ValueError("unknown OPS041_SCENARIO")
+SHARED = SCENARIO == "shared-fileset"
+if SHARED and not OPS040:
+    raise ValueError("shared-fileset requires OPS040_REFERENCES=1")
 HERE = Path(__file__).resolve().parent
 OUT = Path(sys.argv[1]).resolve()
 OUT.mkdir(parents=True, exist_ok=False)
@@ -26,6 +32,8 @@ report = {"project": PROJECT, "commands": [], "status": "running",
 clients = []
 if OPS040:
     report.update(lower_bytes=None, upper_bytes=None, mode="ops040-references-v1")
+    if SHARED:
+        report["scenario"] = SCENARIO
 
 
 def run(args, check=True, timeout=60, **kwargs):
@@ -41,7 +49,7 @@ def ex(*args, **kwargs):
 
 
 def sql(query):
-    return ex("psql", "-XAt", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-c", query, timeout=180 if OPS040 else 60)
+    return ex("psql", "-XAt", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-c", query, timeout=600 if SHARED else 180 if OPS040 else 60)
 
 
 def collect(name, remote):
@@ -102,7 +110,7 @@ try:
         (OUT / "pg-witness.json").write_text(json.dumps(witness))
         run(["docker", "cp", str(OUT / "pg-witness.json"), PROJECT + ":/tmp/pg-witness.json"])
     capture_env = ["-e", "OPS038_INVENTORY=1", "-e", "OPS039_LIFECYCLE=1", "-e", "OPS038_PATH_SCOPE=/tmp/work", "-e", "OPS038_PG_WITNESS=/tmp/pg-witness.json"] if OPS040 else []
-    row_count = 2000 if OPS040 else 20000
+    row_count = 8000 if SHARED else 2000 if OPS040 else 20000
     report["row_count"] = row_count
     sql(f"CREATE TABLE gate_input AS SELECT i,repeat(md5(i::text),4) payload FROM generate_series(1,{row_count}) i; ANALYZE gate_input;")
     ex("gosu", "postgres", "pg_ctl", "-D", DATA, "stop", "-m", "fast", "-w")
@@ -112,7 +120,7 @@ try:
     ex("chmod", "755", "/tmp/control")
     started = time.monotonic()
     mode = ["references040"] if OPS040 else []
-    (OUT / "filesystem.txt").write_text(run(["docker", "exec", *capture_env, PROJECT, "/tmp/capture", "/tmp/work", "/tmp/fs.gz", "--", "/tmp/control", *mode], timeout=180 if OPS040 else 60))
+    (OUT / "filesystem.txt").write_text(run(["docker", "exec", *capture_env, PROJECT, "/tmp/capture", "/tmp/work", "/tmp/fs.gz", "--", "/tmp/control", *mode], timeout=600 if SHARED else 180 if OPS040 else 60))
     report["filesystem_traced_seconds"] = time.monotonic() - started
     collect("filesystem.jsonl.gz", "/tmp/fs.gz")
     if not OPS040:
@@ -124,6 +132,8 @@ try:
     pg_command = ["docker", "exec", *capture_env, "--user", "postgres", PROJECT,
         "/tmp/capture", DATA + "/base/pgsql_tmp", "/tmp/pg.gz", "--",
         "postgres", "-D", DATA, "-c", "io_method=sync", "-c", "log_temp_files=0"]
+    if SHARED:
+        pg_command += ["-c", "log_line_prefix=%m [%p] %b ", "-c", "log_min_messages=debug5"]
     report["commands"].append(pg_command)
     p = subprocess.Popen(pg_command,
         stdout=open(OUT / "postgres.stdout", "w"), stderr=open(OUT / "postgres.stderr", "w"))
@@ -144,15 +154,23 @@ try:
     started = time.monotonic()
     if OPS040:
         query = "SET temp_tablespaces=''; " + query
+    report["ordinary_sql"] = query
     report["ordinary_result"] = sql(query)
     report["ordinary_traced_seconds"] = time.monotonic() - started
     (OUT / "ordinary-processes.txt").write_text(process_evidence())
     query = "SET work_mem='64kB'; SET max_parallel_workers_per_gather=2; SET min_parallel_table_scan_size=0; SET parallel_setup_cost=0; SET parallel_tuple_cost=0; EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);"
     started = time.monotonic()
-    if OPS040:
+    if OPS040 and not SHARED:
         query = "SET temp_tablespaces=ops040_custom; " + query.replace("SELECT count(*) FROM gate_input a JOIN gate_input b USING (i)", "SELECT * FROM gate_input ORDER BY payload")
+    if SHARED:
+        query = "SELECT pg_backend_pid(); SET temp_tablespaces=ops040_custom; SET hash_mem_multiplier=1; " + query.replace("EXPLAIN (ANALYZE, FORMAT JSON)", "EXPLAIN (ANALYZE, VERBOSE, FORMAT JSON)")
+    report["parallel_sql"] = query
     (OUT / "parallel-plan.txt").write_text(sql(query))
     report["parallel_traced_seconds"] = time.monotonic() - started
+    if SHARED:
+        result_sql = "SET work_mem='64kB'; SET max_parallel_workers_per_gather=0; SELECT count(*) FROM gate_input a JOIN gate_input b USING (i);"
+        report["shared_result_sql"] = result_sql
+        report["shared_result"] = sql(result_sql)
     (OUT / "after-parallel-processes.txt").write_text(process_evidence())
     ex("gosu", "postgres", "pg_ctl", "-D", DATA, "stop", "-m", "fast", "-w", timeout=120)
     report["capture_exit"] = p.wait(timeout=30)

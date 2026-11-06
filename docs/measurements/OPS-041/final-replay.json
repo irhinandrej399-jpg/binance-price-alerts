@@ -1,0 +1,675 @@
+{
+  "references": {
+    "receive-reused": {
+      "inode_reused": true
+    },
+    "drop-reused": {
+      "inode_reused": true
+    },
+    "mapping-reused": {
+      "inode_reused": true
+    }
+  },
+  "filesystem": {
+    "terminal_identity_races": [],
+    "transitions": 0,
+    "inherited_returns": 0,
+    "incomplete_evidence": 7,
+    "inventory": {
+      "checkpoints": 314,
+      "census_changed_checkpoints": 1,
+      "census_read_errors": 0,
+      "fd_read_errors": 1879,
+      "map_read_errors": 106905,
+      "consistency": "unknown",
+      "pg_coverage": "blocked: external aliases/custom tablespaces not certified",
+      "new_identities": [
+        [
+          163,
+          3991785
+        ],
+        [
+          164,
+          3991800
+        ],
+        [
+          165,
+          3991800
+        ],
+        [
+          166,
+          3991800
+        ],
+        [
+          167,
+          3991801
+        ],
+        [
+          168,
+          3991801
+        ]
+      ],
+      "vanished_identities": [
+        [
+          162,
+          3991783
+        ],
+        [
+          164,
+          3991800
+        ],
+        [
+          165,
+          3991800
+        ],
+        [
+          166,
+          3991800
+        ],
+        [
+          167,
+          3991801
+        ],
+        [
+          168,
+          3991801
+        ]
+      ],
+      "temp_peak_live_bytes": null,
+      "lower_bytes": null,
+      "upper_bytes": null,
+      "qualification_blocked": true
+    },
+    "birth_count": 5
+  },
+  "postgres": {
+    "terminal_identity_races": [],
+    "transitions": 0,
+    "inherited_returns": 0,
+    "incomplete_evidence": 2,
+    "inventory": {
+      "checkpoints": 6782,
+      "census_changed_checkpoints": 12,
+      "census_read_errors": 0,
+      "fd_read_errors": 47131,
+      "map_read_errors": 5125488,
+      "consistency": "unknown",
+      "pg_coverage": "blocked: external aliases/custom tablespaces not certified",
+      "new_identities": [
+        [
+          181,
+          3992051
+        ],
+        [
+          182,
+          3992246
+        ],
+        [
+          183,
+          3996362
+        ],
+        [
+          184,
+          3996363
+        ],
+        [
+          185,
+          3996369
+        ],
+        [
+          186,
+          3996543
+        ],
+        [
+          187,
+          3996548
+        ],
+        [
+          188,
+          3996561
+        ],
+        [
+          189,
+          3996578
+        ],
+        [
+          190,
+          3996578
+        ],
+        [
+          191,
+          3996578
+        ],
+        [
+          192,
+          3996578
+        ],
+        [
+          193,
+          3996578
+        ],
+        [
+          194,
+          3996578
+        ],
+        [
+          195,
+          3996605
+        ],
+        [
+          218,
+          3999229
+        ],
+        [
+          224,
+          3999232
+        ],
+        [
+          225,
+          3999483
+        ],
+        [
+          226,
+          3999507
+        ],
+        [
+          227,
+          4000181
+        ],
+        [
+          228,
+          4001144
+        ],
+        [
+          234,
+          4001156
+        ],
+        [
+          235,
+          4001658
+        ],
+        [
+          236,
+          4001658
+        ],
+        [
+          237,
+          4001658
+        ],
+        [
+          238,
+          4001658
+        ],
+        [
+          239,
+          4001658
+        ],
+        [
+          240,
+          4001658
+        ],
+        [
+          261,
+          4001665
+        ],
+        [
+          262,
+          4001665
+        ],
+        [
+          263,
+          4001665
+        ],
+        [
+          264,
+          4001665
+        ],
+        [
+          265,
+          4001665
+        ],
+        [
+          266,
+          4001665
+        ]
+      ],
+      "vanished_identities": [
+        [
+          180,
+          3992047
+        ],
+        [
+          183,
+          3996362
+        ],
+        [
+          184,
+          3996363
+        ],
+        [
+          185,
+          3996369
+        ],
+        [
+          186,
+          3996543
+        ],
+        [
+          187,
+          3996548
+        ],
+        [
+          188,
+          3996561
+        ],
+        [
+          189,
+          3996578
+        ],
+        [
+          190,
+          3996578
+        ],
+        [
+          191,
+          3996578
+        ],
+        [
+          192,
+          3996578
+        ],
+        [
+          193,
+          3996578
+        ],
+        [
+          194,
+          3996578
+        ],
+        [
+          195,
+          3996605
+        ],
+        [
+          218,
+          3999229
+        ],
+        [
+          224,
+          3999232
+        ],
+        [
+          225,
+          3999483
+        ],
+        [
+          226,
+          3999507
+        ],
+        [
+          227,
+          4000181
+        ],
+        [
+          228,
+          4001144
+        ],
+        [
+          234,
+          4001156
+        ],
+        [
+          235,
+          4001658
+        ],
+        [
+          236,
+          4001658
+        ],
+        [
+          237,
+          4001658
+        ],
+        [
+          238,
+          4001658
+        ],
+        [
+          239,
+          4001658
+        ],
+        [
+          240,
+          4001658
+        ],
+        [
+          262,
+          4001665
+        ],
+        [
+          263,
+          4001665
+        ],
+        [
+          264,
+          4001665
+        ],
+        [
+          265,
+          4001665
+        ],
+        [
+          266,
+          4001665
+        ]
+      ],
+      "temp_peak_live_bytes": null,
+      "lower_bytes": null,
+      "upper_bytes": null,
+      "qualification_blocked": true
+    },
+    "birth_count": 12
+  },
+  "backend_pids": [
+    183,
+    184,
+    185,
+    186,
+    187,
+    188,
+    195,
+    224,
+    225,
+    226,
+    227,
+    234
+  ],
+  "shared_filesets": {
+    "path_identity_checks": 992,
+    "paths": [
+      "/tmp/work/custom/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0.fileset/i1of4.p0.0",
+      "/tmp/work/custom/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0.fileset/i2of4.p0.0",
+      "/tmp/work/custom/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0.fileset/i3of4.p0.0",
+      "/tmp/work/custom/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0.fileset/o0of4.p1.0",
+      "/tmp/work/custom/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0.fileset/o0of4.p2.0",
+      "/tmp/work/custom/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0.fileset/o1of4.p1.0",
+      "/tmp/work/custom/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0.fileset/o1of4.p2.0",
+      "/tmp/work/custom/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0.fileset/o2of4.p1.0",
+      "/tmp/work/custom/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0.fileset/o2of4.p2.0",
+      "/tmp/work/custom/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0.fileset/o3of4.p1.0",
+      "/tmp/work/custom/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0.fileset/o3of4.p2.0"
+    ],
+    "identity_count": 11,
+    "shared_identities": [
+      {
+        "dev": 64,
+        "ino": 208046,
+        "owners": [
+          {
+            "pid": 224,
+            "starttime": 3999232,
+            "parent": 180,
+            "birth_seq": 51109,
+            "seq": 55449,
+            "fd": 22,
+            "open_return_seq": 55448,
+            "path": "/tmp/work/custom/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0.fileset/i1of4.p0.0",
+            "stat": {
+              "dev": 64,
+              "ino": 208046,
+              "size": 0,
+              "nlink": 1,
+              "mode": 33152,
+              "path": "/proc/224/task/224/fd/22"
+            }
+          },
+          {
+            "pid": 225,
+            "starttime": 3999483,
+            "parent": 180,
+            "birth_seq": 55274,
+            "seq": 59643,
+            "fd": 13,
+            "open_return_seq": 59642,
+            "path": "/tmp/work/custom/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0.fileset/i1of4.p0.0",
+            "stat": {
+              "dev": 64,
+              "ino": 208046,
+              "size": 65536,
+              "nlink": 1,
+              "mode": 33152,
+              "path": "/proc/225/task/225/fd/13"
+            }
+          }
+        ]
+      },
+      {
+        "dev": 64,
+        "ino": 208048,
+        "owners": [
+          {
+            "pid": 224,
+            "starttime": 3999232,
+            "parent": 180,
+            "birth_seq": 51109,
+            "seq": 55997,
+            "fd": 23,
+            "open_return_seq": 55996,
+            "path": "/tmp/work/custom/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0.fileset/i2of4.p0.0",
+            "stat": {
+              "dev": 64,
+              "ino": 208048,
+              "size": 0,
+              "nlink": 1,
+              "mode": 33152,
+              "path": "/proc/224/task/224/fd/23"
+            }
+          },
+          {
+            "pid": 226,
+            "starttime": 3999507,
+            "parent": 180,
+            "birth_seq": 55366,
+            "seq": 59729,
+            "fd": 9,
+            "open_return_seq": 59728,
+            "path": "/tmp/work/custom/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0.fileset/i2of4.p0.0",
+            "stat": {
+              "dev": 64,
+              "ino": 208048,
+              "size": 65536,
+              "nlink": 1,
+              "mode": 33152,
+              "path": "/proc/226/task/226/fd/9"
+            }
+          }
+        ]
+      },
+      {
+        "dev": 64,
+        "ino": 208049,
+        "owners": [
+          {
+            "pid": 224,
+            "starttime": 3999232,
+            "parent": 180,
+            "birth_seq": 51109,
+            "seq": 56394,
+            "fd": 24,
+            "open_return_seq": 56393,
+            "path": "/tmp/work/custom/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0.fileset/i3of4.p0.0",
+            "stat": {
+              "dev": 64,
+              "ino": 208049,
+              "size": 0,
+              "nlink": 1,
+              "mode": 33152,
+              "path": "/proc/224/task/224/fd/24"
+            }
+          },
+          {
+            "pid": 226,
+            "starttime": 3999507,
+            "parent": 180,
+            "birth_seq": 55366,
+            "seq": 60067,
+            "fd": 9,
+            "open_return_seq": 60066,
+            "path": "/tmp/work/custom/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0.fileset/i3of4.p0.0",
+            "stat": {
+              "dev": 64,
+              "ino": 208049,
+              "size": 65536,
+              "nlink": 1,
+              "mode": 33152,
+              "path": "/proc/226/task/226/fd/9"
+            }
+          }
+        ]
+      },
+      {
+        "dev": 64,
+        "ino": 208054,
+        "owners": [
+          {
+            "pid": 225,
+            "starttime": 3999483,
+            "parent": 180,
+            "birth_seq": 55274,
+            "seq": 58565,
+            "fd": 13,
+            "open_return_seq": 58564,
+            "path": "/tmp/work/custom/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0.fileset/o2of4.p2.0",
+            "stat": {
+              "dev": 64,
+              "ino": 208054,
+              "size": 0,
+              "nlink": 1,
+              "mode": 33152,
+              "path": "/proc/225/task/225/fd/13"
+            }
+          },
+          {
+            "pid": 226,
+            "starttime": 3999507,
+            "parent": 180,
+            "birth_seq": 55366,
+            "seq": 60007,
+            "fd": 9,
+            "open_return_seq": 60006,
+            "path": "/tmp/work/custom/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0.fileset/o2of4.p2.0",
+            "stat": {
+              "dev": 64,
+              "ino": 208054,
+              "size": 32768,
+              "nlink": 1,
+              "mode": 33152,
+              "path": "/proc/226/task/226/fd/9"
+            }
+          }
+        ]
+      },
+      {
+        "dev": 64,
+        "ino": 208056,
+        "owners": [
+          {
+            "pid": 225,
+            "starttime": 3999483,
+            "parent": 180,
+            "birth_seq": 55274,
+            "seq": 59044,
+            "fd": 15,
+            "open_return_seq": 59043,
+            "path": "/tmp/work/custom/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0.fileset/o3of4.p2.0",
+            "stat": {
+              "dev": 64,
+              "ino": 208056,
+              "size": 0,
+              "nlink": 1,
+              "mode": 33152,
+              "path": "/proc/225/task/225/fd/15"
+            }
+          },
+          {
+            "pid": 226,
+            "starttime": 3999507,
+            "parent": 180,
+            "birth_seq": 55366,
+            "seq": 60331,
+            "fd": 9,
+            "open_return_seq": 60330,
+            "path": "/tmp/work/custom/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0.fileset/o3of4.p2.0",
+            "stat": {
+              "dev": 64,
+              "ino": 208056,
+              "size": 32768,
+              "nlink": 1,
+              "mode": 33152,
+              "path": "/proc/226/task/226/fd/9"
+            }
+          }
+        ]
+      },
+      {
+        "dev": 64,
+        "ino": 208057,
+        "owners": [
+          {
+            "pid": 225,
+            "starttime": 3999483,
+            "parent": 180,
+            "birth_seq": 55274,
+            "seq": 59072,
+            "fd": 16,
+            "open_return_seq": 59071,
+            "path": "/tmp/work/custom/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0.fileset/o0of4.p2.0",
+            "stat": {
+              "dev": 64,
+              "ino": 208057,
+              "size": 0,
+              "nlink": 1,
+              "mode": 33152,
+              "path": "/proc/225/task/225/fd/16"
+            }
+          },
+          {
+            "pid": 226,
+            "starttime": 3999507,
+            "parent": 180,
+            "birth_seq": 55366,
+            "seq": 59669,
+            "fd": 9,
+            "open_return_seq": 59668,
+            "path": "/tmp/work/custom/PG_18_202506291/pgsql_tmp/pgsql_tmp224.0.fileset/o0of4.p2.0",
+            "stat": {
+              "dev": 64,
+              "ino": 208057,
+              "size": 32768,
+              "nlink": 1,
+              "mode": 33152,
+              "path": "/proc/226/task/226/fd/9"
+            }
+          }
+        ]
+      }
+    ],
+    "owner_pids": [
+      224,
+      225,
+      226
+    ],
+    "root_pid": 180,
+    "consistency": "unknown",
+    "qualification_blocked": true,
+    "temp_peak_live_bytes": null,
+    "lower_bytes": null,
+    "upper_bytes": null,
+    "backend_pid": 224,
+    "worker_pids": [
+      225,
+      226
+    ]
+  },
+  "qualification_blocked": true
+}

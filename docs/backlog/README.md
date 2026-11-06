@@ -214,12 +214,13 @@
 | [OPS-029](tickets/OPS-029.md) | Измерить количество и время fsync процесса Kafka | OPS-020, OPS-023 | done |
 | [OPS-032](tickets/OPS-032.md) | Подключить и проверить temp peak observer в фазовом runner | OPS-036, OPS-023 | planned |
 | [OPS-033](tickets/OPS-033.md) | Сохранять и проверять передачу FD через ancillary data | OPS-019 | done |
-| [OPS-034](tickets/OPS-034.md) | Замкнуть модель ссылок и идентичности work inode | OPS-033, OPS-040 | planned |
+| [OPS-034](tickets/OPS-034.md) | Замкнуть модель ссылок и идентичности work inode | OPS-033, OPS-040, OPS-041 | planned |
 | [OPS-035](tickets/OPS-035.md) | Восстановить доказанные границы apparent peak из raw | OPS-034 | planned |
 | [OPS-036](tickets/OPS-036.md) | Проверить самостоятельный observer на PostgreSQL | OPS-035 | planned |
 | [OPS-038](tickets/OPS-038.md) | Сохранять независимый census и полные inode inventories | OPS-033 | done |
 | [OPS-039](tickets/OPS-039.md) | Сохранять lifecycle evidence при shared state и nonleader exec | OPS-038 | done |
 | [OPS-040](tickets/OPS-040.md) | Проверить reference witnesses и повторить PostgreSQL capture | OPS-038, OPS-039 | done |
+| [OPS-041](tickets/OPS-041.md) | Сохранить shared-fileset PG spill в новом raw-контракте | OPS-040 | done |
 
 [OPS-031](tickets/OPS-031.md) разделён на OPS-033–036: ancillary raw →
 identity/references → classifier/bounds → самостоятельный PG gate.
@@ -227,7 +228,8 @@ identity/references → classifier/bounds → самостоятельный PG 
 полные raw inventories/reference controls, отсутствующие в ancillary capture.
 OPS-037 split после реального preflight: [OPS-038](tickets/OPS-038.md)
 (inventory/census) → [OPS-039](tickets/OPS-039.md) (lifecycle/exec) →
-[OPS-040](tickets/OPS-040.md) (reference verifier/PG); OPS-034 ждёт OPS-040.
+[OPS-040](tickets/OPS-040.md) (reference verifier/PG). OPS-041 сохраняет shared-fileset Parallel Hash в новом raw-контракте;
+его [вход](../measurements/OPS-041/README.md) готов для OPS-034.
 [Старые raw](../measurements/OPS-031/README.md) остаются unknown, peak=null;
 OPS-032/018 ждут готового observer.
 

@@ -109,3 +109,38 @@ shared-state/clear_tid, external aliases, unreadable procfs and inconsistent
 checkpoints must remain unresolved. Inherited child-return stops were not observed
 in OPS-039; no new success is claimed here. Last reference, complete owners,
 observer gate, numeric bounds and quota qualification remain subsequent work.
+
+## OPS-041 shared-fileset scenario
+
+```sh
+OPS040_REFERENCES=1 OPS041_SCENARIO=shared-fileset \
+  python3 infra/postgres/measure/ancillary/run.py /tmp/ops041-new
+python3 infra/postgres/measure/references/verify.py /tmp/ops041-new --record
+```
+
+The default `OPS041_SCENARIO=parallel-sort` preserves OPS-040 ordinary/default
+and parallel/custom sorts. `shared-fileset` keeps ordinary/default sort and
+selects the original OPS-033 self join in the custom tablespace: 8000 unique
+integer keys, 132 B payload, work_mem=64kB, hash_mem_multiplier=1, two requested
+workers and zero parallel cost thresholds. The query begins with
+`pg_backend_pid()` in the same psql session, followed by EXPLAIN ANALYZE VERBOSE
+JSON. A separate serial self join checks the aggregate result. Exact statements
+and results are in report.json and the independent PostgreSQL statement log.
+Debug5 and `%p`/`%b` log fields retain worker PID/type; these logs and tracing add
+substantial overhead and cannot measure application latency.
+
+The full verifier requires executed parallel multi-batch Hash, two launched
+workers, actual `.fileset/` FD/stat evidence, successful open returns, readable
+PID/starttime census and postmaster-child lineage. Shared dev/inode witnesses
+must occur under distinct PG owners, and PID roles bind to the independently
+logged worker/backend types. Readable pathname stat must agree with FD identity;
+contradictions fail as incomplete. This is positive sharing evidence within the
+controlled query, not an inode-generation or last-reference proof. Rehashed and
+resequenced full PG artifacts with fileset/worker/stat/lineage removal or identity
+substitution are passed to the same full artifact verifier and must fail.
+
+All raw procfs/FD/maps/census errors and shared-state/external-alias limitations
+remain. No capture, scheduler, phase harness or lifetime reducer was introduced.
+The [OPS-041 report](../../../../docs/measurements/OPS-041/README.md) is the new
+input for OPS-034; historical OPS-033/040 captures remain unchanged. Consistency
+unknown, qualification blocked and all numeric bounds null.

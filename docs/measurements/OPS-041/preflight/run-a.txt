@@ -1,0 +1,1 @@
+Sandbox Python runner could not access Docker socket during image inspect. No resource was created. Attempted unique project binance-ops033-8803c46e90. Cleanup queries also unavailable in that sandbox. Source snapshots remain local in run-a; not acceptance evidence.
