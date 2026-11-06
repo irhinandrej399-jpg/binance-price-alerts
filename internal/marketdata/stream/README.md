@@ -127,6 +127,43 @@ raw JSON; успешный dial или отправка команды ещё н
 Runtime wiring, ACK tracking и backfill здесь не реализованы. Ротация — ниже.
 
 
+## Подготовка каждой попытки — OPS-050
+
+`ReconnectPrepared(ctx, endpoint, config, retry, initialCommands, prepare)`
+добавляет к тому же reconnect-пути синхронный
+`prepare(ctx) (stream.AttemptCallbacks, error)` **до каждого dial**, включая
+первый и повтор после неудачного handshake, обрыва, serverShutdown или возраста.
+Runtime может выполнить durable BeginGeneration и замкнуть полученное поколение
+в возвращаемых callbacks. Транспорт SQL не вызывает и live не назначает.
+
+Оба поля AttemptCallbacks обязательны:
+
+- `Handle(context.Context, []byte) error` получает только payload своей попытки.
+  Это context соединения: возраст отменяет его с cause ErrRotation.
+- `Disconnected(context.Context, error, time.Duration) error` получает context
+  владельца, причину сбоя/ротации и выбранный backoff после завершения обработчика,
+  закрытия сокета, writer и rotation watcher. Context владельца позволяет сохранить
+  durable SetStatus после отмены context соединения. Возвращённая ошибка terminal,
+  сохраняет errors.Is/As; ожидания backoff и нового dial после неё нет.
+
+Prepare и callbacks сериализованы: следующая подготовка начинается только после
+завершения предыдущей попытки, callback разрыва и backoff. Ошибка prepare terminal
+с сохранением errors.Is/As, без dial и без Disconnected. Невалидный config/retry
+или nil prepare отвергаются до подготовки; nil поля её результата — до dial.
+Уже отменённый context не вызывает prepare/dial. Отмена во время prepare
+проверяется до dial; context владельца имеет приоритет после попытки.
+Прикладная ошибка Handle terminal без Disconnected, как в Reconnect;
+cooperative context.Canceled от возрастной ротации остаётся повторяемой ротацией.
+При отмене владельца Disconnected не гарантируется: финальный durable статус
+при shutdown остаётся обязанностью runtime.
+
+Все callbacks синхронны и обязаны быстро возвращаться либо учитывать context;
+транспорт ждёт их завершения. InitialCommands по-прежнему копируются один раз,
+каждая попытка воспроизводит их через прежний scheduler. Старый Reconnect
+адаптирует свои callbacks к тому же пути; отдельного цикла retry нет.
+Loopback WS/fake-clock тесты проверяют подготовку до handshake, изоляцию поколений,
+порядок cleanup, dial failure/loss/shutdown/age, terminal ошибки и отмену.
+
 ## Плановая ротация — MKT-012
 
 `Reconnect` заменяет установленное соединение через `RotationAge = 23*time.Hour`
