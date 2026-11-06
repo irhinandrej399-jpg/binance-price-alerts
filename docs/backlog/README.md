@@ -180,6 +180,7 @@
 | [NTF-010](tickets/NTF-010.md) | Сохранить успешную доставку | NTF-003, NTF-009 | done |
 | [NTF-016](tickets/NTF-016.md) | Сохранить временный отказ и обязанность отчёта | NTF-006, NTF-009, NTF-010, NTF-007, NTF-008 | done |
 | [NTF-017](tickets/NTF-017.md) | Закрыть изменение исторических свидетельств ролью notifications | NTF-008, NTF-016 | planned |
+| [NTF-018](tickets/NTF-018.md) | Исследовать сбой восстановления после потери ответа регистрации | NTF-012 | planned |
 | [NTF-014](tickets/NTF-014.md) | Надёжно передать исход попытки владельцу подписки | NTF-010, SUB-020, NTF-007, NTF-008, NTF-016, SUB-026 | done |
 | [NTF-015](tickets/NTF-015.md) | Возобновить задание после восстановления Telegram | NTF-008, NTF-009, SUB-018, DEC-005 | done |
 | [NTF-012](tickets/NTF-012.md) | Выполнить одну попытку обработки готового задания | NTF-004, NTF-005, NTF-006, NTF-007, NTF-008, NTF-009, NTF-010, SUB-018, NTF-014, NTF-002, NTF-015, NTF-003, NTF-016, SUB-027 | done |
@@ -189,7 +190,7 @@
 
 | ID | Один результат | Зависимости | Статус |
 | --- | --- | --- | --- |
-| [OPS-001](tickets/OPS-001.md) | Добавить health и readiness API | SET-001, DEC-003, DEC-010 | planned |
+| [OPS-001](tickets/OPS-001.md) | Добавить health и readiness API | SET-001, DEC-003, DEC-010 | done |
 | [OPS-002](tickets/OPS-002.md) | Измерять задержку от цены до trigger | MAT-004, SUB-013, SUB-014 | planned |
 | [OPS-003](tickets/OPS-003.md) | Измерять состояние очереди доставки | NTF-012, NTF-013 | planned |
 | [OPS-004](tickets/OPS-004.md) | Корректно остановить API | SUB-007, SUB-009 | planned |

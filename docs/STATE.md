@@ -5,7 +5,8 @@
 ## Активная работа
 
 - Активная реализация: нет. По [DEC-010](decisions/DEC-010.md) приоритет — рабочий локальный пет-проект; OPS-044 отложен в planned, kernel/capacity квалификация запуск не блокирует. Незавершённые raw/code сохранены.
-- Последнее решение: [DEC-010](decisions/DEC-010.md), локальный функциональный профиль. Следующий тикет OPS-001; запуск четырёх процессов ещё не подтверждён.
+- Последнее решение: [DEC-010](decisions/DEC-010.md), локальный функциональный профиль. Следующий тикет OPS-002; запуск четырёх процессов ещё не подтверждён.
+- Последний функциональный результат: [OPS-001](backlog/tickets/OPS-001.md), [HTTP health/readiness API](../internal/api/health/README.md). Проверены инициализация, отказ/восстановление БД, timeout/cancellation и реальный API PostgreSQL; race/vet/build прошли. Подключение в cmd/runtime впереди. В общем PostgreSQL-прогоне обнаружен независимый сбой crash recovery — [NTF-018](backlog/tickets/NTF-018.md).
 - Последний измерительный результат: [OPS-042](backlog/tickets/OPS-042.md). [Proof contract и независимый raw audit](measurements/OPS-042/README.md): 17 PG numeric candidates, ни одного work exclusive-create binding, 65025:208045 у разных PID/имён; 13 FS stages, шесть creates/три reuse и девять semantic challenges. Поддержанного envelope нет. Первым недостающим capture механизмом выделен OPS-043; P0–P5 остаются gate для OPS-034.
 - [OPS-041](backlog/tickets/OPS-041.md). [Shared-fileset capture/вход OPS-034](measurements/OPS-041/README.md): Parallel Hash с двумя workers/4 batches; 11 fileset paths и 6 identities наблюдены у разных PG владельцев, PID/starttime/lineage и independent role logs связаны. Полный verifier, 15+5 rehashed controls, финальный replay и регрессия OPS-040 прошли; cleanup пуст. Все procfs/shared-state/external alias gaps сохранены; lifetime/bounds не квалифицированы.
 - Предыдущий завершённый тикет: [OPS-040](backlog/tickets/OPS-040.md). [Reference/full verifier](../infra/postgres/measure/references/README.md): queue-only receive/drop после source close, mapping-only, фактический pathname/FD/inode reuse; ordinary/default и parallel/custom PG18.6 с двумя worker. 314 FS/5660 PG checkpoints и 15 rehashed controls прошли; dependency regressions по 17 прошли, cleanup пуст. [Отчёт/вход OPS-034](measurements/OPS-040/README.md). Terminal Z → X procfs race явно incomplete, все census/FD/maps ошибки сохранены; all-owner/shared-state/queue/external aliases completeness не доказана.
@@ -121,8 +122,8 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-[OPS-001](backlog/tickets/OPS-001.md): health/readiness API для локального
-профиля DEC-010. Далее функциональные OPS и E2E-003/004 → E2E-002 → E2E-001:
+[OPS-002](backlog/tickets/OPS-002.md): метрика задержки от цены до trigger.
+Health API готов в OPS-001; далее функциональные OPS и E2E-003/004 → E2E-002 → E2E-001:
 четыре процесса и сценарий подписка → цена → уведомление. Перед E2E проверить
 фактический runtime wiring; отсутствующую сборку сервисов выделить отдельно.
 Исследование ядра, exact temp peak, квалификация квот и миллионный LOAD
@@ -143,7 +144,7 @@ NTF-006 рассчитывает retry Plan и бюджет доказанных
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show OPS-001` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show OPS-002` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.
