@@ -8,9 +8,12 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/auth"
@@ -65,6 +68,10 @@ func loadConfig(get func(string) string) (config, error) {
 	return c, nil
 }
 
+func expectedStop(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, http.ErrServerClosed)
+}
+
 // supervise cancels and joins every sibling when any required component exits.
 // Relay Run already classifies retryable versus terminal errors.
 func supervise(parent context.Context, runs ...func(context.Context) error) error {
@@ -77,14 +84,18 @@ func supervise(parent context.Context, runs ...func(context.Context) error) erro
 	var first error
 	for range runs {
 		err := <-results
-		if first == nil {
-			first = err
-			if first == nil {
-				first = errors.New("api: required component stopped")
-			}
-			cancel()
+		if err == nil {
+			err = errors.New("api: required component stopped")
 		}
+		if first == nil || (expectedStop(first) && !expectedStop(err)) {
+			first = err
+		}
+		cancel()
 	}
+	if parent.Err() != nil && expectedStop(first) {
+		return parent.Err()
+	}
+
 	return first
 }
 
@@ -137,22 +148,12 @@ func run(ctx context.Context, c config) error {
 		func(c context.Context) error { return changes.Run(c, nil) },
 		func(c context.Context) error { return deliveries.Run(c, nil) },
 		func(c context.Context) error {
-			// Immediate close on failure/cancel. Bounded graceful drain is OPS-004.
-			stopped := make(chan struct{})
-			go func() {
-				select {
-				case <-c.Done():
-					h.SetInitialized(false)
-					_ = server.Close()
-				case <-stopped:
-				}
-			}()
-			defer close(stopped)
-			return server.Serve(listener)
+			return serveHTTP(c, server, listener, func() { h.SetInitialized(false) }, 5*time.Second)
 		})
-	if ctx.Err() != nil {
-		return ctx.Err()
+	if ctx.Err() != nil && errors.Is(err, ctx.Err()) {
+		return nil
 	}
+
 	if err != nil {
 		return errors.New("api: required component stopped")
 	}
@@ -161,10 +162,84 @@ func run(ctx context.Context, c config) error {
 func main() {
 	c, err := loadConfig(os.Getenv)
 	if err == nil {
-		err = run(context.Background(), c)
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
+		defer stop()
+		go func() {
+			<-ctx.Done()
+			// A final process bound also covers stuck cleanup/driver code. Durable SQL
+			// and relay recovery remain authoritative after this forced exit.
+			time.Sleep(10 * time.Second)
+			fmt.Fprintln(os.Stderr, "api: shutdown deadline exceeded")
+			os.Exit(1)
+		}()
+		err = run(ctx, c)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+// serveHTTP stops admission immediately, lets accepted handlers finish, then
+// cancels their SQL contexts and closes connections at the drain deadline.
+// It joins handlers before run can close the shared pool.
+func serveHTTP(ctx context.Context, server *http.Server, listener net.Listener, withdraw func(), budget time.Duration) error {
+	requests, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	server.BaseContext = func(net.Listener) context.Context { return requests }
+	var active sync.WaitGroup
+	var gate sync.Mutex
+	retired := false
+	handler := server.Handler
+	server.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gate.Lock()
+		if retired {
+			gate.Unlock()
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		active.Add(1)
+		gate.Unlock()
+		defer active.Done()
+		handler.ServeHTTP(w, r)
+	})
+	drained := make(chan error, 1)
+	serving := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			withdraw()
+			drain, done := context.WithTimeout(context.Background(), budget)
+			defer done()
+			err := server.Shutdown(drain)
+			if err != nil {
+				cancel()
+				_ = server.Close()
+			}
+			drained <- err
+		case <-serving:
+			drained <- nil
+		}
+	}()
+	err := server.Serve(listener)
+	close(serving)
+	drainErr := <-drained
+	if ctx.Err() == nil {
+		withdraw()
+		cancel()
+		_ = server.Close()
+	}
+	// Shutdown/Close have stopped dispatch before Wait. Context-aware handlers
+	// release their transactions; main imposes a final bound on all cleanup.
+	gate.Lock()
+	retired = true
+	gate.Unlock()
+	active.Wait()
+	if drainErr != nil {
+		return drainErr
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return err
 }

@@ -37,7 +37,7 @@ func TestAPIProcess(t *testing.T) {
 	if os.Getenv("API_PROCESS_INTEGRATION") != "1" {
 		t.Skip("run python3 scripts/check_api_process.py --package ./cmd/api")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Second)
 	defer cancel()
 	binary := filepath.Join(t.TempDir(), "api")
 	build := exec.CommandContext(ctx, "go", "build", "-race", "-o", binary, ".")
@@ -58,6 +58,7 @@ func TestAPIProcess(t *testing.T) {
 	env["DELIVERY_RELAY_TRANSACTIONAL_ID"] = prefix + "-api-delivery"
 	cfg := apiprocess.Config{Executable: binary, Env: env, StartupTimeout: 12 * time.Second, StopTimeout: time.Second}
 	pool := postgrestest.Open(t)
+	testGracefulProcess(t, ctx, cfg, pool)
 	f, err := apiprocess.Seed(ctx, pool)
 	if err != nil {
 		t.Fatal("fixture failed")
