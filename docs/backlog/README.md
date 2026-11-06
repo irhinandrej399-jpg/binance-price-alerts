@@ -197,7 +197,7 @@
 | [OPS-046](tickets/OPS-046.md) | Собрать минимальный процесс API для отмены и relay | SUB-005, SUB-012, IAM-005, SUB-007, SUB-009, OPS-001, DEC-010, OPS-047 | done |
 | [OPS-004](tickets/OPS-004.md) | Корректно остановить API | SUB-007, SUB-009, OPS-046 | done |
 | [OPS-006](tickets/OPS-006.md) | Добавить health и readiness market-data | MKT-006, MKT-015, MKT-016, DEC-010 | done |
-| [OPS-007](tickets/OPS-007.md) | Добавить health и readiness matcher | MAT-007, MAT-008, MAT-009 | planned |
+| [OPS-007](tickets/OPS-007.md) | Добавить health и readiness matcher | MAT-007, MAT-008, MAT-009 | done |
 | [OPS-008](tickets/OPS-008.md) | Добавить health и readiness notifications | NTF-012, NTF-013 | planned |
 | [OPS-009](tickets/OPS-009.md) | Корректно остановить market-data | MKT-013, MKT-014, MKT-015, MKT-016 | planned |
 | [OPS-010](tickets/OPS-010.md) | Корректно остановить matcher | MAT-005 | planned |

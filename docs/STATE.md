@@ -5,7 +5,8 @@
 ## Активная работа
 
 - Активная реализация: нет. Незавершённые raw/code исследований сохранены по DEC-010; kernel/capacity квалификация локальный запуск не блокирует.
-- Последний завершённый тикет: [OPS-006](backlog/tickets/OPS-006.md), [health/readiness market-data](../internal/marketdata/health/README.md). HTTP-компонент учитывает инициализацию, собственную БД и явное состояние feed; возраст сделки и исторический gap не заменяют текущее состояние. Reconnect не ломает liveness. Полный PostgreSQL/race, общая race-регрессия, vet/build прошли; disposable стенд удалён. Runtime market-data пока не подключён.
+- Последний завершённый тикет: [OPS-007](backlog/tickets/OPS-007.md), [health/readiness matcher](../internal/matcher/health/README.md). HTTP учитывает инициализацию, свою БД и Status реплики (назначение/recovery/готовая view). Наблюдаемы durable C, последний API head и nullable lag; пустой старт/частичный snapshot не готовы. Целевые и общая race-регрессия, vet/build прошли; PostgreSQL/Kafka opt-in не запускались. Runtime matcher ещё не подключён.
+- Предыдущий завершённый тикет: [OPS-006](backlog/tickets/OPS-006.md), [health/readiness market-data](../internal/marketdata/health/README.md). HTTP-компонент учитывает инициализацию, собственную БД и явное состояние feed; возраст сделки и исторический gap не заменяют текущее состояние. Reconnect не ломает liveness. Полный PostgreSQL/race, общая race-регрессия, vet/build прошли; disposable стенд удалён. Runtime market-data пока не подключён.
 - Предыдущий завершённый тикет: [OPS-013](backlog/tickets/OPS-013.md), [общая квота аутентификации](../internal/api/authlimit/README.md). PostgreSQL API: 20 попыток/мин на IP совместно для входа и регистрации всех реплик; оба маршрута подключены в cmd/api. Новые PostgreSQL/race и процессные PostgreSQL/Kafka проверки прошли, vet/build прошли; общая регрессия повторила известную NTF-018. Миграция 015 нужна перед запуском; очистка IP и нагрузка не проверены.
 - Последнее решение: [DEC-010](decisions/DEC-010.md), локальный функциональный профиль. Минимальный cmd/api собран в OPS-046; запуск четырёх процессов ещё не подтверждён.
 - Предыдущий завершённый тикет: [OPS-012](backlog/tickets/OPS-012.md), [предел тела публичного HTTP](../internal/api/bodylimit/README.md). Middleware до auth/обработки, 64 КиБ включительно, стабильный 413 для Content-Length и chunked, ограниченное чтение и воспроизведение допустимых байтов. Подключён к mux cmd/api. HTTP boundary/error tests и общая race-регрессия/vet/build прошли; PostgreSQL/Kafka opt-in в этом прогоне пропущены. Полный API ещё впереди.
@@ -131,7 +132,9 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-[OPS-007](backlog/tickets/OPS-007.md): health и readiness matcher.
+[OPS-008](backlog/tickets/OPS-008.md): health и readiness notifications.
+OPS-007 завершил HTTP-компонент matcher и Status проекции/реплики; listener,
+инициализация и wiring matcherPool.Ping/replica.Status нужны при сборке runtime.
 OPS-006 завершил HTTP-компонент health/readiness market-data; listener и aggregate
 feedSnapshot должны быть подключены при сборке runtime перед E2E-002.
 OPS-013 завершил общую квоту входа и регистрации и подключил оба endpoint в cmd/api.
@@ -162,7 +165,7 @@ NTF-006 рассчитывает retry Plan и бюджет доказанных
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show OPS-007` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show OPS-008` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

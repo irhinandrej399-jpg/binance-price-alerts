@@ -190,3 +190,10 @@ Unit fixtures проверяют New/NewResume, unrestricted/empty/no-active-own
 Совместный runner проверяет snapshot + SQL/Kafka replay + restart с чужими
 active after-images, tombstone и workflow через второй SQL pool, сохраняя
 полный transport cursor и освобождая/восстанавливая последнюю свою пару.
+
+## HTTP-наблюдение
+
+`Status()` конкурентно возвращает текущую Ready, последний прочитанный durable
+C и последний валидированный API head с nullable lag. Контракт и подключение
+через Replica — [matcher/health](../health/README.md). Это локальное наблюдение,
+без SQL/RPC на каждый запрос и без изменения протокола допуска цен.

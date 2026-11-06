@@ -133,3 +133,7 @@ OffsetCommit. После нового token и NewResume SQL next имеет п�
 
 Это управляемая отмена владельца и задержка уже завершённого RPC; SIGKILL процесса,
 сетевая потеря OffsetCommit, cmd/runtime и нагрузка этим тестом не заявляются.
+
+`Status()` возвращает наблюдение live view и Ready с теми же условиями назначения
+и recovery, что `Ready()`. При отсутствии view lag неизвестен. Подключение к HTTP
+описано в [health](../health/README.md); callback не выдаёт полномочия.

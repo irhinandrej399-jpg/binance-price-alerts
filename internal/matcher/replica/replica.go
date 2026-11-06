@@ -171,10 +171,18 @@ func (r *Replica) revoke(grants []fencing.Grant) {
 		}
 	}
 }
-func (r *Replica) Ready() bool {
+func (r *Replica) Ready() bool { return r.Status().Ready }
+
+// Status observes the current assignment and full projection without RPC/SQL.
+func (r *Replica) Status() live.Status {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.recovered && r.assignment != nil && r.assignment.Context().Err() == nil && r.view != nil && r.view.Ready()
+	if r.view == nil {
+		return live.Status{}
+	}
+	s := r.view.Status()
+	s.Ready = s.Ready && r.recovered && r.assignment != nil && r.assignment.Context().Err() == nil
+	return s
 }
 
 // Grants is a copy for observing an assignment, never a new authority grant.

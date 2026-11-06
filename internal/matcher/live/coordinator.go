@@ -90,6 +90,8 @@ type Coordinator struct {
 	quoteStops      map[string]context.CancelFunc
 	reg             Registration
 	c               uint64
+	appliedC, head  uint64
+	headKnown       bool
 	expires         time.Time
 	changed         chan struct{}
 	ctx             context.Context
@@ -284,6 +286,7 @@ func (c *Coordinator) Run(parent context.Context) (result error) {
 	}
 	c.mu.Lock()
 	c.c = cp.C
+	c.appliedC = cp.C
 	c.ready = true
 	c.mu.Unlock()
 	c.signal()
@@ -354,6 +357,7 @@ func (c *Coordinator) sync(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	c.observeCheckpoint(cp.C)
 	if state.Progress > cp.C || cp.C > state.Head {
 		return ErrProtocol
 	}
@@ -390,6 +394,7 @@ func (c *Coordinator) sync(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		c.observeCheckpoint(cp.C)
 		if cp.C < page.Next {
 			return ErrProtocol
 		}
@@ -424,6 +429,8 @@ func (c *Coordinator) state(s *pb.ReplayState) error {
 		return ErrProtocol
 	}
 	c.expires = expiry
+	c.head = s.Head
+	c.headKnown = true
 	return nil
 }
 func transactions(events [][]byte, after, next uint64) ([][][]byte, error) {
@@ -571,6 +578,7 @@ func (c *Coordinator) update(ctx context.Context, events [][]byte) error {
 	}
 	c.mu.Lock()
 	c.c = cp.C
+	c.appliedC = cp.C
 	c.mu.Unlock()
 	return nil
 }
