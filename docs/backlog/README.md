@@ -10,6 +10,8 @@
 
 [Проверка размера и разделение крупных карточек](session-review.md). Все активные implementation-карточки остаются `planned`: одно сессионное выполнение подтверждается перед `ready` по реальному коду.
 
+> Текущий приоритет — локальный рабочий сценарий по [DEC-010](../decisions/DEC-010.md). Незавершённая kernel/capacity квалификация отложена и запуск не блокирует.
+
 ## Порядок работ
 
 **Единая очередь от первого тикета к последнему: [ORDER.md](ORDER.md).** Этот README группирует карточки по темам. При выборе следующей сессии идти по ORDER.md, пропуская done и предварительно завершая уже начатую работу. `python3 scripts/backlog.py next` читает именно эту очередь.
@@ -43,6 +45,7 @@
 | [DEC-007](tickets/DEC-007.md) | Выбрать брокер событий | DEC-003, DEC-004, DEC-006 | done |
 | [DEC-008](tickets/DEC-008.md) | Зафиксировать воспроизводимый профиль нагрузки | — | done |
 | [DEC-009](tickets/DEC-009.md) | Закрепить транспорт межсервисных вызовов | DEC-003, DEC-004, DEC-007 | done |
+| [DEC-010](tickets/DEC-010.md) | Поставить рабочий локальный запуск перед квалификацией нагрузки | DEC-008, DEC-009 | done |
 
 ### Каркас и локальный стенд
 
@@ -186,11 +189,11 @@
 
 | ID | Один результат | Зависимости | Статус |
 | --- | --- | --- | --- |
-| [OPS-001](tickets/OPS-001.md) | Добавить health и readiness API | SET-001, DEC-003, OPS-015 | planned |
+| [OPS-001](tickets/OPS-001.md) | Добавить health и readiness API | SET-001, DEC-003, DEC-010 | planned |
 | [OPS-002](tickets/OPS-002.md) | Измерять задержку от цены до trigger | MAT-004, SUB-013, SUB-014 | planned |
 | [OPS-003](tickets/OPS-003.md) | Измерять состояние очереди доставки | NTF-012, NTF-013 | planned |
 | [OPS-004](tickets/OPS-004.md) | Корректно остановить API | SUB-007, SUB-009 | planned |
-| [OPS-006](tickets/OPS-006.md) | Добавить health и readiness market-data | MKT-006, MKT-015, MKT-016, OPS-016 | planned |
+| [OPS-006](tickets/OPS-006.md) | Добавить health и readiness market-data | MKT-006, MKT-015, MKT-016, DEC-010 | planned |
 | [OPS-007](tickets/OPS-007.md) | Добавить health и readiness matcher | MAT-007, MAT-008, MAT-009 | planned |
 | [OPS-008](tickets/OPS-008.md) | Добавить health и readiness notifications | NTF-012, NTF-013 | planned |
 | [OPS-009](tickets/OPS-009.md) | Корректно остановить market-data | MKT-013, MKT-014, MKT-015, MKT-016 | planned |
@@ -222,7 +225,8 @@
 | [OPS-040](tickets/OPS-040.md) | Проверить reference witnesses и повторить PostgreSQL capture | OPS-038, OPS-039 | done |
 | [OPS-041](tickets/OPS-041.md) | Сохранить shared-fileset PG spill в новом raw-контракте | OPS-040 | done |
 | [OPS-042](tickets/OPS-042.md) | Определить доказуемый lifetime envelope и capture предпосылки | OPS-041 | done |
-| [OPS-043](tickets/OPS-043.md) | Сохранить incarnation binding и terminal retirement witness | OPS-042 | planned |
+| [OPS-043](tickets/OPS-043.md) | Сохранить incarnation binding и terminal retirement witness | OPS-042, OPS-044 | planned |
+| [OPS-044](tickets/OPS-044.md) | Подготовить проверенный kernel tracing toolchain | OPS-042 | planned |
 
 [OPS-031](tickets/OPS-031.md) разделён на OPS-033–036: ancillary raw →
 identity/references → classifier/bounds → самостоятельный PG gate.
@@ -233,7 +237,12 @@ OPS-037 split после реального preflight: [OPS-038](tickets/OPS-038
 [OPS-040](tickets/OPS-040.md) (reference verifier/PG). OPS-041 сохраняет shared-fileset Parallel Hash в новом raw-контракте;
 его [вход](../measurements/OPS-041/README.md) готов для replay. OPS-042 выделена
 перед OPS-034: proof audit отрицательный, первым недостающим capture механизмом
-выделен OPS-043 (incarnation binding/terminal retirement).
+выделен OPS-043 (incarnation binding/terminal retirement). Его preflight
+не подтвердил toolchain/source-build readiness; перед ним поставлена OPS-044
+(проверенный kernel tracing профиль), capture OPS-043 ещё не выполнен.
+Продолжение OPS-044 проверило полную branch inventory и локальные
+acknowledgements: [source-b](../measurements/OPS-044/source-b/report.json);
+vendor source/build binding остаётся открытым. По DEC-010 тикет отложен в planned и локальный запуск не блокирует.
 [Старые raw](../measurements/OPS-031/README.md) остаются unknown, peak=null;
 OPS-032/018 ждут готового observer.
 
