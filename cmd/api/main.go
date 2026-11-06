@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/auth"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/bodylimit"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/deliveryrelay"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/health"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/relay"
@@ -140,7 +141,7 @@ func run(ctx context.Context, c config) error {
 	mux.Handle("/healthz", h)
 	mux.Handle("/readyz", h)
 	mux.Handle("/v1/subscriptions/", auth.New(session.New(pool, nil), subscription.NewCancelHandler(pool)))
-	server := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second}
+	server := &http.Server{Handler: bodylimit.New(bodylimit.PublicLimit, mux), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second}
 	defer server.Close()
 	h.SetInitialized(true)
 	defer h.SetInitialized(false)

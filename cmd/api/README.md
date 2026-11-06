@@ -39,7 +39,9 @@ DSN других сервисов не читает.
 | GET /readyz | После startup — API pool.Ping, бюджет 1 с |
 | DELETE /v1/subscriptions/{id} | Bearer session/auth, каноническая отмена с journal |
 
-Health поддерживает HEAD. Подробности HTTP-отмены —
+Весь HTTP mux обёрнут в [bodylimit](../../internal/api/bodylimit/README.md):
+максимум 64 КиБ тела, включая chunked; превышение даёт 413
+`request_body_too_large` до auth/SQL. Health поддерживает HEAD. Подробности HTTP-отмены —
 [контракт компонента](../../internal/api/subscription/README.md#http-отмена-sub-005).
 Регистрация, вход, создание подписки, Telegram webhook, внутренние RPC и метрики
 не смонтированы. Аккаунт/сессия/подписка для проверки создаются fixture harness.
