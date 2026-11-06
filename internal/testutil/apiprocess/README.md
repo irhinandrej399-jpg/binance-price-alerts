@@ -41,8 +41,17 @@ err := apiprocess.With(ctx, apiprocess.Config{
 })
 ```
 
-Harness задаёт `HTTP_ADDR=127.0.0.1:<port>`, ждёт HTTP 200 на `/readyz`,
-параллельно наблюдает exit. Env — полный явный набор, окружение родителя
+Harness задаёт `HTTP_ADDR=127.0.0.1:<port>`, ждёт HTTP 200 на стартовой пробе,
+параллельно наблюдает exit. `Config.StartupProbePath` по умолчанию `/readyz`.
+Для OPS-048 задайте `StartupProbePath: "/healthz"`: это допускает callback
+при доступном HTTP и честном `/readyz = 503` с feed=unconfirmed. Callback
+отдельно проверяет readiness и её тело; стартовая проба не подтверждает
+готовность приложения к обслуживанию. Допустим только абсолютный локальный
+путь (например `/healthz`), без scheme/host, query/fragment, backslash и
+управляющих символов (включая percent-encoded). Невалидный путь возвращает
+безопасный `ErrConfig` до запуска child. Только 200 означает успех;
+redirect не выполняется, остальные статусы ожидаются до timeout.
+Env — полный явный набор, окружение родителя
 не наследуется. stdout/stderr child отбрасываются, чтобы ошибка child не
 вывела credentials. Ошибки старта безопасные, exit code сохраняется.
 После callback (также error/panic/Goexit), ошибки старта/readiness или отмены

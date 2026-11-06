@@ -5,7 +5,8 @@
 ## Активная работа
 
 - Активная реализация: нет. Незавершённые raw/code исследований сохранены по DEC-010; kernel/capacity квалификация локальный запуск не блокирует.
-- Последний завершённый тикет: [OPS-050](backlog/tickets/OPS-050.md), [подготовка попытки WebSocket](../internal/marketdata/stream/README.md). ReconnectPrepared синхронно готовит отдельные callbacks до каждого dial; ошибки prepare/disconnect terminal. Общий retry/rotation/scheduler сохранён, WS/fake-clock и общая race-регрессия/vet/build прошли. Runtime/SQL подключить в OPS-048.
+- Последний завершённый тикет: [OPS-051](backlog/tickets/OPS-051.md), [стартовая HTTP-проба process harness](../internal/testutil/apiprocess/README.md). Config.StartupProbePath выбирает локальный endpoint, default /readyz; /healthz допускает проверку честного readiness 503/unconfirmed. Целевые и общая race-регрессия/vet/build прошли; DB/Kafka opt-in не запускались. Далее повторить проверку OPS-048.
+- Предыдущий завершённый тикет: [OPS-050](backlog/tickets/OPS-050.md), [подготовка попытки WebSocket](../internal/marketdata/stream/README.md). ReconnectPrepared синхронно готовит отдельные callbacks до каждого dial; ошибки prepare/disconnect terminal. Общий retry/rotation/scheduler сохранён, WS/fake-clock и общая race-регрессия/vet/build прошли. Runtime/SQL подключить в OPS-048.
 - Предыдущий завершённый тикет: [OPS-049](backlog/tickets/OPS-049.md), [disposable market-data process environment](../internal/testutil/marketprocess/README.md). Общий runner/lifecycle OPS-047, только market_data DSN/migrations, raw WS child, canonical outbox и read_committed bytes. Реальные market-data/API и аварийный owner-exit cleanup прошли; общая race-регрессия/vet/build прошли. Продуктовый runtime — OPS-048.
 - Предыдущий завершённый тикет: [OPS-008](backlog/tickets/OPS-008.md), [health/readiness notifications](../internal/notifications/health/README.md). HTTP учитывает инициализацию, свою durable jobs БД и Running worker; SQL-ошибка/выход worker снимают readiness, Telegram 429 не влияет на liveness. Целевые и общая race-регрессия, vet/build прошли; PostgreSQL/Kafka opt-in не запускались. cmd/notifications пока каркас, runtime wiring впереди.
 - Предыдущий завершённый тикет: [OPS-007](backlog/tickets/OPS-007.md), [health/readiness matcher](../internal/matcher/health/README.md). HTTP учитывает инициализацию, свою БД и Status реплики (назначение/recovery/готовая view). Наблюдаемы durable C, последний API head и nullable lag; пустой старт/частичный snapshot не готовы. Целевые и общая race-регрессия, vet/build прошли; PostgreSQL/Kafka opt-in не запускались. Runtime matcher ещё не подключён.
@@ -136,9 +137,10 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 ## Следующий рекомендуемый шаг
 
 [OPS-048](backlog/tickets/OPS-048.md): повторить сессионную проверку минимального
-процесса raw trade. OPS-050 завершил недостающий интерфейс: ReconnectPrepared
-позволяет выполнить BeginGeneration до каждого dial и вернуть ошибку SetStatus
-из Disconnected. OPS-048 остаётся planned, реализация процесса не начата.
+процесса raw trade. OPS-051 завершил выбор стартовой пробы: использовать
+Config.StartupProbePath=/healthz и отдельно проверять /readyz=503/unconfirmed.
+OPS-050 done: ReconnectPrepared позволяет BeginGeneration до каждого dial
+и возвращает ошибки Disconnected. OPS-048 остаётся planned, runtime не начат.
 Окружение [OPS-049](backlog/tickets/OPS-049.md) готово: общий runner OPS-047
 с market_data credentials, fixture/WS и проверкой child/cleanup; интерфейс —
 [marketprocess](../internal/testutil/marketprocess/README.md). После OPS-048 —

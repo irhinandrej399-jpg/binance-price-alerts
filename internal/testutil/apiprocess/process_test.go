@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -47,7 +48,17 @@ func TestChild(t *testing.T) {
 		defer pool.Close()
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) })
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) })
+	mux.HandleFunc("/redirect", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/healthz", http.StatusFound) })
+	mux.HandleFunc("/nocontent", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) })
+	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		if mode == "unconfirmed" {
+			w.WriteHeader(503)
+			_, _ = io.WriteString(w, `{"status":"not_ready","feed":"unconfirmed"}`)
+			return
+		}
+		w.WriteHeader(200)
+	})
 	if http.ListenAndServe(os.Getenv("HTTP_ADDR"), mux) != nil {
 		os.Exit(26)
 	}
@@ -78,7 +89,9 @@ func TestLifecycle(t *testing.T) {
 	sentinel := errors.New("verification failed")
 	for _, fail := range []bool{false, true} {
 		pid := 0
-		err := With(context.Background(), childConfig(t, "serve"), func(p *Process) error {
+		cfg := childConfig(t, "unconfirmed")
+		cfg.StartupProbePath = "/healthz"
+		err := With(context.Background(), cfg, func(p *Process) error {
 			pid = p.PID()
 			if _, err := os.Stat(filepath.Join(registry, strconv.Itoa(pid))); err != nil {
 				t.Fatal("missing child registry entry")
@@ -87,8 +100,9 @@ func TestLifecycle(t *testing.T) {
 			if err != nil {
 				return err
 			}
+			body, readErr := io.ReadAll(resp.Body)
 			resp.Body.Close()
-			if resp.StatusCode != 200 {
+			if readErr != nil || resp.StatusCode != 503 || string(body) != `{"status":"not_ready","feed":"unconfirmed"}` {
 				t.Fatal(resp.StatusCode)
 			}
 			if fail {
@@ -109,6 +123,7 @@ func TestLifecycle(t *testing.T) {
 func TestStartupFailures(t *testing.T) {
 	for _, mode := range []string{"exit", "hang"} {
 		cfg := childConfig(t, mode)
+		cfg.StartupProbePath = "/healthz"
 		cfg.StartupTimeout = 250 * time.Millisecond
 		pidFile := filepath.Join(t.TempDir(), "pid")
 		cfg.Env["CHILD_PID_FILE"] = pidFile
@@ -147,7 +162,9 @@ func TestCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	pid := 0
-	err := With(ctx, childConfig(t, "serve"), func(p *Process) error {
+	cfg := childConfig(t, "unconfirmed")
+	cfg.StartupProbePath = "/healthz"
+	err := With(ctx, cfg, func(p *Process) error {
 		pid = p.PID()
 		cancel()
 		select {
@@ -161,4 +178,67 @@ func TestCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertDead(t, pid)
+}
+
+func TestStartupProbe(t *testing.T) {
+	for _, tc := range []struct {
+		name, mode, path string
+		timeout          bool
+	}{
+		{"default", "serve", "", false},
+		{"default unconfirmed", "unconfirmed", "", true},
+		{"non-200", "serve", "/nocontent", true},
+		{"redirect", "serve", "/redirect", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			registry := t.TempDir()
+			t.Setenv("API_PROCESS_PID_DIR", registry)
+			cfg := childConfig(t, tc.mode)
+			cfg.StartupProbePath = tc.path
+			cfg.StartupTimeout = 500 * time.Millisecond
+			pidFile := filepath.Join(t.TempDir(), "pid")
+			cfg.Env["CHILD_PID_FILE"] = pidFile
+			called := false
+			err := With(context.Background(), cfg, func(*Process) error { called = true; return nil })
+			if tc.timeout {
+				if !errors.Is(err, context.DeadlineExceeded) || called {
+					t.Fatalf("err=%v called=%v", err, called)
+				}
+			} else if err != nil || !called {
+				t.Fatalf("err=%v called=%v", err, called)
+			}
+			raw, err := os.ReadFile(pidFile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			pid, err := strconv.Atoi(string(raw))
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertDead(t, pid)
+			entries, err := os.ReadDir(registry)
+			if err != nil || len(entries) != 0 {
+				t.Fatal("stale registry")
+			}
+		})
+	}
+}
+
+func TestInvalidStartupProbe(t *testing.T) {
+	for _, path := range []string{"readyz", "http://secret.invalid/", "//secret.invalid/", "/healthz?secret=value", "/healthz?", "/healthz#secret", "/healthz#", "/a\nsecret", "/a\x7f", "/%0a", "/%7f", "/%zz", `/\host`} {
+		t.Run(strconv.Quote(path), func(t *testing.T) {
+			cfg := childConfig(t, "serve")
+			cfg.StartupProbePath = path
+			pidFile := filepath.Join(t.TempDir(), "pid")
+			cfg.Env["CHILD_PID_FILE"] = pidFile
+			called := false
+			err := With(context.Background(), cfg, func(*Process) error { called = true; return nil })
+			if err != ErrConfig || called {
+				t.Fatalf("unsafe config error or callback: %v %v", err, called)
+			}
+			if _, err := os.Stat(pidFile); !errors.Is(err, os.ErrNotExist) {
+				t.Fatal("child started")
+			}
+		})
+	}
 }

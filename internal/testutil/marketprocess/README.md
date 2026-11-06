@@ -90,3 +90,15 @@ GOCACHE=/tmp/binance-go-build PYTHONDONTWRITEBYTECODE=1 python3 scripts/check_ma
 обоих проектов. Это не graceful SIGTERM продукта. SIGKILL внешнего Python
 runner обходит его finally и требует ручной очистки по точным labels, как и
 в OPS-047. Нагрузка/HA/full E2E здесь не проверяются.
+
+## Стартовая HTTP-проба (OPS-051)
+
+Для минимального raw runtime OPS-048 передайте
+`apiprocess.Config{StartupProbePath: "/healthz", ...}`. Пустое поле сохраняет
+прежнее ожидание `/readyz = 200` для существующих consumers. Успешная стартовая
+проба означает только HTTP 200 на выбранном endpoint: callback должен отдельно
+проверить `/readyz = 503` и feed=unconfirmed, пока runtime не подтвердил live.
+Readiness продукта не изменяется. Путь ограничен origin harness, без
+scheme/host, query/fragment и управляющих символов; redirects не выполняются,
+невалидная настройка отклоняется с ErrConfig до старта child. Все прежние
+startup deadlines, early-exit, cancellation и TERM/KILL/Wait остаются в With.

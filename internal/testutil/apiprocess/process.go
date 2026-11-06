@@ -8,13 +8,16 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
+	"unicode"
 )
 
 var (
@@ -27,6 +30,9 @@ var (
 type Config struct {
 	Executable string
 	Args       []string
+	// StartupProbePath is an origin-local absolute path; empty means /readyz.
+	// A successful probe only confirms HTTP 200 at this endpoint.
+	StartupProbePath string
 	// Env is the entire child environment, not an overlay on the parent.
 	// HTTP_ADDR is reserved and supplied by the harness.
 	Env            map[string]string
@@ -80,11 +86,18 @@ func (p *Process) Stop() error {
 	}
 }
 
-// With starts cfg.Executable, probes /readyz, invokes check, and stops/reaps on
+// With starts cfg.Executable, probes StartupProbePath (default /readyz), invokes check, and stops/reaps on
 // all return paths (also panic/Goexit). check must respect ctx for its own I/O.
 // Context cancellation independently stops the child after readiness too.
 func With(ctx context.Context, cfg Config, check func(*Process) error) (err error) {
 	if cfg.Executable == "" || cfg.StartupTimeout <= 0 || cfg.StopTimeout <= 0 || check == nil {
+		return ErrConfig
+	}
+	probePath := cfg.StartupProbePath
+	if probePath == "" {
+		probePath = "/readyz"
+	}
+	if !validProbePath(probePath) {
 		return ErrConfig
 	}
 	if ctx.Err() != nil {
@@ -156,7 +169,7 @@ func With(ctx context.Context, cfg Config, check func(*Process) error) (err erro
 			return readyCtx.Err()
 		default:
 		}
-		req, _ := http.NewRequestWithContext(readyCtx, http.MethodGet, p.URL+"/readyz", nil)
+		req, _ := http.NewRequestWithContext(readyCtx, http.MethodGet, p.URL+probePath, nil)
 		resp, e := client.Do(req)
 		if e == nil {
 			resp.Body.Close()
@@ -177,4 +190,17 @@ func With(ctx context.Context, cfg Config, check func(*Process) error) (err erro
 		case <-ticker.C:
 		}
 	}
+}
+
+// Validate before allocating resources or starting the child. Never return the
+// supplied path or URL parser errors: callers may accidentally supply secrets.
+func validProbePath(path string) bool {
+	if !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") || strings.ContainsAny(path, "?#\\") {
+		return false
+	}
+	u, err := url.ParseRequestURI(path)
+	if err != nil || u.Scheme != "" || u.Host != "" || u.Opaque != "" {
+		return false
+	}
+	return !strings.ContainsFunc(path, unicode.IsControl) && !strings.ContainsFunc(u.Path, unicode.IsControl)
 }
