@@ -12,6 +12,7 @@ import (
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/domain/price"
 	domain "github.com/irhinandrej399-jpg/binance-price-alerts/internal/domain/subscription"
 	pb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/api/v1"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/latency"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/serviceauth"
 	"github.com/jackc/pgx/v5/pgtype"
 	"google.golang.org/grpc"
@@ -33,14 +34,22 @@ type Database interface {
 	account.DB
 	sub.Beginner
 }
-type Postgres struct{ db Database }
+type Postgres struct {
+	db           Database
+	observations *latency.Recorder
+}
 
-func NewPostgres(db Database) *Postgres { return &Postgres{db: db} }
+func NewPostgres(db Database) *Postgres { return NewPostgresObserved(db, nil) }
+
+// NewPostgresObserved records confirmed creation at the SQL commit boundary.
+func NewPostgresObserved(db Database, observations *latency.Recorder) *Postgres {
+	return &Postgres{db: db, observations: observations}
+}
 func (p *Postgres) ByID(ctx context.Context, owner, id string) (sub.Record, error) {
 	return sub.New(p.db).ByID(ctx, owner, id)
 }
 func (p *Postgres) RequestDelivery(ctx context.Context, c sub.DeliveryCandidate) (sub.Record, error) {
-	return sub.RequestDelivery(ctx, p.db, c)
+	return sub.RequestDeliveryObserved(ctx, p.db, c, p.observations)
 }
 
 type Server struct {

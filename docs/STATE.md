@@ -6,6 +6,7 @@
 
 - Активная реализация: нет. По [DEC-010](decisions/DEC-010.md) приоритет — рабочий локальный пет-проект; OPS-044 отложен в planned, kernel/capacity квалификация запуск не блокирует. Незавершённые raw/code сохранены.
 - Последнее решение: [DEC-010](decisions/DEC-010.md), локальный функциональный профиль. Следующий тикет OPS-002; запуск четырёх процессов ещё не подтверждён.
+- Последний завершённый тикет: [OPS-045](backlog/tickets/OPS-045.md), [raw наблюдения t0/t1](../internal/platform/latency/README.md). Приём цены до SQL и первое подтверждение workflow/outbox, общая шкала часов, retry/rollback/unknown/sink failure проверены на PostgreSQL и TLS loopback. Полный PostgreSQL/race, vet/build прошли; runtime и p99 впереди.
 - Последний функциональный результат: [OPS-001](backlog/tickets/OPS-001.md), [HTTP health/readiness API](../internal/api/health/README.md). Проверены инициализация, отказ/восстановление БД, timeout/cancellation и реальный API PostgreSQL; race/vet/build прошли. Подключение в cmd/runtime впереди. В общем PostgreSQL-прогоне обнаружен независимый сбой crash recovery — [NTF-018](backlog/tickets/NTF-018.md).
 - Последний измерительный результат: [OPS-042](backlog/tickets/OPS-042.md). [Proof contract и независимый raw audit](measurements/OPS-042/README.md): 17 PG numeric candidates, ни одного work exclusive-create binding, 65025:208045 у разных PID/имён; 13 FS stages, шесть creates/три reuse и девять semantic challenges. Поддержанного envelope нет. Первым недостающим capture механизмом выделен OPS-043; P0–P5 остаются gate для OPS-034.
 - [OPS-041](backlog/tickets/OPS-041.md). [Shared-fileset capture/вход OPS-034](measurements/OPS-041/README.md): Parallel Hash с двумя workers/4 batches; 11 fileset paths и 6 identities наблюдены у разных PG владельцев, PID/starttime/lineage и independent role logs связаны. Полный verifier, 15+5 rehashed controls, финальный replay и регрессия OPS-040 прошли; cleanup пуст. Все procfs/shared-state/external alias gaps сохранены; lifetime/bounds не квалифицированы.
@@ -122,7 +123,11 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-[OPS-002](backlog/tickets/OPS-002.md): метрика задержки от цены до trigger.
+[OPS-002](backlog/tickets/OPS-002.md): метрика задержки на готовых raw наблюдениях
+[OPS-045](../internal/platform/latency/README.md). Проверить oracle ожидаемых
+подписок, missing и buckets, не сбрасывать первое t0 поздними revision/retry.
+Failover/потеря наблюдения не восстанавливают первое t1. Полный runtime и p99
+не проверены; нагрузка по DEC-010 отложена.
 Health API готов в OPS-001; далее функциональные OPS и E2E-003/004 → E2E-002 → E2E-001:
 четыре процесса и сценарий подписка → цена → уведомление. Перед E2E проверить
 фактический runtime wiring; отсутствующую сборку сервисов выделить отдельно.

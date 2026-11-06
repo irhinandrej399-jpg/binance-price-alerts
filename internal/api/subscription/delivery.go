@@ -13,6 +13,7 @@ import (
 	changed "github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/subscriptionchanged"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/domain/price"
 	domain "github.com/irhinandrej399-jpg/binance-price-alerts/internal/domain/subscription"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/latency"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -38,6 +39,12 @@ type DeliveryCandidate struct {
 // subscription command, which returns a committed workflow if it exists.
 // No network calls, quota release, attempts or automatic transaction retries.
 func RequestDelivery(ctx context.Context, db Beginner, c DeliveryCandidate) (Record, error) {
+	return RequestDeliveryObserved(ctx, db, c, nil)
+}
+
+// RequestDeliveryObserved records only a newly created, confirmed workflow commit.
+// Observation failures never change the command result; inspect Recorder.Failures.
+func RequestDeliveryObserved(ctx context.Context, db Beginner, c DeliveryCandidate, observations *latency.Recorder) (Record, error) {
 	if c.OwnerID == "" || c.SubscriptionID == "" || c.ExpectedVersion < 1 || c.Quote.Validate() != nil {
 		return Record{}, ErrInvalidInput
 	}
@@ -101,5 +108,6 @@ func RequestDelivery(ctx context.Context, db Beginner, c DeliveryCandidate) (Rec
 	if err = tx.Commit(ctx); err != nil {
 		return Record{}, storageError(ctx, err)
 	}
+	observations.Committed(r.OwnerID, r.ID, r.Workflow.TriggerID, workID, r.Version, c.Quote)
 	return r, nil
 }

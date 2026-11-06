@@ -14,6 +14,7 @@ import (
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/event"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/priceobserved"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/trade"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/latency"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -28,9 +29,17 @@ var (
 	pairPattern = regexp.MustCompile(`^[A-Z0-9]+$`)
 )
 
-type Repository struct{ pool *pgxpool.Pool }
+type Repository struct {
+	pool         *pgxpool.Pool
+	observations *latency.Recorder
+}
 
-func New(pool *pgxpool.Pool) *Repository { return &Repository{pool: pool} }
+func New(pool *pgxpool.Pool) *Repository { return NewObserved(pool, nil) }
+
+// NewObserved enables optional measurement boundaries; nil disables recording.
+func NewObserved(pool *pgxpool.Pool, observations *latency.Recorder) *Repository {
+	return &Repository{pool: pool, observations: observations}
+}
 
 // BeginGeneration fences earlier ingest workers. Call before each new connection,
 // including restart. Historical gaps are sticky; no external replay is implied.
@@ -90,6 +99,7 @@ func (r *Repository) Accept(ctx context.Context, gen uint64, q priceobserved.Obs
 	if _, err := trade.CheckNext(nil, q); err != nil {
 		return false, err
 	}
+	receipt := r.observations.Receive(q.Pair, q.SourceID, meta.EventID, gen)
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return false, err
@@ -156,6 +166,7 @@ func (r *Repository) Accept(ctx context.Context, gen uint64, q priceobserved.Obs
 	if err = tx.Commit(ctx); err != nil {
 		return false, err
 	}
+	r.observations.Accepted(receipt, q.Revision)
 	return true, nil
 }
 

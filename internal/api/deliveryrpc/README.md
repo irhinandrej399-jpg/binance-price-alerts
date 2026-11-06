@@ -73,3 +73,6 @@ matcher → API → market-data; SQL-тест без opt-in пропускает
 неизменяемую диагностику/outbox, повтор при missing, изоляцию владельца, отмену
 ожидания SQL-lock и повтор после timeout. Публикация outbox (SUB-009), runtime,
 PKI окружения, admission/attempt/results и Telegram сюда не входят.
+
+Для raw измерения границы SQL commit: `NewPostgresObserved(db, recorder)`;
+[контракт OPS-045](../../platform/latency/README.md). Recovery не создаёт новый t1.

@@ -51,3 +51,6 @@ MKT-014 ограничивает сериализованный PriceObserved д
 `ErrTooLarge`. Accept отклоняет превышение до commit цены/outbox. Claim не загружает
 oversized legacy payload целиком: ошибка сохраняет запись неопубликованной.
 Готовый serial relay описан в [relay](../relay/README.md); runtime ещё не подключён.
+
+Для контрольных наблюдений t0/accepted используйте `NewObserved(pool, recorder)`;
+[формат, подключение и crash-ограничения OPS-045](../../platform/latency/README.md).

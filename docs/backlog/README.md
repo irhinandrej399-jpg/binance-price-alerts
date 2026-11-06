@@ -191,7 +191,7 @@
 | ID | Один результат | Зависимости | Статус |
 | --- | --- | --- | --- |
 | [OPS-001](tickets/OPS-001.md) | Добавить health и readiness API | SET-001, DEC-003, DEC-010 | done |
-| [OPS-002](tickets/OPS-002.md) | Измерять задержку от цены до trigger | MAT-004, SUB-013, SUB-014 | planned |
+| [OPS-002](tickets/OPS-002.md) | Измерять задержку от цены до trigger | MAT-004, SUB-013, SUB-014, OPS-045 | planned |
 | [OPS-003](tickets/OPS-003.md) | Измерять состояние очереди доставки | NTF-012, NTF-013 | planned |
 | [OPS-004](tickets/OPS-004.md) | Корректно остановить API | SUB-007, SUB-009 | planned |
 | [OPS-006](tickets/OPS-006.md) | Добавить health и readiness market-data | MKT-006, MKT-015, MKT-016, DEC-010 | planned |
@@ -228,6 +228,7 @@
 | [OPS-042](tickets/OPS-042.md) | Определить доказуемый lifetime envelope и capture предпосылки | OPS-041 | done |
 | [OPS-043](tickets/OPS-043.md) | Сохранить incarnation binding и terminal retirement witness | OPS-042, OPS-044 | planned |
 | [OPS-044](tickets/OPS-044.md) | Подготовить проверенный kernel tracing toolchain | OPS-042 | planned |
+| [OPS-045](tickets/OPS-045.md) | Подготовить наблюдения границ задержки цена → durable workflow | MKT-014, SUB-013, SUB-014, DEC-008, DEC-010 | done |
 
 [OPS-031](tickets/OPS-031.md) разделён на OPS-033–036: ancillary raw →
 identity/references → classifier/bounds → самостоятельный PG gate.
