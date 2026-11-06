@@ -2,7 +2,9 @@ package deliveryrpc_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -11,6 +13,7 @@ import (
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/account"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/deliveryrpc"
 	sub "github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/subscription"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/alerttriggered"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/event"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/priceobserved"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/latest"
@@ -90,6 +93,10 @@ func TestLatencyBoundariesOverTLS(t *testing.T) {
 	accept("1")
 	// Reference is owned by the control caller, independent of API's later Latest.
 	expected := map[string]string{v.ID: "1"}
+	mu.Lock()
+	first := raw[0]
+	mu.Unlock()
+	oracle := latency.Expected{OwnerID: a.ID, SubscriptionID: v.ID, Pair: v.Pair, FirstAttemptID: first.AttemptID, FirstEventID: first.EventID, FirstSourceID: first.SourceID, Generation: first.Generation}
 	nanos.Store(100000100)
 	accept("2")
 	marketConn := marketConnection(t, market)
@@ -125,6 +132,42 @@ func TestLatencyBoundariesOverTLS(t *testing.T) {
 	}
 	if d, e := latency.Between(t0, t1); e != nil || d != 200*time.Millisecond {
 		t.Fatal(d, e, raw)
+	}
+	// Read the canonical result independently of the observation sink. In an
+	// actual run the runner enumerates all control workflow/outbox rows, including
+	// unexpected results; it must never derive its expected set from these rows.
+	var body []byte
+	if e = pool.QueryRow(ctx, `SELECT body FROM app.delivery_outbox WHERE subscription_id=$1`, v.ID).Scan(&body); e != nil {
+		t.Fatal(e)
+	}
+	envelope, work, e := alerttriggered.Decode(body)
+	if e != nil {
+		t.Fatal(e)
+	}
+	marketFailures, _ := marketRecorder.Failures()
+	apiFailures, _ := apiRecorder.Failures()
+	input := latency.Input{Expected: []latency.Expected{oracle},
+		Workflows: []latency.Workflow{{OwnerID: work.UserID, SubscriptionID: work.SubscriptionID, Pair: work.Pair, SourceID: work.CandidateQuote.SourceID, Revision: work.CandidateQuote.Revision, TriggerID: work.TriggerID, EventID: envelope.EventID, SubscriptionVersion: int64(work.SubscriptionVersion)}},
+		Processes: []latency.ProcessStatus{{Name: "market-data", Complete: true, Failures: marketFailures}, {Name: "api", Complete: true, Failures: apiFailures}}, Observations: raw}
+	wire, e := json.Marshal(input)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = json.Unmarshal(wire, &input); e != nil {
+		t.Fatal(e)
+	}
+	report, e := latency.Analyze(input)
+	if e != nil || !report.Complete || !report.WithinOneSecond || report.P99Nanos == nil || *report.P99Nanos != int64(200*time.Millisecond) {
+		t.Fatal(report, e)
+	}
+	if !strings.Contains(report.Prometheus(), `price_to_workflow_seconds_bucket{le="0.25"} 1`) {
+		t.Fatal(report.Prometheus())
+	}
+	// Recovery can prove a workflow exists but cannot reconstruct its first t1.
+	input.Observations = raw[:len(raw)-1]
+	missing, e := latency.Analyze(input)
+	if e != nil || missing.Complete || missing.Missing != 1 || missing.P99Nanos != nil {
+		t.Fatal(missing, e)
 	}
 	if n, e := marketRecorder.Failures(); n != 0 || e != nil {
 		t.Fatal(n, e)

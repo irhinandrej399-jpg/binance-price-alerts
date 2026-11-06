@@ -1,7 +1,8 @@
 # Raw границы задержки (OPS-045)
 
-Пакет предоставляет исходные наблюдения для OPS-002. Histogram, агрегация,
-проверка полноты всего опыта, p99 и runtime здесь не реализованы.
+Пакет предоставляет raw наблюдения границ (OPS-045) и агрегацию одного
+контрольного опыта с histogram, проверкой полноты и p99 (OPS-002).
+Подключение в runtime и нагрузочный runner остаются отдельными задачами.
 
 ## Подключение
 
@@ -107,3 +108,83 @@ commit-response может оставить durable workflow без t1: успе
 не доказывает полноту. Нельзя реконструировать t1 из envelope.OccurredAt,
 времени повторного RPC, Latest или wall clock. SQL/business результаты остаются
 первичными, распределённая транзакция с sink не добавляется.
+
+## Отчёт и histogram (OPS-002)
+
+`Analyze(Input)` агрегирует **один** контрольный опыт. `Input.Expected` — заранее
+зафиксированный oracle выше (без `run_id`: один файл относится к одному run).
+Для каждой подписки допускается один непрерывно подходящий участок. Следующий
+участок/опыт получает отдельный Input; объединять файлы разных опытов нельзя.
+Идентификаторы в raw/JSON отчёте нужны для диагностики, они не экспортируются
+в metric labels.
+
+Вход дополнительно содержит:
+
+- `workflows`: независимо прочитанные канонические результаты API/outbox **всего
+  контрольного scope**, включая неожиданные подписки. Поля `Workflow` — owner,
+  subscription, trigger, event ID outbox, subscription version **при создании**,
+  pair/source/revision исходной candidate quote из payload. Поздний текущий
+  subscription version не заменяет версию payload. Нельзя строить oracle по
+  успешным workflow или копировать canonical данные из raw t1.
+- `processes`: заранее определённое полное множество участвующих процессов.
+  Каждая строка содержит name, накопленный `Recorder.Failures()` и `complete`.
+  Только успешное получение счётчика и flush/close sink позволяет complete=true.
+  При crash, неизвестном результате flush или потере процесса оставить false.
+  Проверку списка процессов и preflight сопоставимости шкал выполняет runner;
+  анализатор проверяет непустой список, уникальные имена, complete и failures.
+- `observations`: объединённые raw v1 из sink всех процессов; порядок строк
+  не важен. Каждый raw-файл/счётчик должен быть собран один раз. Дубли первых
+  receipt/acceptance или commit считаются неоднозначностью, а не выбираются
+  по минимальному времени. Посторонние рабочие цены допустимы; посторонние
+  workflow внутри контрольного scope проваливают полноту.
+
+Join индексируется по attempt и owner/subscription. Первая цена обязана иметь
+однозначные receipt и acceptance с oracle identity и durable revision. Commit
+сверяется с независимым canonical workflow, revision не может предшествовать
+первой принятой цене. Проверяются одинаковые шкалы и порядок receipt ≤ acceptance
+≤ commit. Новые Latest, receipt/retry и более поздняя revision не меняют первый
+attempt oracle. При утрате первого t1 recovery не создаёт sample.
+
+Результат содержит исходные samples в ns, missing по ожидаемым подпискам с
+причиной, глобальные issues и inclusive cumulative buckets в секундах:
+0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, **1**, 2.5, 5, 10, +Inf.
+Пустой/неполный или неоднозначный oracle — ошибка входа. Missing, сбои capture,
+неизвестный raw kind/version, чужие шкалы и неожиданные workflow дают
+`complete=false`. Partial histogram остаётся видимым, но p50/p95/p99 отсутствуют.
+При полной выборке quantiles считаются точно методом nearest-rank
+(`ceil(percent*N/100)`, без интерполяции buckets); `within_one_second` требует
+полноту и p99 ≤1 с. Этот флаг оценивает только задержку: отдельную burst
+пропускную способность, нагрузочный fixture или полноту runtime он не доказывает.
+
+Воспроизведение на **синтетической**, не производительной, фикстуре 200 ms:
+
+```sh
+GOTOOLCHAIN=local go run ./cmd/latency-report \
+  < internal/platform/latency/testdata/control.json > /tmp/latency-report.json
+GOTOOLCHAIN=local go run ./cmd/latency-report -format prometheus \
+  < internal/platform/latency/testdata/control.json > /tmp/latency.prom
+```
+
+Для реального опыта runner создаёт такой же JSON Input из собственного oracle,
+canonical SQL/outbox и собранных raw. CLI читает один JSON со stdin, пишет полный
+отчёт либо Prometheus text. Код выхода 0 — complete и p99 ≤1 с, 1 — неполный
+опыт или превышение цели (отчёт сохранён), 2 — неверный вход/ошибка вывода.
+Проверять код самого собранного бинарника; `go run` оборачивает ненулевой exit.
+Результат можно опубликовать как отдельный snapshot опыта через textfile
+collector; cmd сервисов и live HTTP scrape этим тикетом не подключаются.
+
+Prometheus экспортирует histogram `price_to_workflow_seconds`, gauges expected,
+missing, issues, complete, within_one_second и, только для полной выборки,
+p50/p95/p99_seconds с префиксом `price_to_workflow_`. Единственный label —
+фиксированный числовой `le` у bucket. Не объединять per-run snapshots в один
+кумулятивный live счётчик. Для проверки цели использовать complete=1 **и**
+within_one_second=1; один histogram_quantile по частичным samples не даёт pass.
+Queue, wait_condition и подтверждённая доставка не входят в этот histogram;
+их отдельная телеметрия остаётся в OPS-003. Полный нагрузочный p99 остаётся
+проверкой LOAD-003, отложенной по DEC-010.
+
+`TestReport*` проверяют missing/ambiguity, сохранение первого t0, canonical join,
+шкалы, buckets, nearest-rank/границу цели и отсутствие ID в экспорте.
+`TestLatencyBoundariesOverTLS` дополнительно строит отчёт на реальных PostgreSQL
+commit/outbox и mTLS RPC с управляемыми 200 ms, поздней ценой и recovery/retry.
+Это проверка правильности измерителя, а не фактической производительности.

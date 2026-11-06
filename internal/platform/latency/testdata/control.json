@@ -1,0 +1,94 @@
+{
+  "expected": [
+    {
+      "owner_id": "control-owner",
+      "subscription_id": "control-subscription",
+      "pair": "BTCUSDT",
+      "first_attempt_id": "first",
+      "first_event_id": "price-1",
+      "first_source_id": "1",
+      "generation": 1
+    }
+  ],
+  "workflows": [
+    {
+      "owner_id": "control-owner",
+      "subscription_id": "control-subscription",
+      "pair": "BTCUSDT",
+      "source_id": "2",
+      "revision": {
+        "stream_id": "trade",
+        "generation": 1,
+        "sequence": 2
+      },
+      "trigger_id": "control-trigger",
+      "event_id": "control-work-event",
+      "subscription_version": 2
+    }
+  ],
+  "processes": [
+    {
+      "name": "market-data",
+      "complete": true,
+      "failures": 0
+    },
+    {
+      "name": "api",
+      "complete": true,
+      "failures": 0
+    }
+  ],
+  "observations": [
+    {
+      "version": 1,
+      "kind": "price_received",
+      "at": {
+        "scale": "synthetic/raw",
+        "nanos": 10000000
+      },
+      "attempt_id": "first",
+      "pair": "BTCUSDT",
+      "source_id": "1",
+      "event_id": "price-1",
+      "generation": 1
+    },
+    {
+      "version": 1,
+      "kind": "price_accepted",
+      "at": {
+        "scale": "synthetic/raw",
+        "nanos": 50000000
+      },
+      "attempt_id": "first",
+      "pair": "BTCUSDT",
+      "source_id": "1",
+      "event_id": "price-1",
+      "generation": 1,
+      "revision": {
+        "stream_id": "trade",
+        "generation": 1,
+        "sequence": 1
+      }
+    },
+    {
+      "version": 1,
+      "kind": "workflow_committed",
+      "at": {
+        "scale": "synthetic/raw",
+        "nanos": 210000000
+      },
+      "owner_id": "control-owner",
+      "subscription_id": "control-subscription",
+      "pair": "BTCUSDT",
+      "source_id": "2",
+      "revision": {
+        "stream_id": "trade",
+        "generation": 1,
+        "sequence": 2
+      },
+      "trigger_id": "control-trigger",
+      "event_id": "control-work-event",
+      "subscription_version": 2
+    }
+  ]
+}
