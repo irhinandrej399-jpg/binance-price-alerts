@@ -5,8 +5,9 @@
 ## Активная работа
 
 - Активная реализация: нет. По [DEC-010](decisions/DEC-010.md) приоритет — рабочий локальный пет-проект; OPS-044 отложен в planned, kernel/capacity квалификация запуск не блокирует. Незавершённые raw/code сохранены.
-- Последнее решение: [DEC-010](decisions/DEC-010.md), локальный функциональный профиль. Следующий тикет OPS-003; запуск четырёх процессов ещё не подтверждён.
-- Последний завершённый тикет: [OPS-002](backlog/tickets/OPS-002.md), [метрика/CLI](../internal/platform/latency/README.md). Raw join по независимому oracle/canonical outbox, missing/ошибки capture, фиксированные buckets и точные p50/p95/p99; ID отсутствуют в metric labels. Полный PostgreSQL/race, vet/build и CLI-сценарии прошли. Проверенные 200 ms — управляемый контроль измерителя; runtime/нагрузочный p99 впереди.
+- Последнее решение: [DEC-010](decisions/DEC-010.md), локальный функциональный профиль. Следующий тикет OPS-004; запуск четырёх процессов ещё не подтверждён.
+- Последний завершённый тикет: [OPS-003](backlog/tickets/OPS-003.md), [метрики очереди](../internal/notifications/metrics/README.md). Согласованный SQL snapshot backlog/возраста, waits/blocks, pending reports и durable исходов/429/uncertainty; API-ack success и drain rate. Prometheus с фиксированными labels и histogram admission RPC, включая transport/API. Полный PostgreSQL/race, дополнительный jobs/metrics прогон и vet/build прошли. DB gauges реплик не суммировать; runtime и нагрузка ещё не проверены.
+- Предыдущий завершённый тикет: [OPS-002](backlog/tickets/OPS-002.md), [метрика/CLI](../internal/platform/latency/README.md). Raw join по независимому oracle/canonical outbox, missing/ошибки capture, фиксированные buckets и точные p50/p95/p99; ID отсутствуют в metric labels. Полный PostgreSQL/race, vet/build и CLI-сценарии прошли. Проверенные 200 ms — управляемый контроль измерителя; runtime/нагрузочный p99 впереди.
 - Предыдущий завершённый тикет: [OPS-045](backlog/tickets/OPS-045.md), [raw наблюдения t0/t1](../internal/platform/latency/README.md). Приём цены до SQL и первое подтверждение workflow/outbox, общая шкала часов, retry/rollback/unknown/sink failure проверены на PostgreSQL и TLS loopback. Полный PostgreSQL/race, vet/build прошли; runtime и p99 впереди.
 - Последний функциональный результат: [OPS-001](backlog/tickets/OPS-001.md), [HTTP health/readiness API](../internal/api/health/README.md). Проверены инициализация, отказ/восстановление БД, timeout/cancellation и реальный API PostgreSQL; race/vet/build прошли. Подключение в cmd/runtime впереди. В общем PostgreSQL-прогоне обнаружен независимый сбой crash recovery — [NTF-018](backlog/tickets/NTF-018.md).
 - Последний измерительный результат: [OPS-042](backlog/tickets/OPS-042.md). [Proof contract и независимый raw audit](measurements/OPS-042/README.md): 17 PG numeric candidates, ни одного work exclusive-create binding, 65025:208045 у разных PID/имён; 13 FS stages, шесть creates/три reuse и девять semantic challenges. Поддержанного envelope нет. Первым недостающим capture механизмом выделен OPS-043; P0–P5 остаются gate для OPS-034.
@@ -124,13 +125,11 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-[OPS-003](backlog/tickets/OPS-003.md): сессионная проверка метрик очереди
-доставки на готовых NTF-012/013. В OPS-002 добавлены histogram, полный raw join
-и CLI [latency-report](../internal/platform/latency/README.md), включая missing
-и точный p99. Runner будущего опыта должен независимо собрать ожидаемые
-подписки, canonical workflow/outbox и статусы всех процессов. Потеря первого t1
-не восстанавливается recovery. Полный runtime и нагрузочный p99 не проверены;
-нагрузка по DEC-010 отложена.
+[OPS-004](backlog/tickets/OPS-004.md): сессионная проверка корректной остановки
+API на готовых зависимостях. Метрики очереди OPS-003 готовы как HTTP exporter
+и admission decorator; runtime должен подключить их явно и ограничить deadline
+SQL collection. Копии DB gauges реплик не суммировать. Полный runtime и
+нагрузочный p99 не проверены; нагрузка по DEC-010 отложена.
 Health API готов в OPS-001; далее функциональные OPS и E2E-003/004 → E2E-002 → E2E-001:
 четыре процесса и сценарий подписка → цена → уведомление. Перед E2E проверить
 фактический runtime wiring; отсутствующую сборку сервисов выделить отдельно.
@@ -152,7 +151,7 @@ NTF-006 рассчитывает retry Plan и бюджет доказанных
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show OPS-003` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show OPS-004` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

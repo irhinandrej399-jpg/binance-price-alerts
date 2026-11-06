@@ -356,3 +356,12 @@ current-fence channel blocks без живой аренды/успеха. `Recov
 требует ScheduleRecovery вместо Handle; это подсказка, а не владение.
 Claim/ScheduleRecovery повторно проверяют гонки. Worker/ограничения, deadlines
 и сохранение PendingWrite — [контракт цикла](../worker/README.md).
+
+## Наблюдение очереди (OPS-003)
+
+`QueueMetrics(ctx)` возвращает согласованный read-only `QueueSnapshot`:
+backlog/возраст, effective states/blocks, четыре pending report вида, durable
+outcomes/uncertainty и distinct API-acknowledged successful workflows.
+SQL clock и repeatable-read, без claim/ack/RPC; ошибка не возвращает частичный
+результат. Все значения общие для notifications DB, копии реплик не суммировать.
+Экспорт, timing admission и смысл состояний — [metrics/README.md](../metrics/README.md).

@@ -192,7 +192,7 @@
 | --- | --- | --- | --- |
 | [OPS-001](tickets/OPS-001.md) | Добавить health и readiness API | SET-001, DEC-003, DEC-010 | done |
 | [OPS-002](tickets/OPS-002.md) | Измерять задержку от цены до trigger | MAT-004, SUB-013, SUB-014, OPS-045 | done |
-| [OPS-003](tickets/OPS-003.md) | Измерять состояние очереди доставки | NTF-012, NTF-013 | planned |
+| [OPS-003](tickets/OPS-003.md) | Измерять состояние очереди доставки | NTF-012, NTF-013 | done |
 | [OPS-004](tickets/OPS-004.md) | Корректно остановить API | SUB-007, SUB-009 | planned |
 | [OPS-006](tickets/OPS-006.md) | Добавить health и readiness market-data | MKT-006, MKT-015, MKT-016, DEC-010 | planned |
 | [OPS-007](tickets/OPS-007.md) | Добавить health и readiness matcher | MAT-007, MAT-008, MAT-009 | planned |
