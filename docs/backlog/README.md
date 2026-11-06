@@ -199,7 +199,9 @@
 | [OPS-006](tickets/OPS-006.md) | Добавить health и readiness market-data | MKT-006, MKT-015, MKT-016, DEC-010 | done |
 | [OPS-007](tickets/OPS-007.md) | Добавить health и readiness matcher | MAT-007, MAT-008, MAT-009 | done |
 | [OPS-008](tickets/OPS-008.md) | Добавить health и readiness notifications | NTF-012, NTF-013 | done |
-| [OPS-009](tickets/OPS-009.md) | Корректно остановить market-data | MKT-013, MKT-014, MKT-015, MKT-016 | planned |
+| [OPS-049](tickets/OPS-049.md) | Подготовить disposable окружение процесса market-data | SET-009, MKT-017, MKT-013, OPS-047, DEC-010 | done |
+| [OPS-048](tickets/OPS-048.md) | Собрать минимальный процесс market-data | MKT-005, MKT-017, MKT-013, MKT-014, MKT-011, OPS-006, DEC-010, OPS-049 | planned |
+| [OPS-009](tickets/OPS-009.md) | Корректно остановить market-data | MKT-013, MKT-014, MKT-015, MKT-016, OPS-048 | planned |
 | [OPS-010](tickets/OPS-010.md) | Корректно остановить matcher | MAT-005 | planned |
 | [OPS-011](tickets/OPS-011.md) | Корректно остановить notification worker | NTF-012, NTF-013 | planned |
 | [OPS-012](tickets/OPS-012.md) | Ограничить размер тела публичного запроса | IAM-003, IAM-004, SUB-003 | done |

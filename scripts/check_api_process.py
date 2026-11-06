@@ -37,10 +37,14 @@ def run(command, env, timeout=180, **kwargs):
         return output
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--package', default='./internal/testutil/apiprocess',
-                        help='Go test package for this disposable API environment')
+def main(owner="api"):
+    if owner not in ("api", "market_data"):
+        raise RuntimeError("unsupported process environment owner")
+    market = owner == "market_data"
+    label = "market-data" if market else "API"
+    parser = argparse.ArgumentParser(description=f"Verify a {label} child on disposable PostgreSQL/Kafka projects.")
+    parser.add_argument('--package', default=('./internal/testutil/marketprocess' if market else './internal/testutil/apiprocess'),
+                        help='Go test package for this disposable owner environment')
     args = parser.parse_args()
     if not args.package.startswith('./') or '..' in Path(args.package).parts:
         parser.error('--package must be a repository-relative Go package')
@@ -48,7 +52,7 @@ def main():
     pg_project = 'binance-process-pg-' + suffix
     kafka_project = 'binance-process-kafka-' + suffix
     prefix = 'process-' + suffix
-    # Remove all inherited owner DSNs and app settings. Only the API runtime
+    # Remove all inherited owner DSNs and app settings. Only the selected runtime
     # credential is obtained below and supplied to Go tests. Child env is then
     # explicitly constructed by apiprocess.Config, with no parent inheritance.
     env = {k: v for k, v in os.environ.items()
@@ -68,23 +72,29 @@ def main():
     cleanup_errors = []
     try:
         run(pg + ['up', '-d', '--wait', '--wait-timeout', '120'], env)
-        run([sys.executable, str(ROOT / 'scripts/migrate.py'), '--owner', 'api',
+        run([sys.executable, str(ROOT / 'scripts/migrate.py'), '--owner', owner,
              '--project', pg_project], env)
+        credential_key = owner.upper() + "_RUNTIME_PASSWORD"
         password = run(pg + ['exec', '-T', 'postgres', 'sh', '-c',
-                             'printf %s "$API_RUNTIME_PASSWORD"'], env,
+                             'printf %s "$' + credential_key + '"'], env,
                        stdout=subprocess.PIPE, text=True)
         if not password:
-            raise RuntimeError('missing API runtime credential')
-        env['DATABASE_URL'] = (f'postgres://api_runtime:{quote(password, safe="")}@'
-                               f'127.0.0.1:{env["POSTGRES_PORT"]}/api'
+            raise RuntimeError('missing owner runtime credential')
+        dsn_variable = 'MARKET_DATA_DATABASE_URL' if market else 'DATABASE_URL'
+        env[dsn_variable] = (f'postgres://{owner}_runtime:{quote(password, safe="")}@'
+                               f'127.0.0.1:{env["POSTGRES_PORT"]}/{owner}'
                                '?sslmode=disable&connect_timeout=5')
         run(kafka + ['up', '-d', '--wait', '--wait-timeout', '180'], env, timeout=210)
         with (ROOT / 'infra/kafka/init-topics.sh').open() as script:
             run(kafka + ['exec', '-T', 'kafka', 'timeout', '90', 'bash', '-s', '--', prefix],
                 env, timeout=100, stdin=script)
-        env.update(POSTGRES_TEST='1', API_PROCESS_INTEGRATION='1',
+        env['MARKET_DATA_PROCESS_INTEGRATION' if market else 'API_PROCESS_INTEGRATION'] = '1'
+        env.update(POSTGRES_TEST='1',
                    KAFKA_TEST_BROKER='127.0.0.1:' + env['KAFKA_PORT'],
                    KAFKA_TEST_PREFIX=prefix)
+        if market:
+            run(['go', 'test', '-race', '-count=1', '-v', '-timeout', '30s',
+                 './internal/testutil/apiprocess'], env, timeout=60)
         run(['go', 'test', '-race', '-count=1', '-v', '-timeout', '90s',
              args.package], env, timeout=120)
     finally:
@@ -127,7 +137,7 @@ def main():
                 cleanup_errors.append(project)
         if cleanup_errors:
             raise RuntimeError('cleanup failed: ' + ', '.join(cleanup_errors))
-    print('PASS OPS-047: process lifecycle, API fixture, read_committed bytes; resources removed')
+    print(f'PASS {label}: process lifecycle, fixture, read_committed bytes; resources removed')
 
 
 if __name__ == '__main__':

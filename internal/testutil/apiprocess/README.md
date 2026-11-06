@@ -94,3 +94,8 @@ GOCACHE=/tmp/binance-go-build python3 scripts/check_api_process.py --package ./i
 Владелец завершается с кодом 19 после readiness, обходя defers. Runner обязан
 подтвердить удаление зарегистрированной child group и обоих стендов. Эта
 намеренно падающая проверка находится в testdata и не входит в `go test ./...`.
+
+OPS-049 переиспользует этот lifecycle и runner для владельца market_data:
+[marketprocess](../marketprocess/README.md), `scripts/check_marketdata_process.py`.
+API default/env/fixture остаются прежними; ownerexit fixture принимает также
+`MARKET_DATA_PROCESS_INTEGRATION=1`.
