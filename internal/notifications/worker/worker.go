@@ -45,6 +45,11 @@ type Worker struct {
 	pending []knownWrite
 }
 
+// Running reports whether this instance currently owns a Run call, including
+// idle pauses and persistence retries. It does not assert dependency health or
+// progress; runtime must withdraw initialization before shutdown.
+func (w *Worker) Running() bool { return w.running.Load() }
+
 func New(c Config) (*Worker, error) {
 	if c.Source == nil || c.Handler == nil || c.Concurrency < 1 || c.Concurrency > 1000 || c.Interval <= 0 || c.Timeout <= 0 || c.WriteTimeout <= 0 || c.RecoveryInterval < time.Second || c.RecoveryInterval > time.Hour || c.RecoveryInterval%time.Microsecond != 0 {
 		return nil, errors.New("invalid notification worker configuration")

@@ -57,3 +57,11 @@ shutdown относятся к OPS-011/дальнейшим runtime-задача
 `GOCACHE=/tmp/binance-go-build python3 scripts/check_postgres.py` (реальный
 PostgreSQL/race, SQL discovery и существующий handler/mTLS/HTTP-контракт).
 Реальные Telegram, Kafka и нагрузка не проверяются этим циклом.
+
+## Наблюдение lifecycle — OPS-008
+
+`Running()` безопасно читать конкурентно: true, пока экземпляр владеет Run,
+включая пустую очередь, паузу, ошибки и PendingWrite; false до запуска и после
+возврата. Это не доказательство прогресса или здоровья SQL/Telegram. При shutdown
+runtime сначала отзывает инициализацию health. Контракт HTTP и wiring —
+[health/README.md](../health/README.md).
