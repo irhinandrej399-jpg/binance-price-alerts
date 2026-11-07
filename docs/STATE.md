@@ -4,8 +4,9 @@
 
 ## Активная работа
 
-- Активная реализация: нет. SIGTERM/drain matcher завершён в OPS-010; следующий шаг — сессионная проверка OPS-011. Незавершённые raw/code исследований сохранены по DEC-010; kernel/capacity квалификация локальный запуск не блокирует.
-- Последний завершённый тикет: [OPS-010](backlog/tickets/OPS-010.md), [graceful shutdown matcher](../cmd/matcher/README.md). SIGTERM/SIGINT отменяют intake/оценки/RPC, присоединяют replica/readers/Kafka и отзывают grants до pool.Close; общий предел 20 с. Два успешных PostgreSQL/Kafka process/race прогона: частичный Pending/неоднозначный API commit, exit 0, все 16 grants отозваны, restart/canonical IDs без дублей, SQL/broker Prefix, SIGINT и явный exit 1 при SQL cleanup fault. Cleanup подтверждён; общая race-регрессия/vet/build PASS. Незавершённая работа восстанавливается после restart; полный E2E впереди.
+- Активная реализация: нет. OPS-054 завершил disposable notifications fixture/runner; следующий шаг — сессионная проверка OPS-055, затем OPS-011. Незавершённые raw/code исследований сохранены по DEC-010; kernel/capacity квалификация локальный запуск не блокирует.
+- Последний завершённый тикет: [OPS-054](backlog/tickets/OPS-054.md), [disposable notifications fixture](../internal/testutil/notificationsprocess/README.md). Общий apiprocess lifecycle/runner, только своя БД у child, родительские canonical API workflow/outbox, mTLS Admission/Result/Latest и управляемый Telegram HTTP. Два PostgreSQL/Kafka/race прогона: исходные bytes, SQL/broker Prefix, запрет Send при false Latest, success и восстановление report после потерянного ответа без нового HTTP/attempt/outbox. Изоляция/startup и аварийный owner-exit cleanup подтверждены; общая race-регрессия/vet/build PASS. Product executable/SIGTERM остаются OPS-055/011.
+- Предыдущий завершённый тикет: [OPS-010](backlog/tickets/OPS-010.md), [graceful shutdown matcher](../cmd/matcher/README.md). SIGTERM/SIGINT отменяют intake/оценки/RPC, присоединяют replica/readers/Kafka и отзывают grants до pool.Close; общий предел 20 с. Два успешных PostgreSQL/Kafka process/race прогона: частичный Pending/неоднозначный API commit, exit 0, все 16 grants отозваны, restart/canonical IDs без дублей, SQL/broker Prefix, SIGINT и явный exit 1 при SQL cleanup fault. Cleanup подтверждён; общая race-регрессия/vet/build PASS. Незавершённая работа восстанавливается после restart; полный E2E впереди.
 - Предыдущий завершённый тикет: [OPS-053](backlog/tickets/OPS-053.md), [минимальный matcher](../cmd/matcher/README.md). Явный 16-partition bootstrap/identity, mTLS Snapshot/Replay/Delivery/Latest и OPS-007 HTTP над replica. Настоящий executable/race на PostgreSQL/Kafka: readiness 503/200, partial outcomes → SIGKILL → SQL/changefeed recovery, canonical trigger_id/outbox без дубля, SQL/broker Prefix и terminal SQL/pin/startup failures PASS; cleanup подтверждён. Общая race-регрессия/vet/build PASS. Graceful SIGTERM остаётся OPS-010.
 - Предыдущий завершённый тикет: [OPS-052](backlog/tickets/OPS-052.md), [disposable matcher fixture](../internal/testutil/matcherprocess/README.md). Общий lifecycle/runner apiprocess, только matcher DSN в child, родительская API fixture и mTLS Snapshot/Replay/Delivery/Latest. Целый canonical changefeed пакет совпал с API journal bytes; 16-partition bootstrap, partial/Pending/superseded, canonical trigger_id, SQL/broker Prefix и cleanup проверены на PostgreSQL/Kafka с race. Аварийный owner-exit cleanup подтверждён; общая race-регрессия/vet/build PASS. Product child/SIGTERM — OPS-053/010.
 - Предыдущий завершённый тикет: [OPS-009](backlog/tickets/OPS-009.md), [graceful shutdown market-data](../cmd/market-data/README.md). SIGTERM/SIGINT отменяют приём/publish/reconnect, компоненты присоединяются до pool.Close; durable gap с fencing, pending outbox сохраняется. Общий предел 20 с; ошибки cleanup явные. Два успешных PostgreSQL/Kafka process/race прогона подтвердили потерянный EndTxn response, исходные bytes после lease/restart, handshake и закрытие активного WS; cleanup подтверждён. Общая race-регрессия/vet/build PASS. Feed unconfirmed; lease до 30 с и возможный дубль сохранены.
@@ -141,9 +142,13 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-[OPS-011](backlog/tickets/OPS-011.md): сессионная проверка graceful shutdown
-notification worker. До реализации проверить executable cmd/notifications и
-наличие process fixture; недостающую сборку/окружение выделить отдельно.
+[OPS-055](backlog/tickets/OPS-055.md): сессионная проверка минимального процесса
+notifications. OPS-054 завершил [fixture/runner](../internal/testutil/notificationsprocess/README.md)
+на общем apiprocess lifecycle: parent API, mTLS Admission/Result/Latest,
+управляемый HTTP, independent SQL/Kafka observers и cleanup.
+Следующий шаг — готовые intake/handler/worker/health подключить в executable;
+после OPS-055 вернуться к OPS-011 для SIGTERM/HTTP/drain. Сам cmd/notifications
+ещё каркас; fixture handler в родителе не подменяет настоящий процесс.
 OPS-010 завершил SIGTERM/SIGINT минимального matcher: SQL Pending/исходы
 сохраняются, intake/оценки/RPC отменяются, replica/readers/Kafka присоединяются,
 grants отзываются до закрытия БД. Процессные PostgreSQL/Kafka проверки подтвердили
@@ -187,7 +192,7 @@ NTF-006 рассчитывает retry Plan и бюджет доказанных
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show OPS-011` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show OPS-055` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

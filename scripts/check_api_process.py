@@ -38,13 +38,14 @@ def run(command, env, timeout=180, **kwargs):
 
 
 def main(owner="api"):
-    if owner not in ("api", "market_data", "matcher"):
+    if owner not in ("api", "market_data", "matcher", "notifications"):
         raise RuntimeError("unsupported process environment owner")
     market = owner == "market_data"
     matcher = owner == "matcher"
-    label = "matcher" if matcher else ("market-data" if market else "API")
+    notifications = owner == "notifications"
+    label = "notifications" if notifications else ("matcher" if matcher else ("market-data" if market else "API"))
     parser = argparse.ArgumentParser(description=f"Verify a {label} child on disposable PostgreSQL/Kafka projects.")
-    parser.add_argument('--package', default=('./internal/testutil/matcherprocess' if matcher else ('./internal/testutil/marketprocess' if market else './internal/testutil/apiprocess')),
+    parser.add_argument('--package', default='./internal/testutil/notificationsprocess' if notifications else ('./internal/testutil/matcherprocess' if matcher else ('./internal/testutil/marketprocess' if market else './internal/testutil/apiprocess')),
                         help='Go test package for this disposable owner environment')
     args = parser.parse_args()
     if not args.package.startswith('./') or '..' in Path(args.package).parts:
@@ -54,7 +55,7 @@ def main(owner="api"):
     kafka_project = 'binance-process-kafka-' + suffix
     prefix = 'process-' + suffix
     # Remove all inherited owner DSNs and app settings. Only the selected runtime
-    # credential (plus parent-only API fixture for matcher) is supplied to tests.
+    # credential (plus parent-only API fixture for matcher/notifications) is supplied to tests.
     # Child env is explicitly constructed by apiprocess.Config, with no parent inheritance.
     env = {k: v for k, v in os.environ.items()
            if k in ('PATH', 'HOME', 'TMPDIR', 'DOCKER_HOST', 'DOCKER_CONTEXT',
@@ -73,7 +74,7 @@ def main(owner="api"):
     cleanup_errors = []
     try:
         run(pg + ['up', '-d', '--wait', '--wait-timeout', '120'], env)
-        for db_owner in (("api", "matcher") if matcher else (owner,)):
+        for db_owner in (("api", owner) if matcher or notifications else (owner,)):
             run([sys.executable, str(ROOT / 'scripts/migrate.py'), '--owner', db_owner,
                  '--project', pg_project], env)
             credential_key = db_owner.upper() + "_RUNTIME_PASSWORD"
@@ -90,11 +91,11 @@ def main(owner="api"):
         with (ROOT / 'infra/kafka/init-topics.sh').open() as script:
             run(kafka + ['exec', '-T', 'kafka', 'timeout', '90', 'bash', '-s', '--', prefix],
                 env, timeout=100, stdin=script)
-        env['MATCHER_PROCESS_INTEGRATION' if matcher else ('MARKET_DATA_PROCESS_INTEGRATION' if market else 'API_PROCESS_INTEGRATION')] = '1'
+        env['NOTIFICATIONS_PROCESS_INTEGRATION' if notifications else ('MATCHER_PROCESS_INTEGRATION' if matcher else ('MARKET_DATA_PROCESS_INTEGRATION' if market else 'API_PROCESS_INTEGRATION'))] = '1'
         env.update(POSTGRES_TEST='1',
                    KAFKA_TEST_BROKER='127.0.0.1:' + env['KAFKA_PORT'],
                    KAFKA_TEST_PREFIX=prefix)
-        if market or matcher:
+        if market or matcher or notifications:
             run(['go', 'test', '-race', '-count=1', '-v', '-timeout', '30s',
                  './internal/testutil/apiprocess'], env, timeout=60)
         # Matcher runs crash/startup plus graceful/recovery/fault scenarios in
