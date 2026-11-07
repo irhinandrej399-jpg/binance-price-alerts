@@ -202,7 +202,7 @@
 | [OPS-049](tickets/OPS-049.md) | Подготовить disposable окружение процесса market-data | SET-009, MKT-017, MKT-013, OPS-047, DEC-010 | done |
 | [OPS-050](tickets/OPS-050.md) | Открыть границу каждой попытки WebSocket reconnect | MKT-011, MKT-012 | done |
 | [OPS-051](tickets/OPS-051.md) | Настроить стартовую HTTP-пробу process harness | OPS-047, OPS-049, OPS-006 | done |
-| [OPS-048](tickets/OPS-048.md) | Собрать минимальный процесс market-data | MKT-005, MKT-017, MKT-013, MKT-014, MKT-011, OPS-006, DEC-010, OPS-049, OPS-050, OPS-051 | planned |
+| [OPS-048](tickets/OPS-048.md) | Собрать минимальный процесс market-data | MKT-005, MKT-017, MKT-013, MKT-014, MKT-011, OPS-006, DEC-010, OPS-049, OPS-050, OPS-051 | done |
 | [OPS-009](tickets/OPS-009.md) | Корректно остановить market-data | MKT-013, MKT-014, MKT-015, MKT-016, OPS-048 | planned |
 | [OPS-010](tickets/OPS-010.md) | Корректно остановить matcher | MAT-005 | planned |
 | [OPS-011](tickets/OPS-011.md) | Корректно остановить notification worker | NTF-012, NTF-013 | planned |

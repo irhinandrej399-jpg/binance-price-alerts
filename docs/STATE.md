@@ -1,13 +1,14 @@
 # Текущее состояние проекта
 
-Обновлено: 6 ноября 2026. Это краткая навигация для новой сессии. Статусы живут в карточках, результаты — в их журнале, решения — в ADR; фактические файлы и проверки подтверждают сводку.
+Обновлено: 7 ноября 2026. Это краткая навигация для новой сессии. Статусы живут в карточках, результаты — в их журнале, решения — в ADR; фактические файлы и проверки подтверждают сводку.
 
 ## Активная работа
 
 - Активная реализация: нет. Незавершённые raw/code исследований сохранены по DEC-010; kernel/capacity квалификация локальный запуск не блокирует.
-- Последний завершённый тикет: [OPS-051](backlog/tickets/OPS-051.md), [стартовая HTTP-проба process harness](../internal/testutil/apiprocess/README.md). Config.StartupProbePath выбирает локальный endpoint, default /readyz; /healthz допускает проверку честного readiness 503/unconfirmed. Целевые и общая race-регрессия/vet/build прошли; DB/Kafka opt-in не запускались. Далее повторить проверку OPS-048.
-- Предыдущий завершённый тикет: [OPS-050](backlog/tickets/OPS-050.md), [подготовка попытки WebSocket](../internal/marketdata/stream/README.md). ReconnectPrepared синхронно готовит отдельные callbacks до каждого dial; ошибки prepare/disconnect terminal. Общий retry/rotation/scheduler сохранён, WS/fake-clock и общая race-регрессия/vet/build прошли. Runtime/SQL подключить в OPS-048.
-- Предыдущий завершённый тикет: [OPS-049](backlog/tickets/OPS-049.md), [disposable market-data process environment](../internal/testutil/marketprocess/README.md). Общий runner/lifecycle OPS-047, только market_data DSN/migrations, raw WS child, canonical outbox и read_committed bytes. Реальные market-data/API и аварийный owner-exit cleanup прошли; общая race-регрессия/vet/build прошли. Продуктовый runtime — OPS-048.
+- Последний завершённый тикет: [OPS-048](backlog/tickets/OPS-048.md), [минимальный raw trade процесс](../cmd/market-data/README.md). Durable поколение до каждого dial, Decode/Accept/outbox/relay и собственные health/Ping подключены. Реальные PostgreSQL/Kafka process/race проверки: исходные bytes, reconnect/restart, SQL fencing, startup и terminal relay — PASS; общая race-регрессия/vet/build PASS, cleanup подтверждён. Feed честно unconfirmed; graceful SIGTERM — далее OPS-009.
+- Предыдущий завершённый тикет: [OPS-051](backlog/tickets/OPS-051.md), [стартовая HTTP-проба process harness](../internal/testutil/apiprocess/README.md). Config.StartupProbePath выбирает локальный endpoint, default /readyz; /healthz допускает проверку честного readiness 503/unconfirmed. Целевые и общая race-регрессия/vet/build прошли; DB/Kafka opt-in не запускались. Подключено в OPS-048.
+- Предыдущий завершённый тикет: [OPS-050](backlog/tickets/OPS-050.md), [подготовка попытки WebSocket](../internal/marketdata/stream/README.md). ReconnectPrepared синхронно готовит отдельные callbacks до каждого dial; ошибки prepare/disconnect terminal. Общий retry/rotation/scheduler сохранён, WS/fake-clock и общая race-регрессия/vet/build прошли. Runtime/SQL подключены в OPS-048.
+- Предыдущий завершённый тикет: [OPS-049](backlog/tickets/OPS-049.md), [disposable market-data process environment](../internal/testutil/marketprocess/README.md). Общий runner/lifecycle OPS-047, только market_data DSN/migrations, raw WS child, canonical outbox и read_committed bytes. Реальные market-data/API и аварийный owner-exit cleanup прошли; общая race-регрессия/vet/build прошли. Минимальный продуктовый runtime завершён в OPS-048.
 - Предыдущий завершённый тикет: [OPS-008](backlog/tickets/OPS-008.md), [health/readiness notifications](../internal/notifications/health/README.md). HTTP учитывает инициализацию, свою durable jobs БД и Running worker; SQL-ошибка/выход worker снимают readiness, Telegram 429 не влияет на liveness. Целевые и общая race-регрессия, vet/build прошли; PostgreSQL/Kafka opt-in не запускались. cmd/notifications пока каркас, runtime wiring впереди.
 - Предыдущий завершённый тикет: [OPS-007](backlog/tickets/OPS-007.md), [health/readiness matcher](../internal/matcher/health/README.md). HTTP учитывает инициализацию, свою БД и Status реплики (назначение/recovery/готовая view). Наблюдаемы durable C, последний API head и nullable lag; пустой старт/частичный snapshot не готовы. Целевые и общая race-регрессия, vet/build прошли; PostgreSQL/Kafka opt-in не запускались. Runtime matcher ещё не подключён.
 - Предыдущий завершённый тикет: [OPS-006](backlog/tickets/OPS-006.md), [health/readiness market-data](../internal/marketdata/health/README.md). HTTP-компонент учитывает инициализацию, собственную БД и явное состояние feed; возраст сделки и исторический gap не заменяют текущее состояние. Reconnect не ломает liveness. Полный PostgreSQL/race, общая race-регрессия, vet/build прошли; disposable стенд удалён. Runtime market-data пока не подключён.
@@ -103,7 +104,7 @@
 - Market-data storage: [контракт](../internal/marketdata/storage/README.md), миграция `migrations/market_data/001_quotes_outbox.sql`. BeginGeneration → SetStatus/Accept, Latest, Claim/MarkPublished; gap сохраняется исторически. Перед чтением после рестарта runtime обязан начать новое поколение. `check_postgres.py` проверяет раздельные БД API/market_data на disposable стенде; рабочая миграция этой сессией не применялась.
 
 - [Согласованные требования](requirements.md).
-- WebSocket transport: `internal/marketdata/stream.Read` и `ReadWithCommands(ctx, endpoint, config, commands, handle)`, gorilla/websocket v1.5.3. Общий бюджет команд/pong по умолчанию 5/с, ограниченная очередь pong, отмена и ожидание writer при выходе. `Reconnect` восстанавливает URL/начальные команды после сбоя, сообщает разрыв и ждёт bounded backoff с jitter. Синхронные callbacks должны учитывать context. Ротация через 23 часа/serverShutdown реализована в Reconnect и Reconciler. `NewReconciler`/`Reconcile`/`Close` управляют планом каталога, ACK и повторами; runtime wiring ещё отсутствует.
+- WebSocket transport: `internal/marketdata/stream.Read` и `ReadWithCommands(ctx, endpoint, config, commands, handle)`, gorilla/websocket v1.5.3. Общий бюджет команд/pong по умолчанию 5/с, ограниченная очередь pong, отмена и ожидание writer при выходе. `Reconnect` восстанавливает URL/начальные команды после сбоя, сообщает разрыв и ждёт bounded backoff с jitter. Синхронные callbacks должны учитывать context. Ротация через 23 часа/serverShutdown реализована в Reconnect и Reconciler. `NewReconciler`/`Reconcile`/`Close` управляют планом каталога, ACK и повторами; динамический runtime ещё отсутствует. Минимальный фиксированный raw поток подключён через ReconnectPrepared в OPS-048.
 - [Карточки и зависимости](backlog/README.md), включая разделение крупных задач.
 - [Единая последовательность выполнения](backlog/ORDER.md) — от первого тикета к последнему.
 - [Рекомендации моделей и reasoning](backlog/MODELS.md); для DEC-001 — GPT-6.1 Sol · Medium.
@@ -119,8 +120,8 @@
 - Доменный пакет `internal/domain/subscription` и unit-тесты — чистые переходы жизненного цикла; контракт эффектов и обязанности будущего хранилища описаны в DOM-004.
 - Локальный PostgreSQL: [запуск и проверка](../infra/postgres/README.md), compose и init в `infra/postgres/`; рабочий проект `binance-storage` настроен на loopback:5432; при проверке SET-009 контейнер остановлен. Локальные пароли в игнорируемом `.env`; миграция аккаунтов API существует, в рабочую БД этой сессией не применялась. Runner — `python3 scripts/migrate.py --owner <owner>`, отдельно от runtime; [контракт](../migrations/README.md).
 - Подключение Go к PostgreSQL: `internal/platform/postgres.Open`, драйвер pgx v5.11.0. `internal/testutil/postgrestest.Open(t)` и `scripts/check_postgres.py` проверяют реальные транзакции на disposable проекте binance-go-check; обычный go test пропускает opt-in тесты. Первый прикладной репозиторий — `internal/api/account`; схема аккаунтов применяется runner на тестовом стенде.
-- Локальная Kafka: [запуск и проверка](../infra/kafka/README.md), Compose/init и изолированный smoke-check в `infra/kafka/`. Рабочий проект `binance-broker` настроен на loopback:9092, префикс topics `local`; при проверке SET-009 контейнер уже давно остановлен (Exited 143). Обычный volume без отдельной квоты; нагрузочный override требует отдельную ФС 40 GiB. Producer PriceObserved: [marketdata/publish](../internal/marketdata/publish/README.md); consumers/runtime отсутствуют. Основа Go-producer — [internal/platform/kafka](../internal/platform/kafka/README.md): New(ctx, Config) и Publish(ctx, ...Record), stable transactional.id, классификация fencing/неизвестного commit. `bash infra/kafka/verify-go.sh` поднимает и удаляет уникальный disposable-стенд; fault proxy — `internal/testutil/kafkafault`.
-- Общий конверт `internal/contracts/event`: JSON-метаданные, версия 1, Validate и типизированные ошибки; SubscriptionChanged — `internal/contracts/subscriptionchanged`; PriceObserved — `internal/contracts/priceobserved`; AlertTriggered — `internal/contracts/alerttriggered`; все четыре схемы готовы; Kafka publish PriceObserved готов, runtime отсутствует.
+- Локальная Kafka: [запуск и проверка](../infra/kafka/README.md), Compose/init и изолированный smoke-check в `infra/kafka/`. Рабочий проект `binance-broker` настроен на loopback:9092, префикс topics `local`; при проверке SET-009 контейнер уже давно остановлен (Exited 143). Обычный volume без отдельной квоты; нагрузочный override требует отдельную ФС 40 GiB. Producer PriceObserved: [marketdata/publish](../internal/marketdata/publish/README.md); минимальный producer runtime подключён в OPS-048, полный runtime потребителей впереди. Основа Go-producer — [internal/platform/kafka](../internal/platform/kafka/README.md): New(ctx, Config) и Publish(ctx, ...Record), stable transactional.id, классификация fencing/неизвестного commit. `bash infra/kafka/verify-go.sh` поднимает и удаляет уникальный disposable-стенд; fault proxy — `internal/testutil/kafkafault`.
+- Общий конверт `internal/contracts/event`: JSON-метаданные, версия 1, Validate и типизированные ошибки; SubscriptionChanged — `internal/contracts/subscriptionchanged`; PriceObserved — `internal/contracts/priceobserved`; AlertTriggered — `internal/contracts/alerttriggered`; все четыре схемы готовы; Kafka publish PriceObserved и минимальный raw runtime готовы в OPS-048; полный runtime четырёх сервисов впереди.
 - Go CI: `.github/workflows/go.yml`; команды воспроизведения — в README. Публикация коммита отдельно запустит первую проверку на GitHub.
 - Локальный Git-репозиторий: основная ветка `main`. SHA текущего снимка определяется через `git log -1`; его не нужно дублировать внутри самого коммита.
 - GitHub: [irhinandrej399-jpg/binance-price-alerts](https://github.com/irhinandrej399-jpg/binance-price-alerts), публичный. `origin` указывает на этот репозиторий; публикация текущей main поручена пользователем. Состояние синхронизации проверяется через `git status -sb` и SHA удалённой ветки.
@@ -136,22 +137,19 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-[OPS-048](backlog/tickets/OPS-048.md): повторить сессионную проверку минимального
-процесса raw trade. OPS-051 завершил выбор стартовой пробы: использовать
-Config.StartupProbePath=/healthz и отдельно проверять /readyz=503/unconfirmed.
-OPS-050 done: ReconnectPrepared позволяет BeginGeneration до каждого dial
-и возвращает ошибки Disconnected. OPS-048 остаётся planned, runtime не начат.
-Окружение [OPS-049](backlog/tickets/OPS-049.md) готово: общий runner OPS-047
-с market_data credentials, fixture/WS и проверкой child/cleanup; интерфейс —
-[marketprocess](../internal/testutil/marketprocess/README.md). После OPS-048 —
-OPS-009 с SIGTERM/publish/reconnect. OPS-009 остаётся planned до готового
-executable. Полный каталог/RPC runtime для E2E этим ещё не готов.
+[OPS-009](backlog/tickets/OPS-009.md): сессионная проверка graceful shutdown
+market-data на готовом минимальном [executable OPS-048](../cmd/market-data/README.md).
+Использовать OPS-049 и StartupProbePath=/healthz; отдельно проверять
+/readyz=503/unconfirmed. OPS-048 проверил durable trade/read_committed bytes,
+поколения/reconnect/restart и terminal выход владельца. SIGTERM пока обычное
+завершение ОС; drain/publish/reconnect при остановке ещё не реализованы.
+Полный динамический каталог и внутренние RPC для E2E не подключены.
 OPS-008 завершил HTTP-компонент health/readiness notifications и Worker.Running;
 listener, Ping своей БД и startup/shutdown инициализацию подключить при сборке runtime.
 OPS-007 завершил HTTP-компонент matcher и Status проекции/реплики; listener,
 инициализация и wiring matcherPool.Ping/replica.Status нужны при сборке runtime.
-OPS-006 завершил HTTP-компонент health/readiness market-data; listener и aggregate
-feedSnapshot должны быть подключены при сборке runtime перед E2E-002.
+OPS-006 завершил HTTP-компонент health/readiness market-data; listener и snapshot одного фиксированного raw потока подключены в OPS-048;
+полный план feed для E2E-002 ещё впереди.
 OPS-013 завершил общую квоту входа и регистрации и подключил оба endpoint в cmd/api.
 Предел тела публичного запроса завершён в OPS-012 и подключён к минимальному API.
 Минимальный [cmd/api](../cmd/api/README.md) подключает регистрацию/вход с общей квотой, HTTP-отмену/auth/session,
@@ -180,7 +178,7 @@ NTF-006 рассчитывает retry Plan и бюджет доказанных
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show OPS-048` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show OPS-009` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.
