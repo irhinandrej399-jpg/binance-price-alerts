@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strconv"
 
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/sourcebinding"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -26,9 +27,11 @@ func (s *Store) Recover(ctx context.Context) (Recovery, error) {
 	var topic *string
 	var partition *int32
 	var complete bool
-	err := s.pool.QueryRow(ctx, `SELECT c.snapshot_id,c.journal_c::text,c.next_offset,c.topic,c.partition,g.boundary_c::text,g.complete
+	var cluster *string
+	var tid []byte
+	err := s.pool.QueryRow(ctx, `SELECT c.snapshot_id,c.journal_c::text,c.next_offset,c.topic,c.partition,g.boundary_c::text,g.complete,c.source_cluster,c.source_topic_id
  FROM app.matcher_checkpoints c JOIN app.matcher_snapshot_generations g ON g.snapshot_id=c.snapshot_id
- WHERE c.projection_id=$1`, s.id).Scan(&r.SnapshotID, &c, &r.Checkpoint.NextOffset, &topic, &partition, &originC, &complete)
+ WHERE c.projection_id=$1`, s.id).Scan(&r.SnapshotID, &c, &r.Checkpoint.NextOffset, &topic, &partition, &originC, &complete, &cluster, &tid)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Recovery{}, ErrRecovery
 	}
@@ -55,6 +58,15 @@ func (s *Store) Recover(ctx context.Context) (Recovery, error) {
 			return Recovery{}, ErrRecovery
 		}
 		r.Topic, r.Partition = *topic, *partition
+	}
+	r.Checkpoint.Topic = r.Topic
+	r.Checkpoint.Partition = r.Partition
+	r.Checkpoint.Source, err = sourcebinding.Decode(cluster, tid, topic)
+	if err != nil {
+		return Recovery{}, err
+	}
+	if err = sourcebinding.Check(s.source, r.Checkpoint.Source, topic != nil); err != nil {
+		return Recovery{}, err
 	}
 	return r, nil
 }

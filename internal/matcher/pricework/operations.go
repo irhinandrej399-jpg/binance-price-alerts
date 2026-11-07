@@ -11,7 +11,10 @@ import (
 
 	observed "github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/priceobserved"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/fencing"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/sourcebinding"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func (s *Store) valid(key string) bool {
@@ -68,6 +71,21 @@ func (s *Store) Accept(ctx context.Context, in Input) error {
 		return err
 	}
 
+	if s.source != nil {
+		if err = s.checkPosition(in); err != nil {
+			return err
+		}
+		src := s.source
+		if err = src.Validate(); err != nil {
+			return err
+		}
+		if s.grant == nil || src.Topic != s.grant.Identity.Topic {
+			return kafkasource.ErrMismatch
+		}
+		if _, err = tx.Exec(ctx, `SELECT app.matcher_prices_source($1,$2,$3,$4,$5)`, s.scope, src.Topic, s.grant.Identity.Partition, src.ClusterID, src.TopicID[:]); err != nil {
+			return sourcebinding.Error(err)
+		}
+	}
 	if err = s.authorizeInput(ctx, tx, in, false); err != nil {
 		// Exact acceptance retry may refer to an older generation, whose identity
 		// remains immutable audit data. Never insert new work from an old view.
@@ -128,6 +146,9 @@ func (s *Store) Get(ctx context.Context, key string) (Work, error) {
 		return w, err
 	}
 	if err = json.Unmarshal(body, &w.Input); err != nil {
+		return w, err
+	}
+	if err = s.authorizeSource(ctx, tx, w.Input); err != nil {
 		return w, err
 	}
 	if replacement != nil {
@@ -312,23 +333,37 @@ func (s *Store) Complete(ctx context.Context, key string, replacement *observed.
 		}
 	}
 	if prefix != nil {
+		if s.source != nil && (prefix.Source != *s.source || in.Position == nil || in.Position.Source == nil || prefix.Source != *in.Position.Source) {
+			return kafkasource.ErrMismatch
+		}
 		p := in.Position
 		if p == nil || prefix.Topic != p.Topic || prefix.Partition != p.Partition || prefix.From < 0 || prefix.From > p.Offset || prefix.Next <= p.Offset {
 			return ErrInvalid
 		}
-		if _, err = tx.Exec(ctx, `INSERT INTO app.matcher_price_checkpoints(scope,topic,partition,next_offset) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`, s.scope, prefix.Topic, prefix.Partition, prefix.From); err != nil {
-			return err
-		}
-		var current int64
-		if err = tx.QueryRow(ctx, `SELECT next_offset FROM app.matcher_price_checkpoints WHERE scope=$1 AND topic=$2 AND partition=$3 FOR UPDATE`, s.scope, prefix.Topic, prefix.Partition).Scan(&current); err != nil {
-			return err
-		}
-		if current < prefix.Next {
-			if current != prefix.From {
-				return ErrConflict
+		if s.source != nil {
+			_, err = tx.Exec(ctx, `SELECT app.matcher_prices_advance($1,$2,$3,$4,$5,$6,$7)`, s.scope, prefix.Topic, prefix.Partition, prefix.Source.ClusterID, prefix.Source.TopicID[:], prefix.From, prefix.Next)
+			if err != nil {
+				var pe *pgconn.PgError
+				if errors.As(err, &pe) && pe.Code == "P0612" {
+					return errors.Join(ErrConflict, err)
+				}
+				return sourcebinding.Error(err)
 			}
-			if _, err = tx.Exec(ctx, `UPDATE app.matcher_price_checkpoints SET next_offset=$4 WHERE scope=$1 AND topic=$2 AND partition=$3`, s.scope, prefix.Topic, prefix.Partition, prefix.Next); err != nil {
+		} else {
+			if _, err = tx.Exec(ctx, `INSERT INTO app.matcher_price_checkpoints(scope,topic,partition,next_offset) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`, s.scope, prefix.Topic, prefix.Partition, prefix.From); err != nil {
 				return err
+			}
+			var current int64
+			if err = tx.QueryRow(ctx, `SELECT next_offset FROM app.matcher_price_checkpoints WHERE scope=$1 AND topic=$2 AND partition=$3 FOR UPDATE`, s.scope, prefix.Topic, prefix.Partition).Scan(&current); err != nil {
+				return err
+			}
+			if current < prefix.Next {
+				if current != prefix.From {
+					return ErrConflict
+				}
+				if _, err = tx.Exec(ctx, `UPDATE app.matcher_price_checkpoints SET next_offset=$4 WHERE scope=$1 AND topic=$2 AND partition=$3`, s.scope, prefix.Topic, prefix.Partition, prefix.Next); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -346,17 +381,84 @@ func (s *Store) Complete(ctx context.Context, key string, replacement *observed.
 // Checkpoint returns the independent prices transport prefix, or pgx.ErrNoRows
 // before an explicitly asserted prefix has committed. No offset is inferred.
 func (s *Store) Checkpoint(ctx context.Context, topic string, partition int32) (int64, error) {
+	cp, err := s.ReadCheckpoint(ctx, topic, partition)
+	return cp.NextOffset, err
+}
+func (s *Store) ReadCheckpoint(ctx context.Context, topic string, partition int32) (TransportCheckpoint, error) {
+	var cp TransportCheckpoint
 	if strings.TrimSpace(s.scope) == "" || strings.TrimSpace(topic) == "" || partition < 0 {
-		return 0, ErrInvalid
+		return cp, ErrInvalid
 	}
-	var next int64
-	err := s.pool.QueryRow(ctx, `SELECT next_offset FROM app.matcher_price_checkpoints WHERE scope=$1 AND topic=$2 AND partition=$3`, s.scope, topic, partition).Scan(&next)
-	return next, err
+	var cluster, st *string
+	var tid []byte
+	err := s.pool.QueryRow(ctx, `SELECT c.topic,c.partition,c.next_offset,s.source_cluster,s.source_topic_id,s.topic FROM app.matcher_price_checkpoints c LEFT JOIN app.matcher_price_sources s ON s.scope=c.scope AND s.topic=c.topic AND s.partition=c.partition WHERE c.scope=$1 AND c.topic=$2 AND c.partition=$3`, s.scope, topic, partition).Scan(&cp.Topic, &cp.Partition, &cp.NextOffset, &cluster, &tid, &st)
+	if err != nil {
+		return cp, err
+	}
+	cp.Source, err = sourcebinding.Decode(cluster, tid, st)
+	if err != nil {
+		return cp, err
+	}
+	return cp, sourcebinding.Check(s.source, cp.Source, true)
+}
+func (s *Store) checkPosition(in Input) error {
+	if s.source == nil {
+		return nil
+	}
+	if in.Position == nil {
+		return nil
+	}
+	if in.Position.Source == nil {
+		return sourcebinding.ErrUnbound
+	}
+	if err := in.Position.Source.Validate(); err != nil {
+		return err
+	}
+	if *in.Position.Source != *s.source || in.Position.Topic != s.source.Topic {
+		return kafkasource.ErrMismatch
+	}
+	return nil
+}
+func (s *Store) authorizeSource(ctx context.Context, tx pgx.Tx, in Input) error {
+	if err := s.checkPosition(in); err != nil {
+		return err
+	}
+	var cluster, topic *string
+	var tid []byte
+	var partition int32
+	err := tx.QueryRow(ctx, `SELECT source_cluster,source_topic_id,topic,partition FROM app.matcher_price_sources WHERE scope=$1`, s.scope).Scan(&cluster, &tid, &topic, &partition)
+	if errors.Is(err, pgx.ErrNoRows) {
+		if s.source != nil {
+			return sourcebinding.ErrUnbound
+		}
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	src, err := sourcebinding.Decode(cluster, tid, topic)
+	if err != nil {
+		return err
+	}
+	if s.source == nil {
+		return sourcebinding.ErrUnbound
+	}
+	if err = sourcebinding.Check(s.source, src, true); err != nil {
+		return err
+	}
+	if in.Position != nil && in.Position.Partition != partition {
+		return kafkasource.ErrMismatch
+	}
+	return nil
 }
 
 // Resuming existing work keeps its original projection as audit. Only new work
 // must use the assignment's current generation; transport identity stays fixed.
 func (s *Store) authorizeInput(ctx context.Context, tx pgx.Tx, in Input, resume bool) error {
+	if err := s.authorizeSource(ctx, tx, in); err != nil {
+		return err
+	}
+
 	if s.grant == nil {
 		return fencing.Projection(ctx, tx, in.ProjectionID, nil)
 	}

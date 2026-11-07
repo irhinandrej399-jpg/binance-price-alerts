@@ -100,3 +100,30 @@ SQL-тесты явно SKIP. Consumer, runtime, нагрузка,
 Pending/Get сохраняются при смене token; исходная ProjectionID принятой работы
 остаётся аудитом. Точный протокол Assign/Current/Revoke, новая view, Latest и
 полномочия полной проекции — [fencing](../fencing/README.md).
+
+## Kafka provenance — OPS-061
+
+`NewSourceBound(pool, grant, source)` использует прежний стабильный grant.Scope,
+а не projection/snapshot/token. `Input.Position.Source` — обязательный указатель
+на проверенную identity для transport work; nil Position остаётся Latest без
+offset. Нельзя заполнить Source текущей конфигурацией у восстановленного Input.
+`Prefix.Source` должен совпасть с durable Input и ожидаемым источником.
+
+Первый Accept связывает чистый scope с Source/partition одной транзакцией с
+immutable Input и кандидатами. Binding сам по себе не является cursor. Scope
+с прежними work/checkpoint без provenance отклоняется с ErrUnbound; данные не
+меняются. Get/Accept/Record/Complete проверяют source, включая terminal повторы
+и работу старой projection после takeover. Pending перечисляет ключи, Get перед
+возобновлением проверяет provenance в одной MVCC view с исходами. После takeover
+историческая ProjectionID, частичные исходы и canonical trigger_id сохраняются.
+
+Complete фиксирует состояние и CAS Prefix атомарно, ack идёт после commit.
+`ReadCheckpoint(ctx, topic, partition)` возвращает Source/Topic/Partition/NextOffset
+одним SELECT; до первого Complete с Prefix — pgx.ErrNoRows, без offset из C.
+Чужой источник даёт ErrMismatch, legacy cursor — sourcebinding.ErrUnbound.
+Прежний Checkpoint возвращает только int64 для совместимости; exporter/runtime
+должны использовать ReadCheckpoint и проверять Source. Это read-only API,
+назначение и fencing он не выдаёт. SQL/commit error не разрешает ack.
+
+Миграция/права и безопасный запуск — [sourcebinding](../sourcebinding/README.md).
+Runtime wiring/process recovery — OPS-062; автоматического переноса нет.

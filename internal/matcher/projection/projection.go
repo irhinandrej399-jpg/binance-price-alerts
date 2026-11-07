@@ -10,6 +10,8 @@ import (
 
 	changed "github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/subscriptionchanged"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/fencing"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/sourcebinding"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -21,18 +23,23 @@ var ErrSequence = errors.New("invalid projection sequence or transport")
 // The caller supplies the contiguous read_committed partition prefix; aborted
 // Kafka transactions can leave gaps in physical offsets.
 type Batch struct {
+	Source     kafkasource.Identity
 	Topic      string
 	Partition  int32
 	NextOffset int64
 	Events     [][]byte
 }
 type Checkpoint struct {
+	Source     *kafkasource.Identity
+	Topic      string
+	Partition  int32
 	C          uint64
 	NextOffset int64
 }
 type Store struct {
 	pool   *pgxpool.Pool
 	id     string
+	source *kafkasource.Identity
 	grants []fencing.Grant
 }
 
@@ -46,6 +53,20 @@ func New(pool *pgxpool.Pool, id string) *Store { return &Store{pool: pool, id: i
 func (s *Store) Handle(ctx context.Context, b Batch, ack func(context.Context, int64) error) error {
 	if ack == nil || strings.TrimSpace(s.id) == "" || strings.TrimSpace(b.Topic) == "" || b.Partition < 0 || b.NextOffset <= 0 || len(b.Events) == 0 {
 		return ErrSequence
+	}
+	if s.source != nil {
+		if b.Partition != 0 {
+			return ErrSequence
+		}
+		if err := s.source.Validate(); err != nil {
+			return err
+		}
+		if err := b.Source.Validate(); err != nil {
+			return err
+		}
+		if b.Source != *s.source || b.Topic != b.Source.Topic {
+			return kafkasource.ErrMismatch
+		}
 	}
 	changes, err := decodeTransaction(b.Events)
 	if err != nil {
@@ -61,16 +82,25 @@ func (s *Store) Handle(ctx context.Context, b Batch, ack func(context.Context, i
 	if err = s.authorize(ctx, tx); err != nil {
 		return err
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO app.matcher_checkpoints(projection_id,topic,partition) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, s.id, b.Topic, b.Partition); err != nil {
+	if s.source != nil {
+		if _, err = tx.Exec(ctx, `SELECT app.matcher_projection_source($1,$2,$3,$4,$5)`, s.id, b.Topic, b.Partition, b.Source.ClusterID, b.Source.TopicID[:]); err != nil {
+			return sourcebinding.Error(err)
+		}
+	} else if _, err = tx.Exec(ctx, `INSERT INTO app.matcher_checkpoints(projection_id,topic,partition) VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, s.id, b.Topic, b.Partition); err != nil {
 		return err
 	}
 	var ctext string
 	var topic *string
 	var partition *int32
 	var next int64
-	err = tx.QueryRow(ctx, `SELECT journal_c::text,next_offset,topic,partition FROM app.matcher_checkpoints WHERE projection_id=$1 FOR UPDATE`, s.id).Scan(&ctext, &next, &topic, &partition)
+	var cluster *string
+	var tid []byte
+	err = tx.QueryRow(ctx, `SELECT journal_c::text,next_offset,topic,partition,source_cluster,source_topic_id FROM app.matcher_checkpoints WHERE projection_id=$1 FOR UPDATE`, s.id).Scan(&ctext, &next, &topic, &partition, &cluster, &tid)
 	if err != nil {
 		return err
+	}
+	if s.source == nil && cluster != nil {
+		return sourcebinding.ErrUnbound
 	}
 	c, err := strconv.ParseUint(ctext, 10, 64)
 	if err != nil {
@@ -91,9 +121,13 @@ func (s *Store) Handle(ctx context.Context, b Batch, ack func(context.Context, i
 	if b.NextOffset > next {
 		next = b.NextOffset
 	}
-	_, err = tx.Exec(ctx, `UPDATE app.matcher_checkpoints SET journal_c=$2::numeric,next_offset=$3,topic=$4,partition=$5 WHERE projection_id=$1`, s.id, strconv.FormatUint(c, 10), next, b.Topic, b.Partition)
+	if s.source != nil {
+		_, err = tx.Exec(ctx, `SELECT app.matcher_projection_advance($1,$2,$3,$4,$5,$6::numeric,$7)`, s.id, b.Topic, b.Partition, b.Source.ClusterID, b.Source.TopicID[:], strconv.FormatUint(c, 10), next)
+	} else {
+		_, err = tx.Exec(ctx, `UPDATE app.matcher_checkpoints SET journal_c=$2::numeric,next_offset=$3,topic=$4,partition=$5 WHERE projection_id=$1`, s.id, strconv.FormatUint(c, 10), next, b.Topic, b.Partition)
+	}
 	if err != nil {
-		return err
+		return sourcebinding.Error(err)
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return err
@@ -106,17 +140,50 @@ func (s *Store) Handle(ctx context.Context, b Batch, ack func(context.Context, i
 
 // Checkpoint returns zero for a not-yet-created projection; it never initializes one.
 func (s *Store) Checkpoint(ctx context.Context) (Checkpoint, error) {
+	cp, err := s.readCheckpoint(ctx, s.pool)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Checkpoint{}, nil
+	}
+	return cp, err
+}
+
+type checkpointReader interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+func (s *Store) readCheckpoint(ctx context.Context, q checkpointReader) (Checkpoint, error) {
 	var cp Checkpoint
 	var c string
-	err := s.pool.QueryRow(ctx, `SELECT journal_c::text,next_offset FROM app.matcher_checkpoints WHERE projection_id=$1`, s.id).Scan(&c, &cp.NextOffset)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return cp, nil
-	}
+	var cluster, topic *string
+	var partition *int32
+	var tid []byte
+	err := q.QueryRow(ctx, `SELECT journal_c::text,next_offset,topic,partition,source_cluster,source_topic_id FROM app.matcher_checkpoints WHERE projection_id=$1`, s.id).Scan(&c, &cp.NextOffset, &topic, &partition, &cluster, &tid)
 	if err != nil {
 		return cp, err
 	}
 	cp.C, err = strconv.ParseUint(c, 10, 64)
-	return cp, err
+	if err != nil {
+		return cp, err
+	}
+	if topic != nil {
+		cp.Topic = *topic
+	}
+	if partition != nil {
+		cp.Partition = *partition
+	}
+	cp.Source, err = sourcebinding.Decode(cluster, tid, topic)
+	if err != nil {
+		return cp, err
+	}
+	return cp, sourcebinding.Check(s.source, cp.Source, topic != nil)
+}
+
+// NewSourceBound requires provenance on every Kafka batch. Snapshot/replay have
+// no transport cursor until the first Handle commits. Grants retain fencing.
+func NewSourceBound(pool *pgxpool.Pool, id string, grants []fencing.Grant, source kafkasource.Identity) *Store {
+	s := NewFenced(pool, id, grants)
+	s.source = &source
+	return s
 }
 
 // Get returns the full current after-image, including terminal tombstones.

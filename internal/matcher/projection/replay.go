@@ -233,11 +233,7 @@ func (s *Store) Walk(ctx context.Context, visit func(Image) error) (Checkpoint, 
 		return cp, err
 	}
 	defer tx.Rollback(context.Background())
-	var c string
-	if err = tx.QueryRow(ctx, `SELECT journal_c::text,next_offset FROM app.matcher_checkpoints WHERE projection_id=$1`, s.id).Scan(&c, &cp.NextOffset); err != nil {
-		return cp, err
-	}
-	cp.C, err = strconv.ParseUint(c, 10, 64)
+	cp, err = s.readCheckpoint(ctx, tx)
 	if err != nil {
 		return cp, err
 	}

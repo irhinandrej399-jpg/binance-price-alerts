@@ -146,3 +146,27 @@ after-image заменяет snapshot целиком, owner из прежнег�
 обходит уже защищённый ID. Snapshotload сохраняет изолированный immutable
 снимок без ценового offset; защищено его Initialize в изменяемую view.
 Протокол выдачи/отзыва и смены членства — [fencing](../fencing/README.md).
+
+## Kafka provenance — OPS-061
+
+`NewSourceBound(pool, projectionID, grants, source)` сохраняет прежний SQL
+fencing и требует `Batch.Source` (проверенную transport identity OPS-060).
+Topic обязан совпадать с Source.Topic; partition/offset остаются отдельно.
+`Checkpoint`, `Recover().Checkpoint` и `Walk` возвращают nullable `Source`,
+Topic/Partition и NextOffset в одной SQL/MVCC view. Nil Source при наличии
+transport означает legacy, а не текущую конфигурацию. Bound store отвергает
+такое чтение с `sourcebinding.ErrUnbound`; несовпадение — `kafkasource.ErrMismatch`.
+Ни чтение, ни конструктор не создают binding и не выдают полномочий.
+
+Initialize/SQL replay не создают Kafka cursor. Первый Handle связывает ещё не
+имеющую transport строку с Source, применяет after-images/C и NextOffset одной
+транзакцией. Повтор того же источника идемпотентен; другой ClusterID/TopicID
+отвергается даже при совпадающих topic/offset. Инициализация другого snapshot
+в той же projection остаётся запрещённой. Новая projection/snapshot получает
+собственную пустую транспортную позицию; прежний cursor не переобозначается.
+ApplyReplay изменяет C, сохраняя Source/NextOffset. SQL/commit error не вызывает ack.
+
+Миграция source binding оставляет существующие строки NULL, без backfill.
+Старые New/NewFenced обслуживают только unbound transport; Handle не подтверждает
+bound строку. Порядок безопасного запуска и SQL-права —
+[sourcebinding](../sourcebinding/README.md). Runtime wiring — OPS-062.

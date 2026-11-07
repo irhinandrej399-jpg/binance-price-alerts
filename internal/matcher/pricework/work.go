@@ -6,6 +6,7 @@ import (
 
 	observed "github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/priceobserved"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/fencing"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -16,6 +17,7 @@ var (
 )
 
 type Position struct {
+	Source    *kafkasource.Identity `json:",omitempty"`
 	Topic     string
 	Partition int32
 	Offset    int64
@@ -56,15 +58,17 @@ type Work struct {
 // Prefix is an explicit caller assertion that [From,Next) is a continuous,
 // durably handled read_committed prefix. Physical offsets may have Kafka gaps.
 type Prefix struct {
+	Source    kafkasource.Identity
 	Topic     string
 	Partition int32
 	From      int64
 	Next      int64
 }
 type Store struct {
-	pool  *pgxpool.Pool
-	scope string
-	grant *fencing.Grant
+	pool   *pgxpool.Pool
+	scope  string
+	source *kafkasource.Identity
+	grant  *fencing.Grant
 }
 
 func New(pool *pgxpool.Pool, scope string) *Store { return &Store{pool: pool, scope: scope} }
@@ -72,4 +76,20 @@ func New(pool *pgxpool.Pool, scope string) *Store { return &Store{pool: pool, sc
 // NewFenced binds the stable pricework scope to one durable SQL assignment.
 func NewFenced(pool *pgxpool.Pool, grant fencing.Grant) *Store {
 	return &Store{pool: pool, scope: grant.Scope, grant: &grant}
+}
+
+// NewSourceBound retains the assignment's stable scope across snapshots/takeover.
+func NewSourceBound(pool *pgxpool.Pool, grant fencing.Grant, source kafkasource.Identity) *Store {
+	s := NewFenced(pool, grant)
+	s.source = &source
+	return s
+}
+
+// TransportCheckpoint is one read-only SQL view. Binding without a cursor is not
+// exported as an offset; ReadCheckpoint returns pgx.ErrNoRows in that case.
+type TransportCheckpoint struct {
+	Source     *kafkasource.Identity
+	Topic      string
+	Partition  int32
+	NextOffset int64
 }
