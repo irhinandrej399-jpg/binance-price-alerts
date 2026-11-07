@@ -21,8 +21,10 @@ checkpoint используют тот же scope lock, поэтому не мо
 Pending/исходы не удаляются. Get читает binding и Input/исходы в одной MVCC view.
 Record/Complete проверяют immutable Position.Source, актуальный grant и прежнюю
 ProjectionID как audit. Complete фиксирует состояние и CAS Prefix атомарно;
-ReadCheckpoint объединяет source и cursor одним SELECT. Scope binding до cursor
-не разрешает cleaner удалять что-либо. Все SQL locks отпускаются до RPC/ack.
+ReadCheckpoint объединяет source и cursor одним SELECT. ReadScope (OPS-063)
+проверяет весь prices scope: ledger, любой исторический work и checkpoints одной
+SQL-view до выбора bootstrap, даже без cursor. Scope binding до cursor не разрешает
+cleaner удалять что-либо. Все SQL locks отпускаются до RPC/ack.
 Advisory hash collision только сериализует чужие scope, не смешивает данные.
 
 ## SQL граница и совместимость

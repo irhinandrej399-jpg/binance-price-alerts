@@ -127,3 +127,45 @@ Complete фиксирует состояние и CAS Prefix атомарно, a
 
 Миграция/права и безопасный запуск — [sourcebinding](../sourcebinding/README.md).
 Runtime wiring/process recovery — OPS-062; автоматического переноса нет.
+
+## Проверка всего scope до cursor — OPS-063
+
+`NewSourceBound(pool, grant, expected).ReadScope(ctx, topic, partition)` возвращает
+`ScopeProvenance{Source, HasWork, Checkpoint}`. Требуется валидный expected Source;
+`topic` должен совпасть с ним, partition неотрицательная. Legacy `New`/`NewFenced`
+без expected Source возвращают ErrIdentity. Неверные scope/topic/partition —
+ErrInvalid, несовпадение identity/topic/partition — ErrMismatch. Метод не проверяет
+актуальность grant: чтение не выдаёт полномочий; после takeover оно доступно и
+старому владельцу для диагностики.
+
+Один SELECT видит ledger, наличие **любого** work (pending/completed/superseded,
+Latest с nil Position тоже) и checkpoints **всего** scope в одной MVCC view.
+Нет ledger, work и checkpoints — успешный пустой результат, Source=nil.
+Есть work/checkpoint без ledger — ErrUnbound, включая checkpoint иной partition.
+Есть ledger — identity и partition сверяются с expected, даже если cursor ещё
+не существует. Чужой checkpoint в bound scope также отклоняется. SQL/context
+ошибка возвращается явно; результат при ошибке использовать нельзя.
+
+`Source!=nil, Checkpoint==nil` означает связанный scope без подтверждённого
+transport offset; HasWork отличает ledger без работ от исторического work.
+Только `Checkpoint!=nil` несёт durable Source/Topic/Partition/NextOffset.
+Метод не записывает binding и не синтезирует offset. Прежний ReadCheckpoint
+сохраняет pgx.ErrNoRows при отсутствии cursor и сам по себе не разрешает bootstrap.
+Ledger служит доказательством provenance work по атомарному протоколу OPS-061;
+метод не назначает source отдельным старым строкам и не выполняет backfill.
+
+В OPS-062 в `replica.prepare`, после Assign и до публикации prepared/readiness:
+создать NewSourceBound с прежним grant.Scope и доверенным prices Source, вызвать
+ReadScope для назначенной partition. Любая ошибка прерывает prepare и отзывает
+полученные grants через имеющийся cleanup. При Checkpoint!=nil передать в
+PrepareSource позицию **из результата SQL**, включая durable Source; при nil
+Checkpoint использовать только явно настроенный caller bootstrap. Пустота либо
+наличие binding не задаёт offset. Затем Pending/Get восстанавливают работу с её
+исходной provenance; новый snapshot/C не меняет это правило. Применение здесь
+описано для следующего тикета, runtime ещё не подключён.
+
+ReadScope ничего не резервирует: сразу после пустого чтения конкурентный legacy
+writer может первым записать work. Accept всё равно должен атомарно отказать
+ErrUnbound; при смене Source — ErrMismatch, после takeover — ErrAuthority.
+Complete также сохраняет проверки source/fencing/CAS. Успешное чтение не является
+разрешением ack, обходом guards либо доказательством непрерывного Prefix.

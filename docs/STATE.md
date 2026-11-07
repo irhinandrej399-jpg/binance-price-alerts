@@ -4,8 +4,9 @@
 
 ## Активная работа
 
-- Активная реализация: нет. Следующий шаг — сессионная проверка OPS-062 (runtime source binding). OPS-061 завершён; cmd/matcher до подключения OPS-062 явно отказывает без sourcebound wiring. OPS-014/056 ждут OPS-062 и exporter/fixture OPS-057/058. Raw/code исследований по DEC-010 сохранены; kernel/capacity квалификация локальный запуск не блокирует.
-- Последний завершённый тикет: [OPS-061](backlog/tickets/OPS-061.md), [SQL source binding](../internal/matcher/sourcebinding/README.md). Sourcebound projection/pricework, атомарные binding/checkpoint и read-only provenance, SQL guard прежнего writer. PostgreSQL/race подтвердил сохранность данных до миграции/Pending/исходов, takeover/fencing, CAS, rollback/deferred commit и старый SQL без ack; общая race-регрессия/vet/build и cleanup PASS. Legacy не backfill-ится; runtime/process recovery — OPS-062.
+- Активная реализация: нет. Следующий шаг — сессионная проверка OPS-062 (runtime source binding). OPS-063 завершён: ReadScope проверяет весь prices scope даже без cursor; legacy и чужой источник отвергаются. cmd/matcher до OPS-062 явно отказывает без sourcebound wiring. OPS-014/056 ждут OPS-062 и exporter/fixture OPS-057/058. Исследования DEC-010 сохранены; локальный запуск они не блокируют.
+- Последний завершённый тикет: [OPS-063](backlog/tickets/OPS-063.md), [pricework.ReadScope](../internal/matcher/pricework/README.md). Одна MVCC view ledger/исторического work/checkpoints, без записи binding или синтетического offset. Полный PostgreSQL/race runner, общая race-регрессия/vet/build и cleanup PASS; takeover/guards и сохранность legacy/исходов подтверждены. Runtime — OPS-062.
+- Предыдущий завершённый тикет: [OPS-061](backlog/tickets/OPS-061.md), [SQL source binding](../internal/matcher/sourcebinding/README.md). Sourcebound projection/pricework, атомарные binding/checkpoint и read-only provenance, SQL guard прежнего writer. PostgreSQL/race подтвердил сохранность данных до миграции/Pending/исходов, takeover/fencing, CAS, rollback/deferred commit и старый SQL без ack; общая race-регрессия/vet/build и cleanup PASS. Legacy не backfill-ится; runtime/process recovery — OPS-062.
 - Предыдущий завершённый тикет: [OPS-060](backlog/tickets/OPS-060.md), [Kafka source identity](../internal/platform/kafkasource/README.md). Общие ClusterID/TopicID/Topic, metadata без auto-create и fetch-проверка до data/control dispatch на changefeed/direct/group. Resume/PrepareSource несут source-bound позиции; delete/recreate с совпадающими offsets отвергается. Disposable Kafka/race, общая race-регрессия/vet/build и cleanup PASS. SQL provenance и runtime — OPS-061/062; прежний matcher пока отказывает без нового контракта.
 - Предыдущий завершённый тикет: [OPS-011](backlog/tickets/OPS-011.md), [graceful notifications](../cmd/notifications/README.md). SIGTERM/SIGINT отменяют intake/worker/HTTP/RPC, final PendingWrite получает свежий context, callbacks/Kafka присоединяются до pool.Close; общий предел 20 с. Process/race PostgreSQL/Kafka подтвердил before/during/after HTTP, uncertain/success, final SQL fault → exit 1 и recovery, duplicate bytes/SQL/broker Prefix без новой отправки. Общая race-регрессия/vet/build PASS; cleanup подтверждён. Неподтверждённый Kafka leave может ждать session expiry; внешний дубль при неизвестном исходе остаётся возможным.
 - Предыдущий завершённый тикет: [OPS-055](backlog/tickets/OPS-055.md), [минимальный notifications](../cmd/notifications/README.md). Собраны intake/jobs/оба SQL limiter/Telegram/mTLS Admission/Result/report/handler/worker/health; явная конфигурация и terminal cleanup/join. Два PostgreSQL/Kafka process/race прогона: canonical bytes/IDs и SQL/broker Prefix, false Latest без HTTP, 429/unknown/success, SIGKILL/restart pending report без нового job/attempt/HTTP/outbox. Startup/terminal intake fault и cleanup подтверждены; общая race-регрессия/vet/build PASS. Graceful SIGTERM — OPS-011; риск внешнего дубля после неизвестной отправки сохраняется.
@@ -146,7 +147,15 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-[OPS-062](backlog/tickets/OPS-062.md): сессионная проверка runtime source binding.
+[OPS-062](backlog/tickets/OPS-062.md): повторить сессионную проверку runtime source binding.
+OPS-063 завершил ReadScope: весь prices scope проверяется до bootstrap даже
+без cursor. Пустой scope и bound history без Checkpoint допускают только явный
+caller bootstrap; legacy — ErrUnbound, чужая identity/partition — ErrMismatch.
+В replica.prepare после Assign вызвать NewSourceBound(...).ReadScope до readiness,
+при ошибке отозвать grants; реальную позицию с durable Source брать только из
+Checkpoint. Pending/Get и атомарные writer guards остаются обязательными.
+API и порядок — pricework README; исходный [контрпример](backlog/reproductions/OPS-062.md)
+сохранён. Подключение runtime в OPS-063 не выполнялось.
 OPS-060 завершил transport Identity/Position.Source/PrepareSource; OPS-061 — SQL:
 projection.NewSourceBound, Batch.Source, Checkpoint/Recover/Walk.Source и
 pricework.NewSourceBound, Position.Source, Prefix.Source, ReadCheckpoint.
