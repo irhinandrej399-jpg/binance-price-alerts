@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -50,13 +51,15 @@ const ServerName = "market.test"
 // Fixture must not be logged: it contains paths to ephemeral service secrets.
 // API SQL is used only by the parent. Every child environment is an allowlist.
 type Fixture struct {
-	PricesSource, ChangesSource kafkasource.Identity
-	Conn                        *grpc.ClientConn
-	Target, Broker, Prefix      string
-	CAFile, CertFile, KeyFile   string
-	api                         *pgxpool.Pool
-	quotes                      *quotes
-	delivery                    *deliveryGate
+	PricesSource, ChangesSource         kafkasource.Identity
+	Conn                                *grpc.ClientConn
+	Target, Broker, Prefix              string
+	CAFile, CertFile, KeyFile           string
+	RPCServerCertFile, RPCServerKeyFile string
+	RPCAddr                             string
+	api                                 *pgxpool.Pool
+	quotes                              *quotes
+	delivery                            *deliveryGate
 }
 
 type quotes struct {
@@ -96,12 +99,19 @@ func New(t testing.TB, api *pgxpool.Pool, broker, prefix string) *Fixture {
 			t.Fatal(err)
 		}
 	}
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.RPCAddr = lis.Addr().String()
+	_ = lis.Close()
 	ca := newAuthority(t)
 	server := ca.issue(t, nil, true, false)
 	client := ca.issue(t, []string{MatcherURI}, false, false)
 	dir := t.TempDir()
 	f.CAFile, f.CertFile, f.KeyFile = filepath.Join(dir, "ca.pem"), filepath.Join(dir, "matcher.pem"), filepath.Join(dir, "matcher.key")
-	for path, data := range map[string][]byte{f.CAFile: ca.pem, f.CertFile: client.cert, f.KeyFile: client.key} {
+	f.RPCServerCertFile, f.RPCServerKeyFile = filepath.Join(dir, "exporter.pem"), filepath.Join(dir, "exporter.key")
+	for path, data := range map[string][]byte{f.RPCServerCertFile: server.cert, f.RPCServerKeyFile: server.key, f.CAFile: ca.pem, f.CertFile: client.cert, f.KeyFile: client.key} {
 		if os.WriteFile(path, data, 0600) != nil {
 			t.Fatal("write ephemeral credentials")
 		}
@@ -135,6 +145,10 @@ func New(t testing.TB, api *pgxpool.Pool, broker, prefix string) *Fixture {
 // ChildEnv never copies the parent environment or the fixture's API DSN.
 func (f *Fixture) ChildEnv(matcherDSN string) map[string]string {
 	return map[string]string{
+		"MATCHER_RPC_ADDR":              f.RPCAddr,
+		"MATCHER_RPC_CERT_FILE":         f.RPCServerCertFile,
+		"MATCHER_RPC_KEY_FILE":          f.RPCServerKeyFile,
+		"CLEANER_SERVICE_URI":           MatcherURI,
 		"KAFKA_CLUSTER_ID":              f.PricesSource.ClusterID,
 		"PRICES_TOPIC_ID":               hex.EncodeToString(f.PricesSource.TopicID[:]),
 		"SUBSCRIPTION_CHANGES_TOPIC_ID": hex.EncodeToString(f.ChangesSource.TopicID[:]),

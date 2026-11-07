@@ -12,7 +12,7 @@ func validEnv() map[string]string {
 		offsets[p] = 17
 	}
 	b, _ := json.Marshal(offsets)
-	return map[string]string{"KAFKA_CLUSTER_ID": "test-cluster", "PRICES_TOPIC_ID": "01000000000000000000000000000000", "SUBSCRIPTION_CHANGES_TOPIC_ID": "02000000000000000000000000000000", "HTTP_ADDR": "127.0.0.1:8082", "MATCHER_DATABASE_URL": "postgres://matcher_runtime:secret@localhost/matcher", "KAFKA_BROKERS": "localhost:9092", "PRICES_TOPIC": "local-prices", "SUBSCRIPTION_CHANGES_TOPIC": "local-changes", "MATCHER_ENVIRONMENT": "local", "MATCHER_GROUP": "local-matcher", "MATCHER_REPLICA_ID": "one", "PRICES_BOOTSTRAP": string(b), "API_RPC_ADDR": "localhost:8085", "LATEST_RPC_ADDR": "localhost:8086", "RPC_SERVER_NAME": "market.test", "RPC_CA_FILE": "ca.pem", "RPC_CERT_FILE": "cert.pem", "RPC_KEY_FILE": "key.pem", "SNAPSHOT_TTL": "1h", "REPLAY_TTL": "1h", "HEAD_INTERVAL": "1s", "SNAPSHOT_PAGE_SIZE": "1000", "REPLAY_PAGE_SIZE": "100"}
+	return map[string]string{"KAFKA_CLUSTER_ID": "test-cluster", "PRICES_TOPIC_ID": "01000000000000000000000000000000", "SUBSCRIPTION_CHANGES_TOPIC_ID": "02000000000000000000000000000000", "HTTP_ADDR": "127.0.0.1:8082", "MATCHER_RPC_ADDR": "127.0.0.1:18082", "MATCHER_RPC_CERT_FILE": "server.pem", "MATCHER_RPC_KEY_FILE": "server.key", "CLEANER_SERVICE_URI": "spiffe://test/cleaner", "MATCHER_DATABASE_URL": "postgres://matcher_runtime:secret@localhost/matcher", "KAFKA_BROKERS": "localhost:9092", "PRICES_TOPIC": "local-prices", "SUBSCRIPTION_CHANGES_TOPIC": "local-changes", "MATCHER_ENVIRONMENT": "local", "MATCHER_GROUP": "local-matcher", "MATCHER_REPLICA_ID": "one", "PRICES_BOOTSTRAP": string(b), "API_RPC_ADDR": "localhost:8085", "LATEST_RPC_ADDR": "localhost:8086", "RPC_SERVER_NAME": "market.test", "RPC_CA_FILE": "ca.pem", "RPC_CERT_FILE": "cert.pem", "RPC_KEY_FILE": "key.pem", "SNAPSHOT_TTL": "1h", "REPLAY_TTL": "1h", "HEAD_INTERVAL": "1s", "SNAPSHOT_PAGE_SIZE": "1000", "REPLAY_PAGE_SIZE": "100"}
 }
 func TestConfig(t *testing.T) {
 	env := validEnv()
@@ -30,7 +30,7 @@ func TestConfig(t *testing.T) {
 		})
 	}
 	for _, tc := range []struct{ k, v string }{
-		{"KAFKA_CLUSTER_ID", " "}, {"PRICES_TOPIC_ID", "00000000000000000000000000000000"}, {"SUBSCRIPTION_CHANGES_TOPIC_ID", "bad"}, {"HTTP_ADDR", ":0"}, {"KAFKA_BROKERS", "localhost:9092,"}, {"PRICES_TOPIC", ".."}, {"SUBSCRIPTION_CHANGES_TOPIC", "local-prices"},
+		{"MATCHER_RPC_ADDR", ":0"}, {"CLEANER_SERVICE_URI", "cleaner"}, {"CLEANER_SERVICE_URI", "spiffe://test/cleaner?rights=all"}, {"KAFKA_CLUSTER_ID", " "}, {"PRICES_TOPIC_ID", "00000000000000000000000000000000"}, {"SUBSCRIPTION_CHANGES_TOPIC_ID", "bad"}, {"HTTP_ADDR", ":0"}, {"KAFKA_BROKERS", "localhost:9092,"}, {"PRICES_TOPIC", ".."}, {"SUBSCRIPTION_CHANGES_TOPIC", "local-prices"},
 		{"MATCHER_DATABASE_URL", "postgres://api_runtime:secret@localhost/api"}, {"API_RPC_ADDR", "http://localhost:8080"},
 		{"MATCHER_REPLICA_ID", " "}, {"REPLAY_TTL", "0s"}, {"SNAPSHOT_TTL", "25h"}, {"HEAD_INTERVAL", "0s"}, {"REPLAY_PAGE_SIZE", "1001"},
 		{"PRICES_BOOTSTRAP", "{}"},

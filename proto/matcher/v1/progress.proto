@@ -1,0 +1,31 @@
+syntax = "proto3";
+package matcher.v1;
+option go_package = "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/matcher/v1;matcherv1";
+
+// Every registered mandatory consumer must be queried by the cleaner. One
+// response proves only this exact consumer, never completeness of the registry.
+service MatcherProgress {
+  rpc ReadProgress(ReadProgressRequest) returns (ReadProgressResponse);
+}
+enum ConsumerKind {
+  CONSUMER_KIND_UNSPECIFIED = 0;
+  CONSUMER_KIND_PROJECTION = 1;
+  CONSUMER_KIND_PRICES = 2;
+}
+message ReadProgressRequest {
+  ConsumerKind kind = 1;
+  string consumer_id = 2; // exact durable projection_id or stable prices scope
+  string cluster_id = 3;
+  bytes topic_id = 4; // Kafka topic UUID, exactly 16 bytes
+  string topic = 5;
+  int32 partition = 6;
+}
+message ReadProgressResponse {
+  ConsumerKind kind = 1;
+  string consumer_id = 2;
+  string cluster_id = 3;
+  bytes topic_id = 4;
+  string topic = 5;
+  int32 partition = 6;
+  optional int64 next_offset = 7; // only SQL-confirmed; absent on any failure
+}

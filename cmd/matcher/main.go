@@ -18,11 +18,13 @@ import (
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/replayrpc"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/snapshotrpc"
 	pb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/api/v1"
+	progresspb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/matcher/v1"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/latest"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/changefeed"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/health"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/live"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/pricefeed"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/progressrpc"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/replica"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/snapshotload"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/sourcebinding"
@@ -114,6 +116,26 @@ func run(parent context.Context, c config) error {
 		return errors.New("matcher: database startup failed")
 	}
 	defer pool.Close()
+	rpcCert, e := read(c.rpcCert)
+	if e != nil {
+		return e
+	}
+	rpcKey, e := read(c.rpcKey)
+	if e != nil {
+		return e
+	}
+	opts, e := progressrpc.ServerOptions(rpcCert, rpcKey, ca, c.cleanerURI)
+	if e != nil {
+		return errors.New("matcher: invalid exporter credentials")
+	}
+	rpcListener, e := net.Listen("tcp", c.rpcAddr)
+	if e != nil {
+		return errors.New("matcher: RPC bind failed")
+	}
+	defer rpcListener.Close()
+	rpcServer := grpc.NewServer(opts...)
+	progresspb.RegisterMatcherProgressServer(rpcServer, progressrpc.NewServer(progressrpc.NewPostgres(pool)))
+	defer rpcServer.Stop()
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	r, e := replica.New(replica.Config{Pool: pool, ID: c.id, Environment: c.environment, Group: c.group, ChangesSource: c.changesSource, Prices: pricefeed.Config{Brokers: c.brokers, Topic: c.prices, Source: c.pricesSource}, Bootstrap: c.bootstrap, Replay: replayrpc.NewClient(api), Delivery: deliveryrpc.NewClient(api), Latest: latest.NewClient(quotes), Live: live.Config{ReplayTTL: c.replayTTL, HeadInterval: c.headInterval, PageSize: c.replayPage}, Changes: changes(c), Snapshot: func(ctx context.Context, id string) (string, error) {
@@ -128,10 +150,11 @@ func run(parent context.Context, c config) error {
 	defer h.SetInitialized(false)
 	server := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
 	defer server.Close()
-	results := make(chan error, 2)
+	results := make(chan error, 3)
 	go func() { results <- r.Run(ctx) }()
 	go func() { results <- server.Serve(listener) }()
-	remaining := 2
+	go func() { results <- rpcServer.Serve(rpcListener) }()
+	remaining := 3
 	componentFailed := false
 	var sourceFailure error
 	record := func(err error) {
@@ -149,7 +172,7 @@ func run(parent context.Context, c config) error {
 			componentFailed = true
 			return
 		}
-		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, http.ErrServerClosed) && status.Code(err) != codes.Canceled {
+		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, grpc.ErrServerStopped) && status.Code(err) != codes.Canceled {
 			componentFailed = true
 		}
 	}
@@ -161,6 +184,7 @@ func run(parent context.Context, c config) error {
 	}
 	h.SetInitialized(false)
 	cancel()
+	rpcServer.Stop()
 	httpStop, stopHTTP := context.WithTimeout(context.Background(), 2*time.Second)
 	httpErr := server.Shutdown(httpStop)
 	stopHTTP()

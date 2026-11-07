@@ -129,3 +129,31 @@ cursor, Pending при delete/recreate своего topic, перекрываю�
 отказ старой metadata и нового config против прежнего SQL binding, сохранность
 Pending и отзыв grants. Доверие к broker/соединению и неразличимость клона storage
 с теми же IDs описаны в [kafkasource](../../internal/platform/kafkasource/README.md).
+
+## Durable progress RPC — OPS-056
+
+Дополнительно обязательны `MATCHER_RPC_ADDR` (host:port, отдельный listener),
+`MATCHER_RPC_CERT_FILE`, `MATCHER_RPC_KEY_FILE` (ServerAuth, DNS SAN matcher),
+`CLEANER_SERVICE_URI` (точный URI SAN клиента cleaner). `RPC_CA_FILE` также
+используется как client CA экспортера. Outbound `RPC_CERT_FILE`/`RPC_KEY_FILE`
+остаются ClientAuth credentials. Пустая либо некорректная конфигурация запрещает
+запуск; ошибки listener/Serve являются terminal. На shutdown gRPC Stop отменяет
+активные RPC, ждёт handlers/SQL, Serve присоединяется до pool.Close.
+
+[Wire и ошибки exporter](../../internal/matcher/progressrpc/README.md).
+Пример дополнения к существующему окружению запуска:
+
+```sh
+export MATCHER_RPC_ADDR=127.0.0.1:8087
+export MATCHER_RPC_CERT_FILE=/run/secrets/matcher-server.pem
+export MATCHER_RPC_KEY_FILE=/run/secrets/matcher-server.key
+export CLEANER_SERVICE_URI=spiffe://local/cleaner
+```
+
+Cleaner использует `progressrpc.NewClient(conn)` с mTLS и проверкой DNS SAN;
+ему не передаётся matcher DSN. Вызывать ReadProgress с kind, exact consumer_id,
+ClusterID/TopicID/topic/partition из доверенного provisioning. Для changes
+consumer_id — зарегистрированный durable projection_id, для prices — стабильный
+scope, а не текущий member/token. Перед DeleteRecords необходимо проверить все
+обязательные consumers по протоколу OPS-014; успешного ответа одной projection
+недостаточно. Отсутствие cursor, legacy или иной source запрещают очистку.

@@ -94,3 +94,10 @@ identity, при resume сохраняет Source полученной SQL по�
 bound work через NewSourceBound. Production config не выполняет discovery и
 не присваивает эти значения legacy истории. Проверки самого executable и
 пересоздания только disposable topic находятся в cmd/matcher/source_process_test.go.
+
+OPS-056: fixture выдаёт отдельный ServerAuth сертификат matcher exporter,
+`RPCAddr` на свободном loopback port и ChildEnv с MATCHER_RPC_ADDR,
+MATCHER_RPC_CERT_FILE/KEY_FILE, CLEANER_SERVICE_URI. Тестовый matcher URI
+явно получает право cleaner только в disposable fixture; production настраивает
+отдельную identity cleaner. Process-тест читает RPC до SIGKILL и после restart,
+сравнивает SQL cursor и Prefix и запрещает proof при Pending без cursor.

@@ -4,8 +4,9 @@
 
 ## Активная работа
 
-- Активная реализация: нет. OPS-062 завершён; следующий шаг — сессионная проверка OPS-056 (exporter matcher). OPS-014 ждёт OPS-056/057/058. Исследования DEC-010 сохранены; локальный запуск они не блокируют.
-- Последний завершённый тикет: [OPS-062](backlog/tickets/OPS-062.md), [runtime matcher](../cmd/matcher/README.md). Явные ClusterID/TopicID, PrepareSource/ReadScope и SourceBound stores, durable Source в live resume/Batch/Position/Prefix. PostgreSQL/Kafka process/race подтвердил recovery/takeover, legacy и delete/recreate без reset/смены scope, сохранность Pending/исходов/Prefix и отзыв grants. Общая race-регрессия/vet/build и cleanup PASS. Перенос legacy/источника не реализован.
+- Активная реализация: нет. OPS-056 завершён; следующий шаг — сессионная проверка OPS-057 (exporter notifications). OPS-014 ждёт OPS-057/058. Исследования DEC-010 сохранены; локальный запуск они не блокируют.
+- Последний завершённый тикет: [OPS-056](backlog/tickets/OPS-056.md), [durable progress RPC](../internal/matcher/progressrpc/README.md). Exact projection/scope и SQL source/next, unary mTLS право cleaner, bounded SQL/RPC и shutdown/join подключены в cmd/matcher. SQL exporter, process/race recovery/source/shutdown, общая race-регрессия/vet/build и protobuf check PASS; cleanup подтверждён. Полный SQL runner имеет независимый сбой assertion [NTF-019](backlog/tickets/NTF-019.md). Реестр/cleaner не реализованы.
+- Предыдущий завершённый тикет: [OPS-062](backlog/tickets/OPS-062.md), [runtime matcher](../cmd/matcher/README.md). Явные ClusterID/TopicID, PrepareSource/ReadScope и SourceBound stores, durable Source в live resume/Batch/Position/Prefix. PostgreSQL/Kafka process/race подтвердил recovery/takeover, legacy и delete/recreate без reset/смены scope, сохранность Pending/исходов/Prefix и отзыв grants. Общая race-регрессия/vet/build и cleanup PASS. Перенос legacy/источника не реализован.
 - Предыдущий завершённый тикет: [OPS-063](backlog/tickets/OPS-063.md), [pricework.ReadScope](../internal/matcher/pricework/README.md). Одна MVCC view ledger/исторического work/checkpoints, без записи binding или синтетического offset. Полный PostgreSQL/race runner, общая race-регрессия/vet/build и cleanup PASS; takeover/guards и сохранность legacy/исходов подтверждены. Runtime подключён в OPS-062.
 - Предыдущий завершённый тикет: [OPS-061](backlog/tickets/OPS-061.md), [SQL source binding](../internal/matcher/sourcebinding/README.md). Sourcebound projection/pricework, атомарные binding/checkpoint и read-only provenance, SQL guard прежнего writer. PostgreSQL/race подтвердил сохранность данных до миграции/Pending/исходов, takeover/fencing, CAS, rollback/deferred commit и старый SQL без ack; общая race-регрессия/vet/build и cleanup PASS. Legacy не backfill-ится; runtime/process recovery подключены в OPS-062.
 - Предыдущий завершённый тикет: [OPS-060](backlog/tickets/OPS-060.md), [Kafka source identity](../internal/platform/kafkasource/README.md). Общие ClusterID/TopicID/Topic, metadata без auto-create и fetch-проверка до data/control dispatch на changefeed/direct/group. Resume/PrepareSource несут source-bound позиции; delete/recreate с совпадающими offsets отвергается. Disposable Kafka/race, общая race-регрессия/vet/build и cleanup PASS. SQL provenance завершён в OPS-061, runtime подключён в OPS-062.
@@ -148,17 +149,15 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-[OPS-056](backlog/tickets/OPS-056.md): сессионная проверка exporter matcher.
-OPS-062 подключил runtime source binding: cmd требует доверенные IDs, transport
-проверяет metadata/fetch, PrepareSource после Assign вызывает ReadScope до ready.
-Реальный SQL checkpoint передаёт durable Source/next; без cursor допустим только
-явный caller bootstrap. Scope и snapshot не переименовывают transport history.
-Legacy/чужой источник отвергаются с terminal error и отзывом grants; Pending и
-исходы сохраняются. Команды запуска после миграции 007 — cmd/matcher README.
-Для exporter использовать read-only API projection и pricework OPS-061/063;
-ledger без cursor не является offset. Cleaner/RPC здесь не добавлялись.
+[OPS-057](backlog/tickets/OPS-057.md): сессионная проверка exporter notifications.
+OPS-056 экспортирует точный SQL cursor matcher по projection_id либо prices scope
+через mTLS MatcherProgress/ReadProgress; runtime требует отдельный RPC listener,
+ServerAuth PEM и CLEANER_SERVICE_URI. Source из запроса сверяется с SQL;
+отсутствующий cursor/legacy/mismatch запрещает очистку. Cleaner должен запросить
+все обязательные consumers и проверить минимум; полнота реестра не доказывается
+одним ответом. Подробности — progressrpc/README и cmd/matcher/README.
 OPS-014 не готов: локальные SQL readers не являются интерфейсом cleaner; нужны
-OPS-056/057 (matcher/notifications) и OPS-058 (совместная disposable fixture).
+OPS-057 (notifications) и OPS-058 (совместная disposable fixture).
 Сессионная проверка сохранена в карточке OPS-014; реализация не начата,
 retention/pins не изменены, скорость cleaner по-прежнему считается нулевой.
 OPS-011 завершил SIGTERM/SIGINT [notifications](../cmd/notifications/README.md):
@@ -210,7 +209,7 @@ NTF-006 рассчитывает retry Plan и бюджет доказанных
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show OPS-056` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show OPS-057` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

@@ -181,6 +181,7 @@
 | [NTF-016](tickets/NTF-016.md) | Сохранить временный отказ и обязанность отчёта | NTF-006, NTF-009, NTF-010, NTF-007, NTF-008 | done |
 | [NTF-017](tickets/NTF-017.md) | Закрыть изменение исторических свидетельств ролью notifications | NTF-008, NTF-016 | planned |
 | [NTF-018](tickets/NTF-018.md) | Исследовать сбой восстановления после потери ответа регистрации | NTF-012 | planned |
+| [NTF-019](tickets/NTF-019.md) | Устранить ложный отказ проверки Telegram payload по подстроке возраста | NTF-012 | planned |
 | [NTF-014](tickets/NTF-014.md) | Надёжно передать исход попытки владельцу подписки | NTF-010, SUB-020, NTF-007, NTF-008, NTF-016, SUB-026 | done |
 | [NTF-015](tickets/NTF-015.md) | Возобновить задание после восстановления Telegram | NTF-008, NTF-009, SUB-018, DEC-005 | done |
 | [NTF-012](tickets/NTF-012.md) | Выполнить одну попытку обработки готового задания | NTF-004, NTF-005, NTF-006, NTF-007, NTF-008, NTF-009, NTF-010, SUB-018, NTF-014, NTF-002, NTF-015, NTF-003, NTF-016, SUB-027 | done |
@@ -216,7 +217,7 @@
 | [OPS-061](tickets/OPS-061.md) | Сохранить source binding Kafka checkpoints matcher в SQL | OPS-060, MAT-017, MAT-016, MAT-009 | done |
 | [OPS-063](tickets/OPS-063.md) | Проверить provenance prices scope до первого transport checkpoint | OPS-061 | done |
 | [OPS-062](tickets/OPS-062.md) | Подключить source binding к runtime и восстановлению matcher | OPS-060, OPS-061, OPS-053, OPS-010, OPS-063 | done |
-| [OPS-056](tickets/OPS-056.md) | Экспортировать durable Kafka-прогресс matcher | MAT-011, MAT-009, SET-007, SET-008, OPS-053, OPS-062 | planned |
+| [OPS-056](tickets/OPS-056.md) | Экспортировать durable Kafka-прогресс matcher | MAT-011, MAT-009, SET-007, SET-008, OPS-053, OPS-062 | done |
 | [OPS-057](tickets/OPS-057.md) | Экспортировать durable Kafka-прогресс notifications | NTF-001, SET-007, SET-008, OPS-055 | planned |
 | [OPS-058](tickets/OPS-058.md) | Подготовить disposable окружение проверки Kafka cleaner | OPS-056, OPS-057, OPS-052, OPS-054, SET-009 | planned |
 | [OPS-014](tickets/OPS-014.md) | Удалить безопасный префикс журнала Kafka | SET-005, SUB-022, MAT-011, NTF-001, DEC-007, OPS-056, OPS-057, OPS-058 | planned |

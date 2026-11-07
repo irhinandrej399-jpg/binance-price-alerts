@@ -16,15 +16,21 @@ import (
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/deliveryrpc"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/replayrpc"
 	pb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/api/v1"
+	progresspb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/matcher/v1"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/fencing"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/pricefeed"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/pricework"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/progressrpc"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/projection"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/serviceauth"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/apiprocess"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/matcherprocess"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/postgrestest"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 )
 
 func TestMatcherProcess(t *testing.T) {
@@ -67,6 +73,17 @@ func TestMatcherProcess(t *testing.T) {
 	env["MATCHER_GROUP"] = f.Prefix + "-matcher"
 	env["PRICES_BOOTSTRAP"] = string(b)
 	env["HEAD_INTERVAL"] = "50ms"
+	readSecret := func(path string) []byte { b, e := os.ReadFile(path); must(e); return b }
+	creds, e := serviceauth.ClientCredentials(readSecret(f.CertFile), readSecret(f.KeyFile), readSecret(f.CAFile))
+	must(e)
+	conn, e := grpc.NewClient(f.RPCAddr, grpc.WithTransportCredentials(creds), grpc.WithAuthority(matcherprocess.ServerName))
+	must(e)
+	defer conn.Close()
+	progress := progressrpc.NewClient(conn)
+	var changesOffset int64
+	proof := func(kind progresspb.ConsumerKind, id string, sourceTopic string, tid [16]byte, partition int32) (*progresspb.ReadProgressResponse, error) {
+		return progress.ReadProgress(ctx, &progresspb.ReadProgressRequest{Kind: kind, ConsumerId: id, ClusterId: f.PricesSource.ClusterID, TopicId: tid[:], Topic: sourceTopic, Partition: partition})
+	}
 	cfg := apiprocess.Config{Executable: binary, Env: env, StartupProbePath: "/healthz", StartupTimeout: 12 * time.Second, StopTimeout: time.Second}
 	wait := func(label string, ok func() bool) {
 		t.Helper()
@@ -141,6 +158,10 @@ func TestMatcherProcess(t *testing.T) {
 		if partial.Completed != 1 || len(partial.Entries) != 3 || partial.State != "pending" {
 			t.Fatal("partial durable candidates missing")
 		}
+		out, err := proof(progresspb.ConsumerKind_CONSUMER_KIND_PRICES, grant.Scope, record.Topic, f.PricesSource.TopicID, record.Partition)
+		if out != nil || grpcstatus.Code(err) != codes.FailedPrecondition {
+			t.Fatal("exported Pending without Prefix", out, err)
+		}
 		trigger = response.Workflow.TriggerId
 		var count int
 		var canonical string
@@ -158,6 +179,14 @@ func TestMatcherProcess(t *testing.T) {
 			r, e := projection.New(reader, grant.ProjectionID).Recover(ctx)
 			return e == nil && r.Topic == env["SUBSCRIPTION_CHANGES_TOPIC"] && r.Checkpoint.C > 3
 		})
+		cp, e := projection.New(reader, grant.ProjectionID).Recover(ctx)
+		must(e)
+		out, err = proof(progresspb.ConsumerKind_CONSUMER_KIND_PROJECTION, grant.ProjectionID, cp.Topic, f.ChangesSource.TopicID, cp.Partition)
+		must(err)
+		if out.NextOffset == nil || *out.NextOffset < cp.Checkpoint.NextOffset {
+			t.Fatal("runtime changefeed proof", out)
+		}
+		changesOffset = *out.NextOffset
 		// No signal handler or graceful assertion: kill the actual executable.
 		must(syscall.Kill(-p.PID(), syscall.SIGKILL))
 		select {
@@ -183,6 +212,16 @@ func TestMatcherProcess(t *testing.T) {
 			return e == nil && v == record.Offset+1
 		})
 		wait("broker prefix", func() bool { return brokerOffset() == record.Offset+1 })
+		out, err := proof(progresspb.ConsumerKind_CONSUMER_KIND_PRICES, current.Scope, record.Topic, f.PricesSource.TopicID, record.Partition)
+		must(err)
+		if out.NextOffset == nil || *out.NextOffset != record.Offset+1 {
+			t.Fatal("runtime prices proof", out)
+		}
+		out, err = proof(progresspb.ConsumerKind_CONSUMER_KIND_PROJECTION, current.ProjectionID, f.ChangesSource.Topic, f.ChangesSource.TopicID, 0)
+		must(err)
+		if out.NextOffset == nil || *out.NextOffset < changesOffset {
+			t.Fatal("export lost durable generation", out)
+		}
 		work, e := store.Get(ctx, key)
 		must(e)
 		if work.State != "superseded" || work.Completed < partial.Completed || work.Completed > 2 || work.SupersededBy == nil || work.SupersededBy.Revision.Sequence != 3 || work.Entries[0].Result == nil || work.Entries[0].Result.TriggerID != partial.Entries[0].Result.TriggerID {

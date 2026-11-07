@@ -77,3 +77,7 @@ cursor, неизменные S/C/expires_at и durable повтор создан
 
 `api/v1/replay.proto` — matcher-only SQL-replay: BeginReplay/ReadReplayPage/
 AcknowledgeReplay/AbandonReplay, [контракт SUB-022](../internal/api/replayrpc/README.md).
+
+Matcher progress: `matcher/v1/progress.proto` (OPS-056), read-only exact-consumer
+SQL Kafka next-offset proof over mTLS. Presence `next_offset` is required;
+failed RPC never confirms deletion. See `internal/matcher/progressrpc/README.md`.

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -16,6 +17,7 @@ import (
 )
 
 type config struct {
+	rpcAddr, rpcCert, rpcKey, cleanerURI               string
 	addr, dsn, prices, changes, environment, group, id string
 	api, latest, serverName, ca, cert, key             string
 	pricesSource, changesSource                        kafkasource.Identity
@@ -34,7 +36,7 @@ func addressOK(s string) bool {
 	return e == nil && e2 == nil && host != "" && n > 0 && n <= 65535
 }
 func loadConfig(get func(string) string) (config, error) {
-	c := config{addr: get("HTTP_ADDR"), dsn: get("MATCHER_DATABASE_URL"), prices: get("PRICES_TOPIC"), changes: get("SUBSCRIPTION_CHANGES_TOPIC"), environment: get("MATCHER_ENVIRONMENT"), group: get("MATCHER_GROUP"), id: get("MATCHER_REPLICA_ID"), api: get("API_RPC_ADDR"), latest: get("LATEST_RPC_ADDR"), serverName: get("RPC_SERVER_NAME"), ca: get("RPC_CA_FILE"), cert: get("RPC_CERT_FILE"), key: get("RPC_KEY_FILE")}
+	c := config{rpcAddr: get("MATCHER_RPC_ADDR"), rpcCert: get("MATCHER_RPC_CERT_FILE"), rpcKey: get("MATCHER_RPC_KEY_FILE"), cleanerURI: get("CLEANER_SERVICE_URI"), addr: get("HTTP_ADDR"), dsn: get("MATCHER_DATABASE_URL"), prices: get("PRICES_TOPIC"), changes: get("SUBSCRIPTION_CHANGES_TOPIC"), environment: get("MATCHER_ENVIRONMENT"), group: get("MATCHER_GROUP"), id: get("MATCHER_REPLICA_ID"), api: get("API_RPC_ADDR"), latest: get("LATEST_RPC_ADDR"), serverName: get("RPC_SERVER_NAME"), ca: get("RPC_CA_FILE"), cert: get("RPC_CERT_FILE"), key: get("RPC_KEY_FILE")}
 	for key, target := range map[string]*kafkasource.Identity{"PRICES_TOPIC_ID": &c.pricesSource, "SUBSCRIPTION_CHANGES_TOPIC_ID": &c.changesSource} {
 		b, err := hex.DecodeString(get(key))
 		if err != nil || len(b) != 16 {
@@ -50,7 +52,7 @@ func loadConfig(get func(string) string) (config, error) {
 			return config{}, errConfig
 		}
 	}
-	for _, s := range []string{c.addr, c.api, c.latest} {
+	for _, s := range []string{c.addr, c.api, c.latest, c.rpcAddr} {
 		if !addressOK(s) {
 			return config{}, errConfig
 		}
@@ -67,10 +69,14 @@ func loadConfig(get func(string) string) (config, error) {
 	if c.prices == c.changes {
 		return config{}, errConfig
 	}
-	for _, s := range []string{c.serverName, c.ca, c.cert, c.key} {
+	for _, s := range []string{c.serverName, c.ca, c.cert, c.key, c.rpcCert, c.rpcKey} {
 		if strings.TrimSpace(s) == "" {
 			return config{}, errConfig
 		}
+	}
+	u, err := url.Parse(c.cleanerURI)
+	if err != nil || u.Scheme == "" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return config{}, errConfig
 	}
 	c.brokers = strings.Split(get("KAFKA_BROKERS"), ",")
 	for _, s := range c.brokers {
