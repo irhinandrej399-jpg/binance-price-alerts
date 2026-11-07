@@ -208,7 +208,7 @@
 | [OPS-053](tickets/OPS-053.md) | Собрать минимальный процесс matcher | MAT-011, MAT-015, SUB-016, OPS-007, OPS-052, DEC-010 | done |
 | [OPS-010](tickets/OPS-010.md) | Корректно остановить matcher | MAT-005, OPS-053 | done |
 | [OPS-054](tickets/OPS-054.md) | Подготовить disposable окружение процесса notifications | OPS-047, NTF-001, NTF-012, NTF-013, SUB-018, SUB-020, DEC-010 | done |
-| [OPS-055](tickets/OPS-055.md) | Собрать минимальный процесс notifications | NTF-001, NTF-012, NTF-013, OPS-008, OPS-054, DEC-010 | planned |
+| [OPS-055](tickets/OPS-055.md) | Собрать минимальный процесс notifications | NTF-001, NTF-012, NTF-013, OPS-008, OPS-054, DEC-010 | done |
 | [OPS-011](tickets/OPS-011.md) | Корректно остановить notification worker | NTF-012, NTF-013, OPS-055 | planned |
 | [OPS-012](tickets/OPS-012.md) | Ограничить размер тела публичного запроса | IAM-003, IAM-004, SUB-003 | done |
 | [OPS-013](tickets/OPS-013.md) | Ограничить частоту входа и регистрации между репликами | IAM-003, IAM-004, DEC-003, DEC-006 | done |

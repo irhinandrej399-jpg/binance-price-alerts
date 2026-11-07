@@ -38,8 +38,8 @@ Telegram sender проверяют ответ 429 с retry_after без поте
 Source/Handler в этом тесте управляемые: durable запись retry проверена
 зависимостями NTF-012/013, SQL/Kafka здесь не подменяются интеграционным прогоном.
 
-`cmd/notifications` пока каркас. HTTP listener, Ping notifications pool,
-инициализацию и запуск worker нужно подключить при сборке runtime перед
-E2E-002. Intake lifecycle также принадлежит runtime: общий startup/shutdown
-должен учитывать его запуск/ошибку. OPS-008 предоставляет компонент health;
-четыре процесса, SIGTERM (OPS-011), реальный Telegram и нагрузка не проверены.
+`cmd/notifications` подключает listener, Ping notifications pool, инициализацию,
+Worker.Running и общий lifecycle intake/worker в OPS-055. Process/race сценарий
+проверяет HTTP 200 и сохранение health/readiness при 429; supervisor проверяет
+503 до инициализации, при SQL probe failure и после выхода компонента.
+Четыре процесса, SIGTERM (OPS-011), реальный Telegram и нагрузка отдельно.

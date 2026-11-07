@@ -12,7 +12,7 @@ import (
 )
 
 // TestToken is deliberately fake and valid only at the local fixture endpoint.
-const TestToken = "process-test-token"
+const TestToken = "123:process-test-token"
 
 type Telegram struct {
 	URL      string
@@ -35,6 +35,9 @@ func (s *Send) Reply(messageID int64) {
 	}
 	s.once.Do(func() { s.action <- messageID })
 }
+
+// RateLimit replies with a deterministic retry_after refusal.
+func (s *Send) RateLimit()  { s.once.Do(func() { s.action <- -1 }) }
 func (s *Send) Disconnect() { s.once.Do(func() { s.action <- 0 }) }
 
 // NewTelegram accepts only the production POST/JSON wire contract. Requests are
@@ -68,6 +71,12 @@ func NewTelegram(t testing.TB) *Telegram {
 		}
 		select {
 		case id := <-call.action:
+			if id == -1 {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusTooManyRequests)
+				_, _ = io.WriteString(w, `{"ok":false,"error_code":429,"parameters":{"retry_after":1}}`)
+				return
+			}
 			if id == 0 {
 				conn, _, e := w.(http.Hijacker).Hijack()
 				if e == nil {

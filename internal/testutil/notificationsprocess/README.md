@@ -2,7 +2,7 @@
 
 ```sh
 GOCACHE=/tmp/binance-go-build python3 scripts/check_notifications_process.py
-# После появления process tests OPS-055:
+# Настоящий executable (OPS-055):
 GOCACHE=/tmp/binance-go-build python3 scripts/check_notifications_process.py --package ./cmd/notifications
 ```
 
@@ -31,9 +31,10 @@ Admission/PrepareRecipient/Result. Delivery, Snapshot, Replay и Latest ему
 - `NOTIFICATIONS_DATABASE_URL` — только своя БД;
 - `KAFKA_BROKERS`, `DELIVERY_REQUESTS_TOPIC`;
 - `API_RPC_ADDR`, `RPC_SERVER_NAME`, `RPC_CA_FILE`, `RPC_CERT_FILE`, `RPC_KEY_FILE`;
-- `TELEGRAM_BASE_URL`, `TELEGRAM_BOT_TOKEN` — loopback и заведомо fake token.
+- `TELEGRAM_BASE_URL`, `TELEGRAM_BOT_TOKEN` — loopback и заведомо fake token с числовым bot ID.
 
-Env — интерфейс fixture. Будущий cmd преобразует его в конфигурацию.
+Env — интерфейс fixture. Тест cmd/notifications добавляет обязательные budgets,
+stable group и RPC_IDENTITY из README executable.
 Executable запускается через `apiprocess.With/Config`: HTTP_ADDR, startup probe,
 deadlines, TERM/KILL/Wait, process groups, PID registry и cleanup не дублируются.
 Минимальный child проверяет роль/свою БД, отсутствие foreign DSN/parent secret,
@@ -49,7 +50,7 @@ API deliveryrelay; `f.SetPrice(value, sequence)` меняет Latest, сохра
 времена при чтении. Seed-котировка не даёт admission permission.
 
 `f.Telegram.Requests` — ограниченная очередь входящих sendMessage. Каждый
-`*Send` содержит ChatID/Text/ParseMode и ждёт `Reply(positiveMessageID)` либо
+`*Send` содержит ChatID/Text/ParseMode и ждёт `Reply(positiveMessageID)`, `RateLimit()` (429/retry_after=1) либо
 `Disconnect()`; первая команда побеждает. Endpoint проверяет POST/path/JSON/HTML,
 не делает внешних вызовов. Ожидания ограничены context, 20 с и cleanup.
 Reply сообщает серверный ответ; получение его child доказывается последующим
@@ -78,7 +79,7 @@ workflow. Latest=101 даёт новый permit; наблюдаемы lease до
 попытка во время HTTP, success/pending report после ответа, API delivered после
 commit. После потери ответа Result новый reporter/независимый pool повторяет
 сохранённый исход без Telegram, без нового attempt/outbox. Продуктовый executable
-остаётся OPS-055, SIGTERM и HTTP drain — OPS-011, общий E2E fake — E2E-004.
+проверен отдельно в OPS-055; SIGTERM и HTTP drain — OPS-011, общий E2E fake — E2E-004.
 Нагрузки, четыре процесса и настоящие Telegram credentials сюда не входят.
 
 Без opt-in — явный SKIP. При opt-in отсутствие DB/Kafka — FAIL.
