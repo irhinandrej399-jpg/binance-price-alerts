@@ -26,6 +26,7 @@ import (
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/pricefeed"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/projection"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/snapshotload"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/postgrestest"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
@@ -49,7 +50,8 @@ func (s frozenLiveSnapshot) ReadSnapshotPage(context.Context, *pb.ReadSnapshotPa
 func TestMatcherSnapshotReplayLive(t *testing.T) {
 	apiPool := postgrestest.Open(t)
 	matcherPool := postgrestest.OpenWithDSN(t, "MATCHER_DATABASE_URL")
-	reader := projection.New(postgrestest.OpenWithDSN(t, "MATCHER_DATABASE_URL"), t.Name())
+	readerPool := postgrestest.OpenWithDSN(t, "MATCHER_DATABASE_URL")
+	reader := projection.New(readerPool, t.Name())
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 	pins := sub.NewSnapshots(apiPool)
@@ -137,7 +139,18 @@ func TestMatcherSnapshotReplayLive(t *testing.T) {
 			t.Fatal("Kafka opt-in requires configuration")
 		}
 		topic := prefix + "-subscription-changes"
-		source, err := changefeed.New(ctx, changefeed.Config{Brokers: []string{broker}, Topic: topic})
+		metadataClient, err := kgo.NewClient(kgo.SeedBrokers(broker))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer metadataClient.Close()
+		identity, _, err := kafkasource.Metadata(ctx, metadataClient, topic)
+		if err != nil {
+			t.Fatal(err)
+		}
+		store = projection.NewSourceBound(matcherPool, t.Name(), nil, identity)
+		reader = projection.NewSourceBound(readerPool, t.Name(), nil, identity)
+		source, err := changefeed.New(ctx, changefeed.Config{Brokers: []string{broker}, Topic: topic, Source: identity})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -311,7 +324,7 @@ func TestMatcherSnapshotReplayLive(t *testing.T) {
 			t.Fatal("lost durable transport identity")
 		}
 		if os.Getenv("KAFKA_INTEGRATION") == "1" {
-			src, e := changefeed.New(ctx, changefeed.Config{Brokers: []string{os.Getenv("KAFKA_TEST_BROKER")}, Topic: pos.Topic})
+			src, e := changefeed.New(ctx, changefeed.Config{Brokers: []string{os.Getenv("KAFKA_TEST_BROKER")}, Topic: pos.Topic, Source: pos.Source})
 			if e != nil {
 				return nil, e
 			}

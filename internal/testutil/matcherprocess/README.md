@@ -84,3 +84,13 @@ child group и оба стенда, затем проверяет отсутст
 точным Compose labels. Рабочие стенды не адресуются. Каждый этап ограничен timeout;
 ошибка cleanup — FAIL. SIGKILL самого Python не позволяет выполнить finally;
 в этом случае точные disposable projects убирает оператор, как в apiprocess.
+
+## Source binding — OPS-062
+
+Fixture при provisioning disposable topics читает `PricesSource/ChangesSource`
+через kafkasource.Metadata. ChildEnv передаёт KAFKA_CLUSTER_ID и hex IDs в
+PRICES_TOPIC_ID/SUBSCRIPTION_CHANGES_TOPIC_ID. Changes использует эту явную
+identity, при resume сохраняет Source полученной SQL позиции. Fixture читает
+bound work через NewSourceBound. Production config не выполняет discovery и
+не присваивает эти значения legacy истории. Проверки самого executable и
+пересоздания только disposable topic находятся в cmd/matcher/source_process_test.go.

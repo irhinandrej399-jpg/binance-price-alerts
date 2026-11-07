@@ -215,7 +215,7 @@
 | [OPS-060](tickets/OPS-060.md) | Проверить поколение Kafka-источника на входах matcher | MAT-015, MAT-018, SET-009 | done |
 | [OPS-061](tickets/OPS-061.md) | Сохранить source binding Kafka checkpoints matcher в SQL | OPS-060, MAT-017, MAT-016, MAT-009 | done |
 | [OPS-063](tickets/OPS-063.md) | Проверить provenance prices scope до первого transport checkpoint | OPS-061 | done |
-| [OPS-062](tickets/OPS-062.md) | Подключить source binding к runtime и восстановлению matcher | OPS-060, OPS-061, OPS-053, OPS-010, OPS-063 | planned |
+| [OPS-062](tickets/OPS-062.md) | Подключить source binding к runtime и восстановлению matcher | OPS-060, OPS-061, OPS-053, OPS-010, OPS-063 | done |
 | [OPS-056](tickets/OPS-056.md) | Экспортировать durable Kafka-прогресс matcher | MAT-011, MAT-009, SET-007, SET-008, OPS-053, OPS-062 | planned |
 | [OPS-057](tickets/OPS-057.md) | Экспортировать durable Kafka-прогресс notifications | NTF-001, SET-007, SET-008, OPS-055 | planned |
 | [OPS-058](tickets/OPS-058.md) | Подготовить disposable окружение проверки Kafka cleaner | OPS-056, OPS-057, OPS-052, OPS-054, SET-009 | planned |

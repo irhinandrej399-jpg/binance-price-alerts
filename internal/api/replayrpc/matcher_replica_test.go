@@ -19,12 +19,14 @@ import (
 	pb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/api/v1"
 	mpb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/marketdata/v1"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/changefeed"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/fencing"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/live"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/pricefeed"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/pricework"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/projection"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/replica"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/snapshotload"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/postgrestest"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
@@ -63,6 +65,11 @@ func TestMatcherTwoReplicas(t *testing.T) {
 	if err != nil || len(res.Topics) != 1 || res.Topics[0].ErrorCode != 0 {
 		t.Fatal(res, err)
 	}
+	priceSource, _, sourceErr := kafkasource.Metadata(ctx, producer, topic)
+	if sourceErr != nil {
+		t.Fatal(sourceErr)
+	}
+	changesSource := kafkasource.Identity{ClusterID: "controlled", TopicID: [16]byte{1}, Topic: "live-changes"}
 	pairAt := func(p int32) string {
 		for i := 0; ; i++ {
 			s := fmt.Sprintf("REPLICA%dUSDT", i)
@@ -98,7 +105,7 @@ func TestMatcherTwoReplicas(t *testing.T) {
 		calls[id]++
 		return &pb.RequestDeliveryResponse{SubscriptionId: id, SubscriptionVersion: 2, State: "pending_delivery", Workflow: &pb.Workflow{TriggerId: "canonical-" + id, Version: 1}}, nil
 	})
-	base := replica.Config{Pool: pool, Environment: t.Name(), Group: topic + "-group", Prices: pricefeed.Config{Brokers: []string{broker}, Topic: topic, Buffer: 512}, Replay: replay, Delivery: delivery, Live: live.Config{ReplayTTL: time.Minute, HeadInterval: 200 * time.Millisecond}}
+	base := replica.Config{Pool: pool, Environment: t.Name(), Group: topic + "-group", ChangesSource: changesSource, Prices: pricefeed.Config{Source: priceSource, Brokers: []string{broker}, Topic: topic, Buffer: 512}, Replay: replay, Delivery: delivery, Live: live.Config{ReplayTTL: time.Minute, HeadInterval: 200 * time.Millisecond}}
 	base.Bootstrap = map[int32]int64{}
 	for p := int32(0); p < 16; p++ {
 		base.Bootstrap[p] = 0
@@ -177,7 +184,7 @@ func TestMatcherTwoReplicas(t *testing.T) {
 	oldGrants := r1.Grants()
 	var seededScope string
 	for _, g := range oldGrants {
-		ws := pricework.NewFenced(pool, g)
+		ws := pricework.NewSourceBound(pool, g, priceSource)
 		if _, e := ws.Checkpoint(ctx, topic, g.Identity.Partition); !errors.Is(e, pgx.ErrNoRows) {
 			t.Fatal("Latest invented a checkpoint")
 		}
@@ -212,7 +219,7 @@ func TestMatcherTwoReplicas(t *testing.T) {
 	mu.Unlock()
 	close(release)
 	wait(func() bool { return r1.Ready() && r2.Ready() && len(r1.Grants()) == 8 && len(r2.Grants()) == 8 })
-	recovered, e := pricework.New(readerPool, seededScope).Get(ctx, "pending-before-rebalance")
+	recovered, e := pricework.NewSourceBound(readerPool, fencing.Grant{Scope: seededScope}, priceSource).Get(ctx, "pending-before-rebalance")
 	if e != nil || recovered.State != "completed" || recovered.Entries[0].Result == nil {
 		t.Fatal("Pending not recovered", recovered, e)
 	}
@@ -304,7 +311,7 @@ func TestMatcherTwoReplicas(t *testing.T) {
 				if g.Identity.Partition != part.Partition {
 					continue
 				}
-				cp, e := pricework.New(readerPool, g.Scope).Checkpoint(ctx, topic, part.Partition)
+				cp, e := pricework.NewSourceBound(readerPool, g, priceSource).Checkpoint(ctx, topic, part.Partition)
 				if errors.Is(e, pgx.ErrNoRows) {
 					cp = -1
 				} else if e != nil {
@@ -322,7 +329,7 @@ func TestMatcherTwoReplicas(t *testing.T) {
 	close(releasePrices)
 	wait(func() bool {
 		for _, g := range grants {
-			s := pricework.New(readerPool, g.Scope)
+			s := pricework.NewSourceBound(readerPool, g, priceSource)
 			next, e := s.Checkpoint(ctx, topic, g.Identity.Partition)
 			if e != nil || next != expected[g.Identity.Partition] {
 				return false
@@ -331,9 +338,9 @@ func TestMatcherTwoReplicas(t *testing.T) {
 		return true
 	})
 	for _, g := range grants {
-		s := pricework.New(readerPool, g.Scope)
+		s := pricework.NewSourceBound(readerPool, g, priceSource)
 		for _, off := range offsets[g.Identity.Partition] {
-			w, e := s.Get(ctx, replica.TransportKey(pricework.Position{Topic: topic, Partition: g.Identity.Partition, Offset: off}))
+			w, e := s.Get(ctx, replica.TransportKey(pricework.Position{Source: &priceSource, Topic: topic, Partition: g.Identity.Partition, Offset: off}))
 			if e != nil || (w.State != "completed" && w.State != "superseded") || w.Input.Position.Offset != off {
 				t.Fatal(w, e)
 			}
@@ -342,7 +349,7 @@ func TestMatcherTwoReplicas(t *testing.T) {
 	for _, record := range aborted {
 		for _, g := range grants {
 			if g.Identity.Partition == record.Partition {
-				_, e := pricework.New(readerPool, g.Scope).Get(ctx, replica.TransportKey(pricework.Position{Topic: topic, Partition: record.Partition, Offset: record.Offset}))
+				_, e := pricework.NewSourceBound(readerPool, g, priceSource).Get(ctx, replica.TransportKey(pricework.Position{Source: &priceSource, Topic: topic, Partition: record.Partition, Offset: record.Offset}))
 				if !errors.Is(e, pgx.ErrNoRows) {
 					t.Fatal("aborted price processed", e)
 				}
@@ -354,7 +361,7 @@ func TestMatcherTwoReplicas(t *testing.T) {
 			return false
 		}
 		for _, g := range grants {
-			pending, e := pricework.New(readerPool, g.Scope).Pending(ctx)
+			pending, e := pricework.NewSourceBound(readerPool, g, priceSource).Pending(ctx)
 			if e != nil || len(pending) > 0 {
 				return false
 			}

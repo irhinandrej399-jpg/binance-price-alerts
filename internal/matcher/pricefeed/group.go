@@ -28,9 +28,6 @@ type GroupConfig struct {
 	// methods. ctx is also cancelled on group failure/Close. A late result never
 	// enables work. SQL token issuance is the caller's responsibility (MAT-010).
 	PrepareSource func(ctx context.Context, partitions []int32) (map[int32]Position, error)
-	// Deprecated: compilation bridge for the not-yet-migrated runtime (OPS-062).
-	// This callback is never called; without PrepareSource NewGroup refuses.
-	Prepare func(ctx context.Context, partitions []int32) (map[int32]int64, error)
 }
 
 type Group struct {

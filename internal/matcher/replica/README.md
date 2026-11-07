@@ -1,7 +1,7 @@
 # Работа реплики matcher — MAT-010/011
 
 `New(Config)` и однократный `Run(ctx)` связывают готовые Kafka group, fencing,
-полную live-view, priceconnection и pricehandler. Подключение в `cmd` отдельно.
+полную live-view, priceconnection и pricehandler. Runtime подключён в [cmd/matcher](../../../cmd/matcher/README.md).
 Две реплики используют одну `Environment/Group/Prices.Topic`, разные устойчивые
 `ID` и одну БД matcher. Одновременный запуск с одинаковым ID запрещён caller.
 
@@ -24,11 +24,12 @@ RegisterAt; источник/его Close принадлежат регистр�
 
 ## Назначение и восстановление
 
-Prepare вызывается реальным group protocol, до чтения цен. Для каждой партиции
+PrepareSource вызывается реальным group protocol, до чтения цен. Для каждой партиции
 CAS выдаёт новый SQL Grant; один неизменный RequestID/ExpectedToken используется
 для этого вызова Assign. При неоднозначном результате новый запрос не выдаётся:
-реплика завершается, условный cleanup отзывает и ожидаемый Grant. Prepare
-возвращает только SQL checkpoint либо явный Bootstrap. Старые полномочия
+реплика завершается, условный cleanup отзывает и ожидаемый Grant. PrepareSource
+после Assign проверяет ReadScope всего scope, затем возвращает durable SQL
+Source/offset либо явный Bootstrap без синтетического checkpoint. Старые полномочия
 отзываются условно; отзыв старого token не затрагивает преемника. Ошибки cleanup
 возвращаются caller, а не обозначаются успехом. Ошибка revoke помечается
 `ErrCleanup`: caller обязан проверять её даже при `errors.Is(err, context.Canceled)`,
@@ -41,7 +42,7 @@ replica/PID/token. Полная projection ID — hash Environment/Group/Topic/r
 NewResume. Повтор этого набора с истёкшим pin возвращает ErrBootstrap; скрытого
 reset, удаления поколения или замены snapshot нет. Проекция не шардирует C.
 
-После всех Grant создаётся `projection.NewFenced` с полным набором. New/NewResume
+После всех Grant создаётся `projection.NewSourceBound` с полным набором. New/NewResume
 получает явные PricePartitions; все Register цен идут только через текущий
 Assignment, с production PairPartition. Lifetime view и обработчика ограничен
 Assignment.Context. Восстановление Pending не подтверждает транспорт. Пустые
@@ -139,3 +140,21 @@ OffsetCommit. После нового token и NewResume SQL next имеет п�
 `Status()` возвращает наблюдение live view и Ready с теми же условиями назначения
 и recovery, что `Ready()`. При отсутствии view lag неизвестен. Подключение к HTTP
 описано в [health](../health/README.md); callback не выдаёт полномочия.
+
+## Проверенный источник — OPS-062
+
+Config требует `ChangesSource` и `Prices.Source` (ClusterID/TopicID/Topic).
+Changes callback обязан открыть transport с ожидаемой ChangesSource;
+RegisterAt получает Source из SQL. Перед Recover проверяется Checkpoint, чтобы
+legacy/mismatch не стал причиной нового snapshot. Live передаёт Start.Source
+в Batch, NewResume — Checkpoint.Source в transport Position. Prices stores
+используют NewSourceBound на всех Accept/Get/Resume/Complete; Position/Prefix
+несут тот же источник. Сравнение повторно прочитанной Position использует
+значения identity, а не адрес указателя после JSON decode.
+
+ReadScope не создаёт binding, offset или право ack. Даже при отсутствии cursor
+legacy completed Latest и чужая history отказывают до readiness; Pending/Get и
+атомарные SQL guards остаются обязательны. Scope/ProjectionID вычисляются как
+прежде, не включают TopicID и не меняются для обхода source validation.
+Удалён compilation bridge Prepare; новый group принимает только PrepareSource.
+Process recovery и замена topic проверяются командой cmd/matcher README.

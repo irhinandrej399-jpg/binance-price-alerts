@@ -129,7 +129,7 @@ func TestMatcherProcess(t *testing.T) {
 		var e error
 		grant, _, e = fencing.New(reader).Current(ctx, identity)
 		must(e)
-		store := pricework.New(reader, grant.Scope)
+		store := pricework.NewSourceBound(reader, grant, f.PricesSource)
 		keys, e := store.Pending(ctx)
 		must(e)
 		if len(keys) != 1 {
@@ -177,7 +177,7 @@ func TestMatcherProcess(t *testing.T) {
 		if current.Token <= grant.Token || current.ProjectionID != grant.ProjectionID || current.Scope != grant.Scope {
 			t.Fatal("identity/recovery changed")
 		}
-		store := pricework.New(reader, grant.Scope)
+		store := pricework.NewSourceBound(reader, grant, f.PricesSource)
 		wait("SQL prefix", func() bool {
 			v, e := store.Checkpoint(ctx, record.Topic, record.Partition)
 			return e == nil && v == record.Offset+1
@@ -253,7 +253,7 @@ func TestMatcherProcess(t *testing.T) {
 		t.Fatal("lost pin caused new snapshot")
 	}
 	// Fail before ready on malformed DSN, inaccessible credential and bad Kafka topic.
-	for _, tc := range []struct{ k, v string }{{"MATCHER_DATABASE_URL", "invalid-dsn"}, {"MATCHER_DATABASE_URL", "postgres://matcher_runtime:secret@127.0.0.1:1/matcher?sslmode=disable"}, {"RPC_KEY_FILE", "/missing/matcher-key"}, {"PRICES_TOPIC", f.Prefix + "-missing"}, {"API_RPC_ADDR", "127.0.0.1:1"}, {"LATEST_RPC_ADDR", "127.0.0.1:1"}} {
+	for _, tc := range []struct{ k, v string }{{"KAFKA_CLUSTER_ID", "wrong-cluster"}, {"PRICES_TOPIC_ID", "ffffffffffffffffffffffffffffffff"}, {"SUBSCRIPTION_CHANGES_TOPIC_ID", "ffffffffffffffffffffffffffffffff"}, {"MATCHER_DATABASE_URL", "invalid-dsn"}, {"MATCHER_DATABASE_URL", "postgres://matcher_runtime:secret@127.0.0.1:1/matcher?sslmode=disable"}, {"RPC_KEY_FILE", "/missing/matcher-key"}, {"PRICES_TOPIC", f.Prefix + "-missing"}, {"API_RPC_ADDR", "127.0.0.1:1"}, {"LATEST_RPC_ADDR", "127.0.0.1:1"}} {
 		bad := map[string]string{}
 		for k, v := range env {
 			bad[k] = v

@@ -331,7 +331,7 @@ func (c *Coordinator) Run(parent context.Context) (result error) {
 			events[i] = r.JSON
 		}
 		start := reg.Start()
-		e = c.store.Handle(c.ctx, projection.Batch{Topic: start.Topic, Partition: start.Partition, NextOffset: tx.NextOffset, Events: events}, func(_ context.Context, n int64) error { return reg.Confirm(n) })
+		e = c.store.Handle(c.ctx, projection.Batch{Source: start.Source, Topic: start.Topic, Partition: start.Partition, NextOffset: tx.NextOffset, Events: events}, func(_ context.Context, n int64) error { return reg.Confirm(n) })
 		if e != nil {
 			return e
 		}

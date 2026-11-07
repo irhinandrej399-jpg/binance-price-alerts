@@ -25,6 +25,8 @@ import (
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/pricefeed"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/replica"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/snapshotload"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/sourcebinding"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/postgres"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/serviceauth"
 	"google.golang.org/grpc"
@@ -40,7 +42,7 @@ type registration struct {
 func (r *registration) Close() { r.source.Close() }
 func changes(c config) func(context.Context, *changefeed.Position) (live.Registration, error) {
 	return func(ctx context.Context, pos *changefeed.Position) (live.Registration, error) {
-		s, e := changefeed.New(ctx, changefeed.Config{Brokers: c.brokers, Topic: c.changes})
+		s, e := changefeed.New(ctx, changefeed.Config{Brokers: c.brokers, Topic: c.changes, Source: c.changesSource})
 		if e != nil {
 			return nil, e
 		}
@@ -114,7 +116,7 @@ func run(parent context.Context, c config) error {
 	defer pool.Close()
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
-	r, e := replica.New(replica.Config{Pool: pool, ID: c.id, Environment: c.environment, Group: c.group, Prices: pricefeed.Config{Brokers: c.brokers, Topic: c.prices}, Bootstrap: c.bootstrap, Replay: replayrpc.NewClient(api), Delivery: deliveryrpc.NewClient(api), Latest: latest.NewClient(quotes), Live: live.Config{ReplayTTL: c.replayTTL, HeadInterval: c.headInterval, PageSize: c.replayPage}, Changes: changes(c), Snapshot: func(ctx context.Context, id string) (string, error) {
+	r, e := replica.New(replica.Config{Pool: pool, ID: c.id, Environment: c.environment, Group: c.group, ChangesSource: c.changesSource, Prices: pricefeed.Config{Brokers: c.brokers, Topic: c.prices, Source: c.pricesSource}, Bootstrap: c.bootstrap, Replay: replayrpc.NewClient(api), Delivery: deliveryrpc.NewClient(api), Latest: latest.NewClient(quotes), Live: live.Config{ReplayTTL: c.replayTTL, HeadInterval: c.headInterval, PageSize: c.replayPage}, Changes: changes(c), Snapshot: func(ctx context.Context, id string) (string, error) {
 		g, e := snapshotload.New(pool, snapshotrpc.NewClient(api)).Load(ctx, &pb.BuildSnapshotRequest{RequestId: snapshotRequestID(id), TtlMillis: c.snapshotTTL.Milliseconds(), PageSize: c.snapshotPage})
 		return g.SnapshotID, e
 	}})
@@ -131,7 +133,18 @@ func run(parent context.Context, c config) error {
 	go func() { results <- server.Serve(listener) }()
 	remaining := 2
 	componentFailed := false
+	var sourceFailure error
 	record := func(err error) {
+		for _, kind := range []error{sourcebinding.ErrUnbound, kafkasource.ErrMismatch, kafkasource.ErrIdentity, kafkasource.ErrMetadata} {
+			if errors.Is(err, kind) {
+				// Cancellation of metadata during a requested shutdown is normal.
+				if kind == kafkasource.ErrMetadata && parent.Err() != nil && errors.Is(err, context.Canceled) {
+					continue
+				}
+				componentFailed = true
+				sourceFailure = errors.Join(sourceFailure, kind)
+			}
+		}
 		if errors.Is(err, replica.ErrCleanup) {
 			componentFailed = true
 			return
@@ -164,7 +177,7 @@ func run(parent context.Context, c config) error {
 	if parent.Err() != nil && !componentFailed {
 		return nil
 	}
-	return errors.New("matcher: required component stopped")
+	return errors.Join(errors.New("matcher: required component stopped"), sourceFailure)
 }
 
 // Cancellation stops admission immediately; accepted SQL work is the drain

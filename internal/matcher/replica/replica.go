@@ -24,6 +24,7 @@ import (
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/pricehandler"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/pricework"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/projection"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -43,6 +44,7 @@ var ErrCleanup = errors.New("replica: SQL authority cleanup failed")
 type Config struct {
 	Pool                   *pgxpool.Pool
 	ID, Environment, Group string
+	ChangesSource          kafkasource.Identity
 	Prices                 pricefeed.Config
 	Bootstrap              map[int32]int64
 	Replay                 live.Replay
@@ -72,6 +74,15 @@ func New(cfg Config) (*Replica, error) {
 	if cfg.Pool == nil || strings.TrimSpace(cfg.ID) == "" || strings.TrimSpace(cfg.Environment) == "" || strings.TrimSpace(cfg.Group) == "" || cfg.Replay == nil || cfg.Latest == nil || cfg.Delivery == nil || cfg.Snapshot == nil || cfg.Changes == nil || len(cfg.Bootstrap) != 16 || len(cfg.Prices.Partitions) != 0 {
 		return nil, ErrConfig
 	}
+	if err := cfg.ChangesSource.Validate(); err != nil {
+		return nil, err
+	}
+	if err := cfg.Prices.Source.Validate(); err != nil {
+		return nil, err
+	}
+	if cfg.Prices.Source.Topic != cfg.Prices.Topic {
+		return nil, kafkasource.ErrMismatch
+	}
 	offsets := make(map[int32]int64, 16)
 	for p := int32(0); p < 16; p++ {
 		o, ok := cfg.Bootstrap[p]
@@ -97,7 +108,7 @@ func (r *Replica) identity(p int32) fencing.Identity {
 	return fencing.Identity{Environment: r.cfg.Environment, Group: r.cfg.Group, Topic: r.cfg.Prices.Topic, Partition: p}
 }
 
-func (r *Replica) prepare(ctx context.Context, parts []int32) (out map[int32]int64, err error) {
+func (r *Replica) prepare(ctx context.Context, parts []int32) (out map[int32]pricefeed.Position, err error) {
 	// Group calls this only after retiring the former eager assignment.
 	r.mu.Lock()
 	former := r.prepared
@@ -118,11 +129,12 @@ func (r *Replica) prepare(ctx context.Context, parts []int32) (out map[int32]int
 		Parts                              []int32
 	}{r.cfg.Environment, r.cfg.Group, r.cfg.Prices.Topic, r.cfg.ID, parts})
 	p := &prepared{projectionID: id, starts: map[int32]int64{}}
+	out = make(map[int32]pricefeed.Position, len(parts))
 	defer func() {
 		if err != nil {
 			r.revoke(p.grants)
 			r.mu.Lock()
-			r.prepareErr = err
+			r.prepareErr = errors.Join(r.prepareErr, err)
 			r.mu.Unlock()
 		}
 	}()
@@ -143,13 +155,16 @@ func (r *Replica) prepare(ctx context.Context, parts []int32) (out map[int32]int
 			return nil, e
 		}
 		p.grants[len(p.grants)-1] = grant
-		next, e := pricework.NewFenced(r.cfg.Pool, grant).Checkpoint(ctx, identity.Topic, part)
-		if errors.Is(e, pgx.ErrNoRows) {
-			next = r.cfg.Bootstrap[part]
-		} else if e != nil {
+		provenance, e := pricework.NewSourceBound(r.cfg.Pool, grant, r.cfg.Prices.Source).ReadScope(ctx, identity.Topic, part)
+		if e != nil {
 			return nil, e
 		}
-		p.starts[part] = next
+		position := pricefeed.Position{Source: r.cfg.Prices.Source, Topic: identity.Topic, Partition: part, Offset: r.cfg.Bootstrap[part]}
+		if cp := provenance.Checkpoint; cp != nil {
+			position.Source, position.Offset = *cp.Source, cp.NextOffset
+		}
+		p.starts[part] = position.Offset
+		out[part] = position
 	}
 	if e := ctx.Err(); e != nil {
 		return nil, e
@@ -157,10 +172,6 @@ func (r *Replica) prepare(ctx context.Context, parts []int32) (out map[int32]int
 	r.mu.Lock()
 	r.prepared = p
 	r.mu.Unlock()
-	out = make(map[int32]int64, len(p.starts))
-	for k, v := range p.starts {
-		out[k] = v
-	}
 	return out, nil
 }
 func (r *Replica) revoke(grants []fencing.Grant) {
@@ -210,7 +221,7 @@ func (r *Replica) Run(ctx context.Context) (result error) {
 	}
 	r.started = true
 	r.mu.Unlock()
-	g, err := pricefeed.NewGroup(ctx, pricefeed.GroupConfig{Config: r.cfg.Prices, Group: r.cfg.Group, Prepare: r.prepare})
+	g, err := pricefeed.NewGroup(ctx, pricefeed.GroupConfig{Config: r.cfg.Prices, Group: r.cfg.Group, PrepareSource: r.prepare})
 	if err != nil {
 		return err
 	}
@@ -243,7 +254,10 @@ func (r *Replica) Run(ctx context.Context) (result error) {
 		if p == nil || !sameStarts(a.Starts(), p.starts) {
 			return ErrConfig
 		}
+		// A transport failure cancels the assignment, so business work can
+		// observe only context.Canceled. Preserve the transport cause as well.
 		e = r.runAssignment(ctx, a, p)
+		e = errors.Join(e, g.Err(), a.Err())
 		r.mu.Lock()
 		cleanupErr := r.prepareErr
 		r.mu.Unlock()
@@ -278,7 +292,7 @@ func (r *Replica) runAssignment(parent context.Context, a *pricefeed.Assignment,
 	defer stop()
 	defer cancel()
 	defer r.revoke(p.grants)
-	store := projection.NewFenced(r.cfg.Pool, p.projectionID, p.grants)
+	store := projection.NewSourceBound(r.cfg.Pool, p.projectionID, p.grants, r.cfg.ChangesSource)
 	parts := make([]int32, 0, len(p.grants))
 	for _, g := range p.grants {
 		parts = append(parts, g.Identity.Partition)
@@ -292,6 +306,11 @@ func (r *Replica) runAssignment(parent context.Context, a *pricefeed.Assignment,
 		}, r.cfg.Latest, time.Now)
 	}
 	var view *live.Coordinator
+	// Validate any transport cursor before considering a new snapshot. Invalid
+	// snapshot metadata must never hide legacy or mismatched provenance.
+	if _, err := store.Checkpoint(ctx); err != nil {
+		return err
+	}
 	_, err := store.Recover(ctx)
 	if errors.Is(err, projection.ErrRecovery) {
 		cfg.SnapshotID, err = r.cfg.Snapshot(ctx, p.projectionID)
@@ -352,7 +371,7 @@ func (r *Replica) runAssignment(parent context.Context, a *pricefeed.Assignment,
 	}
 	workers := map[int32]*partition{}
 	for _, grant := range p.grants {
-		w := pricework.NewFenced(r.cfg.Pool, grant)
+		w := pricework.NewSourceBound(r.cfg.Pool, grant, r.cfg.Prices.Source)
 		workers[grant.Identity.Partition] = &partition{work: w, handler: pricehandler.New(w, view, store, r.cfg.Delivery, p.projectionID), next: p.starts[grant.Identity.Partition]}
 	}
 	retry := func(f func() error) error {
@@ -490,15 +509,16 @@ type partition struct {
 }
 
 func (w *partition) process(ctx context.Context, u pricefeed.Update, view *live.Coordinator, store *projection.Store, id string, a *pricefeed.Assignment) error {
-	pos := pricework.Position{Topic: u.Position.Topic, Partition: u.Position.Partition, Offset: u.Position.Offset}
+	src := u.Position.Source
+	pos := pricework.Position{Source: &src, Topic: u.Position.Topic, Partition: u.Position.Partition, Offset: u.Position.Offset}
 	if pos.Offset < w.next {
 		return ErrConfig
 	}
-	prefix := &pricework.Prefix{Topic: pos.Topic, Partition: pos.Partition, From: w.next, Next: pos.Offset + 1}
+	prefix := &pricework.Prefix{Source: src, Topic: pos.Topic, Partition: pos.Partition, From: w.next, Next: pos.Offset + 1}
 	key := TransportKey(pos)
 	old, e := w.work.Get(ctx, key)
 	if e == nil {
-		if old.Input.Position == nil || *old.Input.Position != pos || old.Input.Quote.Pair != u.Quote.Pair || old.Input.Quote.Revision != u.Quote.Revision {
+		if old.Input.Position == nil || old.Input.Position.Topic != pos.Topic || old.Input.Position.Partition != pos.Partition || old.Input.Position.Offset != pos.Offset || old.Input.Position.Source == nil || *old.Input.Position.Source != src || old.Input.Quote.Pair != u.Quote.Pair || old.Input.Quote.Revision != u.Quote.Revision {
 			return pricework.ErrConflict
 		}
 		// Retain immutable candidates even if the last pair connection has gone.

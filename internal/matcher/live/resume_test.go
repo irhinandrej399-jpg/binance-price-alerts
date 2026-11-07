@@ -9,6 +9,7 @@ import (
 	pb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/api/v1"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/changefeed"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/projection"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -36,10 +37,11 @@ func (r resumeFeed) Start() changefeed.Position { return r.start }
 func TestResumeUsesDurableIdentityBeforeReplay(t *testing.T) {
 	for _, bad := range []bool{false, true} {
 		t.Run(map[bool]string{false: "pin-lost", true: "wrong-offset"}[bad], func(t *testing.T) {
-			s := recoveryStore{memoryStore: &memoryStore{c: 7}, recovery: projection.Recovery{SnapshotID: "snapshot", Checkpoint: projection.Checkpoint{C: 7, NextOffset: 12}, Topic: "changes"}}
-			reg := resumeFeed{lostRegistration: &lostRegistration{done: make(chan struct{})}, start: changefeed.Position{Topic: "changes", Offset: 12}}
+			src := kafkasource.Identity{ClusterID: "cluster", TopicID: [16]byte{1}, Topic: "changes"}
+			s := recoveryStore{memoryStore: &memoryStore{c: 7}, recovery: projection.Recovery{SnapshotID: "snapshot", Checkpoint: projection.Checkpoint{Source: &src, C: 7, NextOffset: 12}, Topic: "changes"}}
+			reg := resumeFeed{lostRegistration: &lostRegistration{done: make(chan struct{})}, start: changefeed.Position{Source: src, Topic: "changes", Offset: 12}}
 			c, err := NewResume(s, failedReplay{}, func(_ context.Context, p *changefeed.Position) (Registration, error) {
-				if p == nil || p.Topic != "changes" || p.Offset != 12 {
+				if p == nil || p.Topic != "changes" || p.Offset != 12 || p.Source != src {
 					t.Fatal(p)
 				}
 				if bad {

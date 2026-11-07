@@ -126,7 +126,7 @@ Complete фиксирует состояние и CAS Prefix атомарно, a
 назначение и fencing он не выдаёт. SQL/commit error не разрешает ack.
 
 Миграция/права и безопасный запуск — [sourcebinding](../sourcebinding/README.md).
-Runtime wiring/process recovery — OPS-062; автоматического переноса нет.
+Runtime wiring/process recovery подключены в OPS-062; автоматического переноса нет.
 
 ## Проверка всего scope до cursor — OPS-063
 
@@ -162,7 +162,7 @@ PrepareSource позицию **из результата SQL**, включая d
 Checkpoint использовать только явно настроенный caller bootstrap. Пустота либо
 наличие binding не задаёт offset. Затем Pending/Get восстанавливают работу с её
 исходной provenance; новый snapshot/C не меняет это правило. Применение здесь
-описано для следующего тикета, runtime ещё не подключён.
+подключено в OPS-062; process-проверки — cmd/matcher README.
 
 ReadScope ничего не резервирует: сразу после пустого чтения конкурентный legacy
 writer может первым записать work. Accept всё равно должен атомарно отказать

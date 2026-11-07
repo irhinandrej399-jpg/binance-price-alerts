@@ -16,12 +16,8 @@ func TestGroupInvalidConfig(t *testing.T) {
 	}
 }
 
-func TestLegacyPrepareCannotAssignUnboundOffsets(t *testing.T) {
-	cfg := GroupConfig{Config: Config{Brokers: []string{"localhost:1"}, Topic: "prices", Source: kafkasource.Identity{ClusterID: "cluster", Topic: "prices", TopicID: [16]byte{1}}}, Group: "owners",
-		Prepare: func(context.Context, []int32) (map[int32]int64, error) {
-			t.Fatal("legacy Prepare called")
-			return nil, nil
-		}}
+func TestMissingPrepareSourceCannotAssignOffsets(t *testing.T) {
+	cfg := GroupConfig{Config: Config{Brokers: []string{"localhost:1"}, Topic: "prices", Source: kafkasource.Identity{ClusterID: "cluster", Topic: "prices", TopicID: [16]byte{1}}}, Group: "owners"}
 	if _, err := NewGroup(context.Background(), cfg); !errors.Is(err, ErrConfig) {
 		t.Fatal(err)
 	}

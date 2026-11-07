@@ -62,7 +62,8 @@ sourcebound runtime OPS-062 с доверенными IDs. Отсутствие 
 новой snapshot projection нормально. Legacy cursor/Pending вызывает явный отказ;
 не сбрасывать его на latest, не подставлять config/metadata, не менять scope ради
 обхода проверки, не удалять старое состояние. Автоматический перенос не реализован.
-До OPS-062 текущий cmd/matcher продолжает явно отказывать.
+Runtime подключён в OPS-062; явные переменные и process-проверки —
+[cmd/matcher](../../../cmd/matcher/README.md).
 
 `GOCACHE=/tmp/binance-go-build python3 scripts/check_postgres.py` поднимает
 готовый disposable PostgreSQL, применяет миграции/fixture и запускает race tests.

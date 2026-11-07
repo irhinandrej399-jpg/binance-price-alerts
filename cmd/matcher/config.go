@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -10,12 +11,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type config struct {
 	addr, dsn, prices, changes, environment, group, id string
 	api, latest, serverName, ca, cert, key             string
+	pricesSource, changesSource                        kafkasource.Identity
 	brokers                                            []string
 	bootstrap                                          map[int32]int64
 	snapshotTTL, replayTTL, headInterval               time.Duration
@@ -32,6 +35,21 @@ func addressOK(s string) bool {
 }
 func loadConfig(get func(string) string) (config, error) {
 	c := config{addr: get("HTTP_ADDR"), dsn: get("MATCHER_DATABASE_URL"), prices: get("PRICES_TOPIC"), changes: get("SUBSCRIPTION_CHANGES_TOPIC"), environment: get("MATCHER_ENVIRONMENT"), group: get("MATCHER_GROUP"), id: get("MATCHER_REPLICA_ID"), api: get("API_RPC_ADDR"), latest: get("LATEST_RPC_ADDR"), serverName: get("RPC_SERVER_NAME"), ca: get("RPC_CA_FILE"), cert: get("RPC_CERT_FILE"), key: get("RPC_KEY_FILE")}
+	for key, target := range map[string]*kafkasource.Identity{"PRICES_TOPIC_ID": &c.pricesSource, "SUBSCRIPTION_CHANGES_TOPIC_ID": &c.changesSource} {
+		b, err := hex.DecodeString(get(key))
+		if err != nil || len(b) != 16 {
+			return config{}, errConfig
+		}
+		target.ClusterID = get("KAFKA_CLUSTER_ID")
+		copy(target.TopicID[:], b)
+		target.Topic = c.prices
+		if key == "SUBSCRIPTION_CHANGES_TOPIC_ID" {
+			target.Topic = c.changes
+		}
+		if target.Validate() != nil {
+			return config{}, errConfig
+		}
+	}
 	for _, s := range []string{c.addr, c.api, c.latest} {
 		if !addressOK(s) {
 			return config{}, errConfig

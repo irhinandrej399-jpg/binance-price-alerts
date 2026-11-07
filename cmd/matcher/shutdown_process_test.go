@@ -119,7 +119,7 @@ func testMatcherShutdown(t *testing.T, binary string) {
 		}
 		grant, _, err = fencing.New(reader).Current(ctx, identity)
 		must(err)
-		store := pricework.New(reader, grant.Scope)
+		store := pricework.NewSourceBound(reader, grant, f.PricesSource)
 		keys, e := store.Pending(ctx)
 		must(e)
 		if len(keys) != 1 {
@@ -166,7 +166,7 @@ func testMatcherShutdown(t *testing.T, binary string) {
 	must(apiprocess.With(ctx, cfg, func(p *apiprocess.Process) error {
 		tick := time.NewTicker(10 * time.Millisecond)
 		defer tick.Stop()
-		store := pricework.New(reader, grant.Scope)
+		store := pricework.NewSourceBound(reader, grant, f.PricesSource)
 		for {
 			cp, e := store.Checkpoint(ctx, record.Topic, record.Partition)
 			if e == nil && cp == record.Offset+1 && brokerOffset() == cp {

@@ -30,6 +30,7 @@ import (
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/projection"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/replica"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/snapshotload"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/serviceauth"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/grpctest"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/postgrestest"
@@ -71,6 +72,11 @@ func TestMatcherFaultTakeover(t *testing.T) {
 	if len(created.Topics) != 1 || created.Topics[0].ErrorCode != 0 {
 		t.Fatal(created)
 	}
+	priceSource, _, sourceErr := kafkasource.Metadata(ctx, producer, topic)
+	if sourceErr != nil {
+		t.Fatal(sourceErr)
+	}
+	changesSource := kafkasource.Identity{ClusterID: "controlled", TopicID: [16]byte{1}, Topic: "live-changes"}
 	pair := ""
 	for i := 0; pair == ""; i++ {
 		s := fmt.Sprintf("FAULT%dUSDT", i)
@@ -132,7 +138,7 @@ func TestMatcherFaultTakeover(t *testing.T) {
 		pb.RegisterSubscriptionSnapshotsServer(g, snapshotrpc.NewServer(pins))
 	}, []grpc.DialOption{grpc.WithTransportCredentials(clientCreds(t, client, ca.pem)), grpc.WithAuthority("market.test")}, opts...)
 	delivery := deliveryrpc.NewClient(conn)
-	base := replica.Config{Pool: pool, Environment: t.Name(), Group: topic + "-group", Prices: pricefeed.Config{Brokers: []string{broker}, Topic: topic, Buffer: 512}, Replay: rpc.NewClient(connect(t, rpc.NewServer(pins, api), matcherURI)), Latest: latest, Delivery: delivery, Live: live.Config{ReplayTTL: time.Minute, HeadInterval: 50 * time.Millisecond}, Bootstrap: map[int32]int64{}}
+	base := replica.Config{Pool: pool, Environment: t.Name(), Group: topic + "-group", ChangesSource: changesSource, Prices: pricefeed.Config{Source: priceSource, Brokers: []string{broker}, Topic: topic, Buffer: 512}, Replay: rpc.NewClient(connect(t, rpc.NewServer(pins, api), matcherURI)), Latest: latest, Delivery: delivery, Live: live.Config{ReplayTTL: time.Minute, HeadInterval: 50 * time.Millisecond}, Bootstrap: map[int32]int64{}}
 	for p := int32(0); p < 16; p++ {
 		base.Bootstrap[p] = 0
 	}
@@ -249,9 +255,9 @@ func TestMatcherFaultTakeover(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
 	}
-	pos := pricework.Position{Topic: topic, Partition: 0, Offset: record.Offset}
+	pos := pricework.Position{Source: &priceSource, Topic: topic, Partition: 0, Offset: record.Offset}
 	transportKey := replica.TransportKey(pos)
-	store := pricework.New(reader, oldGrant.Scope)
+	store := pricework.NewSourceBound(reader, oldGrant, priceSource)
 	// Changed and the full transport reader can race to accept this revision.
 	// Both are durable price work; resume the exact accepted key, never assume
 	// which scheduler reached the API first.
@@ -322,7 +328,7 @@ func TestMatcherFaultTakeover(t *testing.T) {
 	wait("transport prefix restored", func() bool { next, e := store.Checkpoint(ctx, topic, 0); return e == nil && next == record.Offset+1 })
 	transportWork, e := store.Get(ctx, transportKey)
 	must(e)
-	if transportWork.State != "completed" || transportWork.Input.Position == nil || *transportWork.Input.Position != pos {
+	if transportWork.State != "completed" || transportWork.Input.Position == nil || transportWork.Input.Position.Source == nil || *transportWork.Input.Position.Source != priceSource || transportWork.Input.Position.Offset != pos.Offset {
 		t.Fatal("transport price not recovered", transportWork)
 	}
 	w, e = store.Get(ctx, key)
@@ -332,7 +338,7 @@ func TestMatcherFaultTakeover(t *testing.T) {
 	}
 	// A revived worker cannot write SQL or invoke its durable ack, even with a
 	// fresh context after the broker has completed reassignment.
-	stale := pricework.NewFenced(pool, oldGrant)
+	stale := pricework.NewSourceBound(pool, oldGrant, priceSource)
 	acked := false
 	if e = stale.Record(ctx, key, ids[1], *w.Entries[1].Result); !errors.Is(e, fencing.ErrAuthority) {
 		t.Fatal("late Record", e)
@@ -342,7 +348,7 @@ func TestMatcherFaultTakeover(t *testing.T) {
 	}
 	var prefix *pricework.Prefix
 	if w.Input.Position != nil {
-		prefix = &pricework.Prefix{Topic: topic, Partition: 0, From: 0, Next: record.Offset + 1}
+		prefix = &pricework.Prefix{Source: priceSource, Topic: topic, Partition: 0, From: 0, Next: record.Offset + 1}
 	}
 	if e = stale.Complete(ctx, key, nil, prefix, func(context.Context) error { acked = true; return nil }); !errors.Is(e, fencing.ErrAuthority) || acked {
 		t.Fatal("late Complete/ack", e, acked)
@@ -404,12 +410,12 @@ func TestMatcherFaultTakeover(t *testing.T) {
 	must(e)
 	value, _ := price.Parse("101")
 	quote := observed.Observed{SchemaVersion: 1, Pair: pair, Price: &value, SourceID: "3", Revision: observed.Revision{StreamID: "fault", Generation: 1, Sequence: 3}, TradeTime: time.Now().UTC(), ReceivedAt: time.Now().UTC(), StreamState: observed.Live}
-	p3 := pricework.Position{Topic: topic, Partition: 0, Offset: record3.Offset}
+	p3 := pricework.Position{Source: &priceSource, Topic: topic, Partition: 0, Offset: record3.Offset}
 	k3 := replica.TransportKey(p3)
-	ws := pricework.NewFenced(pool, grant)
+	ws := pricework.NewSourceBound(pool, grant, priceSource)
 	must(ws.Accept(ctx, pricework.Input{Key: k3, ProjectionID: grant.ProjectionID, C: recovery.Checkpoint.C, Quote: quote, Position: &p3}))
 	lostAck := errors.New("crash before broker Confirm")
-	e = ws.Complete(ctx, k3, nil, &pricework.Prefix{Topic: topic, Partition: 0, From: record.Offset + 1, Next: record3.Offset + 1}, func(context.Context) error { return lostAck })
+	e = ws.Complete(ctx, k3, nil, &pricework.Prefix{Source: priceSource, Topic: topic, Partition: 0, From: record.Offset + 1, Next: record3.Offset + 1}, func(context.Context) error { return lostAck })
 	if !errors.Is(e, lostAck) || brokerOffset() != record.Offset+1 {
 		t.Fatal("ack failure not retained", e)
 	}

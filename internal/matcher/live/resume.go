@@ -53,6 +53,9 @@ func NewResume(store ResumeStore, replay Replay, register func(context.Context, 
 		c.cfg.SnapshotID = r.SnapshotID
 		if r.Topic != "" {
 			position = &changefeed.Position{Topic: r.Topic, Partition: r.Partition, Offset: r.Checkpoint.NextOffset}
+			if r.Checkpoint.Source != nil {
+				position.Source = *r.Checkpoint.Source
+			}
 		}
 		return nil
 	}

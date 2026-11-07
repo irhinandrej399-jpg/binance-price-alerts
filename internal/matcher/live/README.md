@@ -4,7 +4,7 @@
 MAT-014, SUB-022, MAT-015 и MAT-012. `Run(ctx)` обслуживает **одно новое** полное
 поколение MAT-007 и блокируется до отмены/ошибки. Caller задаёт новый отдельный
 projection ID в `projection.New`; один координатор — единственный writer этого
-поколения. `Run` однократный. Внешний runtime/назначение партиций ещё не подключены.
+поколения. `Run` однократный. Назначение партиций и runtime подключены через replica / cmd/matcher.
 
 ```go
 coordinator, err := live.New(projection.New(pool, projectionID), replayClient,
@@ -105,7 +105,7 @@ PostgreSQL-прогон использует управляемый changefeed; 
 `NewResume` получает `projection.New(pool, stableProjectionID)` и читает его
 `Recover` **до регистрации**. SnapshotID в Config должен быть пустым: origin
 восстанавливается из SQL вместе с C и Kafka topic/partition/NextOffset. Владелец
-передаёт тот же стабильный ID; выбор активного поколения в runtime ещё не подключён.
+передаёт тот же стабильный ID; runtime replica выбирает его по набору партиций.
 Новая миграция не нужна. `Initialize` при restart не вызывается, проекция не
 сбрасывается. Истечение срока загрузки локального снимка само по себе не означает
 потери действующего replay-pin: его ресурс/срок проверяются через SUB-022.
@@ -197,3 +197,10 @@ active after-images, tombstone и workflow через второй SQL pool, с�
 C и последний валидированный API head с nullable lag. Контракт и подключение
 через Replica — [matcher/health](../health/README.md). Это локальное наблюдение,
 без SQL/RPC на каждый запрос и без изменения протокола допуска цен.
+
+Source-bound runtime OPS-062 использует `projection.NewSourceBound` вместо
+базового конструктора из примеров: snapshot/replay не синтезируют Kafka cursor,
+а `Batch.Source` берётся из проверенного `registration.Start().Source`.
+`NewResume` переносит `Recover().Checkpoint.Source` в `changefeed.Position.Source`;
+callback сохраняет его в RegisterAt, не подставляя текущую metadata/config.
+Ошибки provenance возвращаются без автоматического нового snapshot.

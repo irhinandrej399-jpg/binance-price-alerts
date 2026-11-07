@@ -5,7 +5,9 @@ package matcherprocess
 import (
 	"context"
 	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -48,12 +50,13 @@ const ServerName = "market.test"
 // Fixture must not be logged: it contains paths to ephemeral service secrets.
 // API SQL is used only by the parent. Every child environment is an allowlist.
 type Fixture struct {
-	Conn                      *grpc.ClientConn
-	Target, Broker, Prefix    string
-	CAFile, CertFile, KeyFile string
-	api                       *pgxpool.Pool
-	quotes                    *quotes
-	delivery                  *deliveryGate
+	PricesSource, ChangesSource kafkasource.Identity
+	Conn                        *grpc.ClientConn
+	Target, Broker, Prefix      string
+	CAFile, CertFile, KeyFile   string
+	api                         *pgxpool.Pool
+	quotes                      *quotes
+	delivery                    *deliveryGate
 }
 
 type quotes struct {
@@ -76,6 +79,23 @@ func (q *quotes) Latest(_ context.Context, pair string) (observed.Observed, erro
 func New(t testing.TB, api *pgxpool.Pool, broker, prefix string) *Fixture {
 	t.Helper()
 	f := &Fixture{api: api, Broker: broker, Prefix: prefix, quotes: &quotes{values: map[string]observed.Observed{}}}
+	if broker != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+		defer cancel()
+		client, err := kgo.NewClient(kgo.SeedBrokers(broker))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer client.Close()
+		f.PricesSource, _, err = kafkasource.Metadata(ctx, client, prefix+"-prices")
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.ChangesSource, _, err = kafkasource.Metadata(ctx, client, prefix+"-subscription-changes")
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	ca := newAuthority(t)
 	server := ca.issue(t, nil, true, false)
 	client := ca.issue(t, []string{MatcherURI}, false, false)
@@ -115,16 +135,19 @@ func New(t testing.TB, api *pgxpool.Pool, broker, prefix string) *Fixture {
 // ChildEnv never copies the parent environment or the fixture's API DSN.
 func (f *Fixture) ChildEnv(matcherDSN string) map[string]string {
 	return map[string]string{
-		"MATCHER_DATABASE_URL":       matcherDSN,
-		"KAFKA_BROKERS":              f.Broker,
-		"SUBSCRIPTION_CHANGES_TOPIC": f.Prefix + "-subscription-changes",
-		"PRICES_TOPIC":               f.Prefix + "-prices",
-		"API_RPC_ADDR":               f.Target,
-		"LATEST_RPC_ADDR":            f.Target,
-		"RPC_SERVER_NAME":            ServerName,
-		"RPC_CA_FILE":                f.CAFile,
-		"RPC_CERT_FILE":              f.CertFile,
-		"RPC_KEY_FILE":               f.KeyFile,
+		"KAFKA_CLUSTER_ID":              f.PricesSource.ClusterID,
+		"PRICES_TOPIC_ID":               hex.EncodeToString(f.PricesSource.TopicID[:]),
+		"SUBSCRIPTION_CHANGES_TOPIC_ID": hex.EncodeToString(f.ChangesSource.TopicID[:]),
+		"MATCHER_DATABASE_URL":          matcherDSN,
+		"KAFKA_BROKERS":                 f.Broker,
+		"SUBSCRIPTION_CHANGES_TOPIC":    f.Prefix + "-subscription-changes",
+		"PRICES_TOPIC":                  f.Prefix + "-prices",
+		"API_RPC_ADDR":                  f.Target,
+		"LATEST_RPC_ADDR":               f.Target,
+		"RPC_SERVER_NAME":               ServerName,
+		"RPC_CA_FILE":                   f.CAFile,
+		"RPC_CERT_FILE":                 f.CertFile,
+		"RPC_KEY_FILE":                  f.KeyFile,
 	}
 }
 
@@ -293,7 +316,7 @@ func (f *Fixture) PublishPrice(ctx context.Context, q observed.Observed) (*kgo.R
 // Changes opens the real Kafka feed at registration LSO, or the exact durable
 // cursor on resume. Close also joins the owning Source and releases its client.
 func (f *Fixture) Changes(ctx context.Context, pos *changefeed.Position) (live.Registration, error) {
-	source, err := changefeed.New(ctx, changefeed.Config{Brokers: []string{f.Broker}, Topic: f.Prefix + "-subscription-changes"})
+	source, err := changefeed.New(ctx, changefeed.Config{Brokers: []string{f.Broker}, Topic: f.Prefix + "-subscription-changes", Source: f.ChangesSource})
 	if err != nil {
 		return nil, err
 	}

@@ -1,4 +1,4 @@
-# Минимальный matcher — OPS-053 / OPS-010
+# Минимальный matcher — OPS-053 / OPS-010 / OPS-062
 
 `go run ./cmd/matcher` запускает одну готовую `replica`: Kafka group → SQL
 fencing → snapshot/replay/live → Latest → canonical RequestDelivery API.
@@ -12,6 +12,8 @@ fencing → snapshot/replay/live → Latest → canonical RequestDelivery API.
 | `HTTP_ADDR` | `127.0.0.1:8082` |
 | `MATCHER_DATABASE_URL` | secret DSN БД `matcher`, роль `matcher_runtime` |
 | `KAFKA_BROKERS` | список `host:port` через запятую |
+| `KAFKA_CLUSTER_ID` | доверенный Kafka ClusterID обоих topics |
+| `PRICES_TOPIC_ID`, `SUBSCRIPTION_CHANGES_TOPIC_ID` | разные ненулевые TopicID: 16 bytes в hex, 32 символа |
 | `PRICES_TOPIC`, `SUBSCRIPTION_CHANGES_TOPIC` | разные topics с 16 и 1 partitions |
 | `MATCHER_ENVIRONMENT` | устойчивое имя окружения, например `local` |
 | `MATCHER_GROUP` | общая Kafka group реплик |
@@ -89,11 +91,41 @@ SQL row lock при отзыве authority проверяет exit 1 вмест�
 Без opt-in тест явно SKIP; при opt-in без конфигурации — FAIL. Это минимальный
 local runtime; полный E2E четырёх сервисов, production PKI и нагрузка остаются отдельно.
 
-## Временная граница после OPS-060
+## Источник и миграция — OPS-062
 
-Транспорт changefeed/pricefeed теперь требует явную broker source identity;
-group требует source-bound PrepareSource. Нынешний cmd/replica ещё не передаёт
-их и явно отказывает при запуске. SQL binding вводит OPS-061, конфигурацию и
-process recovery подключает OPS-062; до этого прежние команды этого README
-не подтверждают работающий runtime. Автоматически присваивать текущую metadata
-историческим checkpoints/Pending запрещено.
+Остановить прежние writers и применить миграции, включая
+`007_source_binding.sql`, прежде чем запускать runtime:
+
+```sh
+python3 scripts/migrate.py --owner matcher
+# Задать KAFKA_CLUSTER_ID, PRICES_TOPIC_ID и SUBSCRIPTION_CHANGES_TOPIC_ID
+# из доверенного provisioning/control plane, затем остальные настройки выше.
+go run ./cmd/matcher
+```
+
+ClusterID/TopicID не являются секретами. TopicID из Kafka CLI в base64 UUID
+нужно преобразовать в hex 16 bytes. Новый runtime сверяет config с metadata
+без auto-create, затем проверяет TopicID каждого fetch до dispatch/ack.
+Изменения и цены должны принадлежать одному настроенному cluster.
+Metadata discovery для нового стенда предоставляет `kafkasource.Metadata`;
+его результат нельзя назначать историческим offsets/Pending.
+
+PrepareSource после Assign проверяет ReadScope всего prices scope до bootstrap.
+При Checkpoint использует durable Source и next; пустой scope либо bound history
+без cursor допускают только явно заданный PRICES_BOOTSTRAP. Latest не создаёт
+transport offset. Projection Checkpoint/Recover проверяют SQL provenance до
+выбора snapshot; NewResume передаёт SQL Source в RegisterAt. Replay C и offset
+остаются независимыми. Scope/проекция не меняют имя при замене источника.
+
+Legacy work любого состояния, включая completed Latest без cursor, либо legacy
+transport cursor дают явный отказ. Другой ClusterID/TopicID даёт source mismatch,
+даже при одинаковых имени/offsets. Ни новая конфигурация, ни новый snapshot
+не связывают старые строки. Перенос/очистка legacy не реализованы; прежние данные
+сохраняются. Ошибка SQL/metadata/source останавливает процесс с exit 1, отменой
+RPC/readers и отзывом grants. Readiness до успешной проверки не появляется.
+
+Process runner дополнительно проверяет legacy Latest без cursor, доказанный
+cursor, Pending при delete/recreate своего topic, перекрывающиеся offsets,
+отказ старой metadata и нового config против прежнего SQL binding, сохранность
+Pending и отзыв grants. Доверие к broker/соединению и неразличимость клона storage
+с теми же IDs описаны в [kafkasource](../../internal/platform/kafkasource/README.md).

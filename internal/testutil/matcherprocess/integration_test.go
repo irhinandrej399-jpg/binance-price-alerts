@@ -184,7 +184,7 @@ func TestDisposableFixture(t *testing.T) {
 	// process wiring and SIGTERM assertions belong to OPS-053/010.
 	pause := f.PauseDelivery(d.IDs[1])
 	defer pause.Release()
-	base := replica.Config{Pool: pool, ID: "fixture", Environment: f.Prefix, Group: f.Prefix + "-matcher", Prices: pricefeed.Config{Brokers: []string{f.Broker}, Topic: f.Prefix + "-prices", Buffer: 512}, Bootstrap: bootstrap, Replay: replayrpc.NewClient(f.Conn), Latest: latest.NewClient(f.Conn), Delivery: deliveryrpc.NewClient(f.Conn), Live: live.Config{ReplayTTL: time.Minute, HeadInterval: 50 * time.Millisecond}}
+	base := replica.Config{Pool: pool, ID: "fixture", Environment: f.Prefix, Group: f.Prefix + "-matcher", ChangesSource: f.ChangesSource, Prices: pricefeed.Config{Source: f.PricesSource, Brokers: []string{f.Broker}, Topic: f.Prefix + "-prices", Buffer: 512}, Bootstrap: bootstrap, Replay: replayrpc.NewClient(f.Conn), Latest: latest.NewClient(f.Conn), Delivery: deliveryrpc.NewClient(f.Conn), Live: live.Config{ReplayTTL: time.Minute, HeadInterval: 50 * time.Millisecond}}
 	base.Snapshot = func(c context.Context, id string) (string, error) {
 		s, e := snapshotload.New(pool, snapshotrpc.NewClient(f.Conn)).Load(c, &pb.BuildSnapshotRequest{RequestId: strings.ReplaceAll(id, ":", "-"), TtlMillis: 60000, PageSize: 1000})
 		return s.SnapshotID, e
@@ -248,7 +248,7 @@ func TestDisposableFixture(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("no delayed delivery")
 	}
-	store := pricework.New(reader, grant.Scope)
+	store := pricework.NewSourceBound(reader, grant, f.PricesSource)
 	keys, err := store.Pending(ctx)
 	must(err)
 	if len(keys) != 1 {
