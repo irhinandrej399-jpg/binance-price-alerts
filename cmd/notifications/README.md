@@ -59,8 +59,22 @@ Claim/CAS, оба лимитера, свежий admission, одна HTTP-поп
 исполняются готовыми пакетами. После потери ответа Result reporter повторяет
 сохранённый исход без нового HTTP. Потеря процесса до durable записи внешнего
 результата сохраняет риск внешнего дубля: неизвестную отправку нельзя считать
-неотправленной. SIGTERM/SIGINT и общий shutdown/drain deadline — OPS-011;
-сейчас используется стандартное завершение ОС, без обещания graceful остановки.
+неотправленной.
+
+SIGTERM/SIGINT снимают readiness, отменяют intake, worker и активные HTTP/RPC.
+Новая работа не начинается; callbacks присоединяются до Close Kafka/SQL/RPC.
+Kafka leave ограничен 2 с, затем отменяется client context и присоединяются
+локальные goroutines; при неподтверждённом leave membership может жить
+до session expiry. Resume всё равно определяется SQL checkpoint.
+Worker даёт PendingWrite отдельный context с WRITE_TIMEOUT для последней
+записи известного исхода, даже после отмены рабочего context. Неподтверждённый
+HTTP сохраняется как uncertain; подтверждённый успех и его report не теряются
+при штатном drain. Не зарегистрированная отправка не выдумывается: lease без
+исхода остаётся до expiry для нового worker. Ошибка final write даёт exit 1;
+чистая остановка — exit 0. Общий предел от сигнала, включая deferred Close, —
+20 секунд; превышение принудительно завершает процесс с exit 1. Незавершённая
+работа восстанавливается из SQL при restart. WRITE_TIMEOUT может превышать
+этот предел: тогда его ограничит общий deadline, без обещания записи результата.
 
 Проверка настоящего executable с race на disposable PostgreSQL/Kafka/mTLS/HTTP:
 
@@ -75,4 +89,7 @@ DB/Kafka — FAIL. Fixture и общая очистка описаны в
 оба limiter state, текущая quote в сообщении, 429/retry_after, unknown,
 success/report после API commit, SIGKILL/restart с прежней identity, отсутствие
 нового job/attempt/HTTP для подтверждённого успеха, startup и terminal intake fault.
+SIGTERM проверяется до HTTP, во время запроса, после подтверждённого ответа
+и при SQL lock на final write; SIGINT — после recovery. Проверяются exit code,
+uncertain/success, lease, bytes и canonical API outcome.
 Четыре процесса, общий E2E и нагрузка остаются отдельными задачами.

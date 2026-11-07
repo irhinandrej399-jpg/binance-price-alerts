@@ -98,3 +98,80 @@ func TestSupervisorWithdrawsReadinessAndJoins(t *testing.T) {
 		})
 	}
 }
+
+// A final persistence error can wrap cancellation; it must still fail shutdown.
+type failedFinalWrite struct{}
+
+func (failedFinalWrite) Error() string               { return "final write failed" }
+func (failedFinalWrite) Retry(context.Context) error { return errors.New("SQL unavailable") }
+
+func TestSupervisorCancellationResult(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		t.Run(map[bool]string{false: "clean", true: "failed_final_write"}[fail], func(t *testing.T) {
+			listener, e := net.Listen("tcp", "127.0.0.1:0")
+			if e != nil {
+				t.Fatal(e)
+			}
+			defer listener.Close()
+			probe := health.New(func(context.Context) error { return nil }, func() bool { return true }, time.Second)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			started := make(chan struct{})
+			done := make(chan error, 1)
+			go func() {
+				done <- supervise(ctx, listener, probe, func(ctx context.Context) error {
+					close(started)
+					<-ctx.Done()
+					if fail {
+						return errors.Join(ctx.Err(), failedFinalWrite{})
+					}
+					return ctx.Err()
+				})
+			}()
+			<-started
+			cancel()
+			select {
+			case e := <-done:
+				if (e != nil) != fail {
+					t.Fatalf("fail=%v error=%v", fail, e)
+				}
+			case <-time.After(3 * time.Second):
+				t.Fatal("join timeout")
+			}
+		})
+	}
+}
+
+func TestShutdownBudget(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	finished := make(chan struct{})
+	done := make(chan bool, 1)
+	go func() { done <- shutdownExpired(ctx, finished, 10*time.Millisecond) }()
+	select {
+	case <-done:
+		t.Fatal("budget started before signal")
+	case <-time.After(30 * time.Millisecond):
+	}
+	cancel()
+	select {
+	case expired := <-done:
+		if !expired {
+			t.Fatal("stuck drain not expired")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("missing deadline")
+	}
+	for _, canceled := range []bool{false, true} {
+		ctx, cancel := context.WithCancel(context.Background())
+		if canceled {
+			cancel()
+		}
+		finished := make(chan struct{})
+		close(finished)
+		if shutdownExpired(ctx, finished, time.Second) {
+			t.Fatal("finished drain expired")
+		}
+		cancel()
+	}
+}

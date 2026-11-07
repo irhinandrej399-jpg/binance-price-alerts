@@ -27,7 +27,11 @@ type Send struct {
 	ParseMode string `json:"parse_mode"`
 	once      sync.Once
 	action    chan int64
+	done      <-chan struct{}
 }
+
+// Done observes the server request context closing (cancellation or completion).
+func (s *Send) Done() <-chan struct{} { return s.done }
 
 func (s *Send) Reply(messageID int64) {
 	if messageID <= 0 {
@@ -53,6 +57,7 @@ func NewTelegram(t testing.TB) *Telegram {
 		}
 		var call Send
 		call.action = make(chan int64, 1)
+		call.done = r.Context().Done()
 		body, err := io.ReadAll(io.LimitReader(r.Body, 8193))
 		if err != nil || len(body) > 8192 || json.Unmarshal(body, &call) != nil || call.ChatID <= 0 || call.Text == "" || call.ParseMode != "HTML" {
 			http.Error(w, "invalid payload", 400)

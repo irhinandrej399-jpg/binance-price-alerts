@@ -55,3 +55,10 @@ Runner миграций применяет notifications и test-only checkpoint
 failures. Без POSTGRES_TEST SQL-тесты пропускаются; Kafka-тесты требуют также
 KAFKA_INTEGRATION и конфигурацию тестового брокера. Обычный `go test` не заменяет
 совместный opt-in прогон.
+
+Остановка владельца вызывает Close после возврата Run/Step: AllowRebalance,
+LeaveGroupContext с отдельным пределом 2 с, затем отмена собственного client
+context и Close/join локального клиента (включая JoinGroup/SyncGroup).
+Ответ брокера о leave не является условием сохранности принятой работы: при
+истечении срока membership может оставаться до session expiry; restart
+продолжает работу по SQL checkpoint. Общий runtime deadline — cmd/notifications.

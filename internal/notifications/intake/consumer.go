@@ -22,6 +22,7 @@ type Config struct {
 // for intake acknowledgement. Callers own the stable environment group name.
 type Consumer struct {
 	client  *kgo.Client
+	cancel  context.CancelFunc
 	store   *Store
 	cfg     Config
 	mu      sync.Mutex
@@ -39,8 +40,9 @@ func New(cfg Config, store *Store) (*Consumer, error) {
 			return nil, ErrConfig
 		}
 	}
-	c := &Consumer{store: store, cfg: cfg, cursors: map[int32]int64{}}
-	cl, e := kgo.NewClient(kgo.SeedBrokers(cfg.Brokers...), kgo.ConsumerGroup(cfg.Group), kgo.ConsumeTopics(cfg.Topic),
+	clientCtx, cancel := context.WithCancel(context.Background())
+	c := &Consumer{store: store, cfg: cfg, cursors: map[int32]int64{}, cancel: cancel}
+	cl, e := kgo.NewClient(kgo.WithContext(clientCtx), kgo.SeedBrokers(cfg.Brokers...), kgo.ConsumerGroup(cfg.Group), kgo.ConsumeTopics(cfg.Topic),
 		kgo.FetchIsolationLevel(kgo.ReadCommitted()), kgo.DisableAutoCommit(),
 		kgo.ConsumeResetOffset(kgo.NoResetOffset()), kgo.KeepRetryableFetchErrors(),
 		kgo.Balancers(kgo.RangeBalancer()), kgo.BlockRebalanceOnPoll(),
@@ -49,6 +51,7 @@ func New(cfg Config, store *Store) (*Consumer, error) {
 		kgo.MaxDecompressBatchBytes(1<<20), kgo.BrokerMaxReadBytes(2<<20), kgo.MaxConcurrentFetches(1),
 		kgo.DialTimeout(time.Second), kgo.RequestTimeoutOverhead(time.Second), kgo.RequestRetries(2), kgo.RetryTimeout(2*time.Second))
 	if e != nil {
+		cancel()
 		return nil, ErrConfig
 	}
 	c.client = cl
@@ -197,4 +200,19 @@ func (c *Consumer) Run(ctx context.Context) error {
 		}
 	}
 }
-func (c *Consumer) Close() { c.fail(errors.New("intake: closed")); c.client.CloseAllowingRebalance() }
+
+// Close joins local work without waiting indefinitely for broker membership.
+// A timed-out LeaveGroup may keep partitions assigned until session expiry;
+// SQL checkpoints, rather than the leave acknowledgement, govern restart.
+// Call only after Run/Step has returned.
+func (c *Consumer) Close() {
+	c.fail(errors.New("intake: closed"))
+	c.client.AllowRebalance()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	_ = c.client.LeaveGroupContext(ctx)
+	cancel()
+	// JoinGroup/SyncGroup use the client context, even after group cancellation.
+	// Cancel it after the bounded leave so Close can join an inflight rebalance.
+	c.cancel()
+	c.client.Close()
+}

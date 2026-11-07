@@ -98,11 +98,11 @@ def main(owner="api"):
         if market or matcher or notifications:
             run(['go', 'test', '-race', '-count=1', '-v', '-timeout', '30s',
                  './internal/testutil/apiprocess'], env, timeout=60)
-        # Matcher runs crash/startup plus graceful/recovery/fault scenarios in
-        # one package (85s + 60s local budgets); retain room for both.
+        # Keep room for crash/startup and graceful/recovery/fault scenarios,
+        # including Kafka membership expiry after SIGKILL.
         run(['go', 'test', '-race', '-count=1', '-v', '-timeout',
-             '150s' if matcher else '90s', args.package], env,
-            timeout=180 if matcher else 120)
+             '210s' if notifications else ('150s' if matcher else '90s'), args.package], env,
+            timeout=240 if notifications else (180 if matcher else 120))
     finally:
         # Go's test timeout/panic does not execute defers. Kill any registered
         # child process groups before removing their disposable infrastructure.

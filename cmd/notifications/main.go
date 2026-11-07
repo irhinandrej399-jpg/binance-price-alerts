@@ -10,6 +10,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/admissionrpc"
@@ -138,10 +140,21 @@ func supervise(parent context.Context, listener net.Listener, probe *health.Hand
 	}
 	launch(func(context.Context) error { return server.Serve(listener) })
 	remaining := len(components) + 1
+	componentFailed := false
+	record := func(err error) {
+		var pending interface {
+			error
+			Retry(context.Context) error
+		}
+		if errors.As(err, &pending) || (err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, http.ErrServerClosed)) {
+			componentFailed = true
+		}
+	}
 	select {
 	case <-parent.Done():
-	case <-results:
+	case err := <-results:
 		remaining--
+		record(err)
 	}
 	probe.SetInitialized(false)
 	cancel()
@@ -152,20 +165,53 @@ func supervise(parent context.Context, listener net.Listener, probe *health.Hand
 		_ = server.Close()
 	}
 	for i := 0; i < remaining; i++ {
-		<-results
+		record(<-results)
 	}
 	if httpErr != nil {
 		return errors.New("notifications: HTTP cleanup incomplete")
 	}
-	if parent.Err() != nil {
-		return parent.Err()
+	if parent.Err() != nil && !componentFailed {
+		return nil
 	}
 	return errors.New("notifications: required component stopped")
 }
+
+// Bound the entire signal drain, including final writes and deferred Close calls.
+func execute(c config) error {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
+	defer stop()
+	finished := make(chan struct{})
+	defer close(finished)
+	go func() {
+		if shutdownExpired(ctx, finished, 20*time.Second) {
+			fmt.Fprintln(os.Stderr, "notifications: shutdown deadline exceeded; durable work requires recovery")
+			os.Exit(1)
+		}
+	}()
+	return run(ctx, c)
+}
+
+// The drain budget starts at cancellation, not process startup.
+func shutdownExpired(ctx context.Context, finished <-chan struct{}, budget time.Duration) bool {
+	select {
+	case <-ctx.Done():
+	case <-finished:
+		return false
+	}
+	timer := time.NewTimer(budget)
+	defer timer.Stop()
+	select {
+	case <-finished:
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
 func main() {
 	c, e := loadConfig(os.Getenv)
 	if e == nil {
-		e = run(context.Background(), c)
+		e = execute(c)
 	}
 	if e != nil {
 		fmt.Fprintln(os.Stderr, e)

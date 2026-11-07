@@ -28,7 +28,7 @@ func TestNotificationsProcess(t *testing.T) {
 	if os.Getenv("POSTGRES_TEST") != "1" || os.Getenv("KAFKA_TEST_BROKER") == "" || os.Getenv("KAFKA_TEST_PREFIX") == "" {
 		t.Fatal("notifications opt-in requires PostgreSQL/Kafka configuration")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 70*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 	must := func(e error) {
 		t.Helper()
@@ -121,6 +121,47 @@ func TestNotificationsProcess(t *testing.T) {
 			t.Fatal("kill not reaped")
 		}
 	}
+	stop := func(p *apiprocess.Process, sig syscall.Signal, expected int) {
+		t.Helper()
+		must(syscall.Kill(-p.PID(), sig))
+		timer := time.NewTimer(15 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-p.Done():
+			code, ok := p.ExitCode()
+			if !ok || code != expected {
+				t.Fatalf("signal exit=%d want=%d", code, expected)
+			}
+		case <-timer.C:
+			t.Fatal("signal drain exceeded test budget")
+		}
+	}
+	producer, e := kgo.NewClient(kgo.SeedBrokers(f.Broker))
+	must(e)
+	defer producer.Close()
+	// A recovered SQL job can complete before Kafka has joined. Observe a
+	// canonical duplicate through intake before stopping that child, proving
+	// restart deduplication and avoiding a succession of abandoned JoinGroups.
+	confirmIntake := func() {
+		t.Helper()
+		before := observe()
+		duplicate := &kgo.Record{Topic: record.Topic, Key: d.Key, Value: d.Body}
+		must(producer.ProduceSync(ctx, duplicate).FirstErr())
+		wait("restart duplicate SQL prefix", func() bool {
+			n, e := np.Checkpoint(ctx, reader, duplicate.Topic, duplicate.Partition)
+			return e == nil && n >= duplicate.Offset+1
+		})
+		wait("restart duplicate broker prefix", func() bool {
+			n, e := f.BrokerOffset(ctx, env["NOTIFICATIONS_GROUP"], duplicate.Partition)
+			return e == nil && n >= duplicate.Offset+1
+		})
+		after := observe()
+		if after.State != before.State || after.Attempts != before.Attempts || after.Claims != before.Claims || after.Successes != before.Successes || !bytes.Equal(after.Body, before.Body) {
+			t.Fatal("duplicate intake changed completed job")
+		}
+		noHTTP()
+	}
+
 	f.SetPrice("99", 1)
 	// False Latest gates HTTP despite a canonical historical candidate.
 	must(apiprocess.With(ctx, cfg, func(p *apiprocess.Process) error {
@@ -215,9 +256,121 @@ func TestNotificationsProcess(t *testing.T) {
 		if n != 1 {
 			t.Fatal("outbox duplicated")
 		}
-		kill(p)
+		confirmIntake()
+		stop(p, syscall.SIGINT, 0)
 		return nil
 	}))
+	// Real signals at deterministic delivery boundaries, using the same durable
+	// intake group/checkpoint. A confirmed HTTP response is proved by Result RPC.
+	for _, phase := range []string{"before", "during", "after", "write_failure"} {
+		t.Log("signal phase:", phase)
+		d, e = f.Seed(ctx)
+		must(e)
+		trigger = d.Record.Workflow.TriggerID
+		f.SetPrice("101", 3)
+		var gate *np.Pause
+		if phase == "before" {
+			gate = f.PauseRPC(pb.Admission_PrepareRecipient_FullMethodName, true)
+		}
+		must(f.Publish(ctx))
+		must(apiprocess.With(ctx, cfg, func(p *apiprocess.Process) error {
+			if phase == "before" {
+				select {
+				case <-gate.Entered:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+				noHTTP()
+				stop(p, syscall.SIGTERM, 0)
+				gate.Release()
+				o := observe()
+				if o.Attempts != 0 || o.Successes != 0 || o.LeaseID == nil {
+					t.Fatal("send or lost lease before HTTP boundary")
+				}
+				return nil
+			}
+			send := call()
+			o := observe()
+			if o.Attempts != 1 || o.LeaseID == nil {
+				t.Fatal("missing registered lease")
+			}
+			if phase == "during" {
+				stop(p, syscall.SIGTERM, 0)
+				select {
+				case <-send.Done():
+				case <-ctx.Done():
+					return errors.New("HTTP not canceled")
+				}
+				o = observe()
+				if o.Successes != 0 || o.Uncertainties != 1 || o.LeaseID != nil {
+					t.Fatal("canceled send not durably uncertain")
+				}
+			} else if phase == "after" {
+				gate = f.PauseRPC(pb.DeliveryResults_SaveDeliveryResult_FullMethodName, true)
+				send.Reply(91)
+				select {
+				case <-gate.Entered:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+				stop(p, syscall.SIGTERM, 0)
+				gate.Release()
+				o = observe()
+				if o.Successes != 1 || o.PendingReports != 0 {
+					t.Fatal("confirmed success lost on shutdown")
+				}
+			} else {
+				// Block only this job's final SQL write beyond WRITE_TIMEOUT. The
+				// server has replied, but no durable success may be claimed by shutdown.
+				tx, e := reader.Begin(ctx)
+				must(e)
+				defer tx.Rollback(context.Background())
+				_, e = tx.Exec(ctx, "SELECT 1 FROM app.delivery_jobs WHERE trigger_id=$1 FOR UPDATE", trigger)
+				must(e)
+				send.Reply(92)
+				wait("success write blocked", func() bool {
+					var n int
+					must(reader.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE usename='notifications_runtime' AND wait_event_type='Lock'`).Scan(&n))
+					return n > 0
+				})
+				stop(p, syscall.SIGTERM, 1)
+				must(tx.Rollback(ctx))
+				o = observe()
+				if o.Successes != 0 || o.Attempts != 1 {
+					t.Fatal("failed final write reported success")
+				}
+			}
+			noHTTP()
+			return nil
+		}))
+		f.SetPrice("101", 4)
+		must(apiprocess.With(ctx, cfg, func(p *apiprocess.Process) error {
+			if phase != "after" {
+				next := call()
+				next.Reply(93)
+			}
+			wait("signal recovery success", func() bool { return observe().Successes == 1 && observe().PendingReports == 0 })
+			o := observe()
+			if !bytes.Equal(o.Body, d.Body) {
+				t.Fatal("signal recovery changed bytes")
+			}
+			if phase == "after" && o.Attempts != 1 {
+				t.Fatal("confirmed send repeated")
+			}
+			if phase == "write_failure" && o.Uncertainties != 1 {
+				t.Fatal("lost outcome not recovered uncertain")
+			}
+			canonical, e := f.Result(ctx, d)
+			must(e)
+			if canonical.State != domain.Delivered {
+				t.Fatal("signal recovery not delivered")
+			}
+			noHTTP()
+			confirmIntake()
+			stop(p, syscall.SIGINT, 0)
+			return nil
+		}))
+	}
 	// Fail startup before any readiness for missing credentials, foreign SQL owner,
 	// identity mismatch, bad Telegram config and unavailable SQL.
 	for _, tc := range []struct{ k, v string }{{"RPC_CERT_FILE", "/unavailable/secret"}, {"RPC_CA_FILE", f.KeyFile}, {"NOTIFICATIONS_DATABASE_URL", "postgres://notifications_runtime:secret@127.0.0.1:1/notifications?sslmode=disable&connect_timeout=1"}, {"RPC_IDENTITY", "spiffe://process.test/wrong"}, {"NOTIFICATIONS_DATABASE_URL", "postgres://api_runtime:secret@localhost/api"}, {"TELEGRAM_BASE_URL", "https://secret@host"}} {
@@ -233,9 +386,6 @@ func TestNotificationsProcess(t *testing.T) {
 		}
 	}
 	// A malformed committed record is terminal: never ack/reset past it.
-	producer, e := kgo.NewClient(kgo.SeedBrokers(f.Broker))
-	must(e)
-	defer producer.Close()
 	badrecord := &kgo.Record{Topic: record.Topic, Key: d.Key, Value: []byte(`invalid`)}
 	must(producer.ProduceSync(ctx, badrecord).FirstErr())
 	terminal := cfg

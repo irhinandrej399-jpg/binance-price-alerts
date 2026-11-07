@@ -53,6 +53,7 @@ API deliveryrelay; `f.SetPrice(value, sequence)` меняет Latest, сохра
 `*Send` содержит ChatID/Text/ParseMode и ждёт `Reply(positiveMessageID)`, `RateLimit()` (429/retry_after=1) либо
 `Disconnect()`; первая команда побеждает. Endpoint проверяет POST/path/JSON/HTML,
 не делает внешних вызовов. Ожидания ограничены context, 20 с и cleanup.
+`Send.Done()` наблюдает закрытие server request context (отмена/завершение).
 Reply сообщает серверный ответ; получение его child доказывается последующим
 Result RPC/SQL, а не самим фактом Reply. Отдельный `NewTelegram(t)` позволяет
 проверить wire adapter без SQL/Kafka.
