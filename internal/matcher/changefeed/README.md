@@ -7,6 +7,7 @@
 ```go
 source, err := changefeed.New(ownerCtx, changefeed.Config{
     Brokers: brokers, Topic: prefix + "-subscription-changes",
+    Source: expectedSource, // kafkasource.Identity из provisioning / durable binding
 })
 if err != nil { return err }
 defer source.Close()
@@ -29,7 +30,7 @@ for {
 На Source разрешена одна успешная регистрация. Register проверяет metadata:
 ровно одна партиция 0; получает её read_committed last stable offset (LSO),
 устанавливает абсолютный direct cursor и запускает reader до возврата.
-`Start()` — неизменяемая включённая позиция `(topic, 0, offset)`. Публикация,
+`Start()` — неизменяемая включённая позиция `(Source, topic, 0, offset)`. Публикация,
 завершившаяся раньше LSO, покрывается последующим SQL-replay; открытая на этой
 границе транзакция будет прочитана после commit. High watermark вместо LSO
 использовать нельзя. Потеря регистрации требует нового Source/bootstrap,
@@ -109,8 +110,25 @@ EXIT удаляет стенд/volume. Без KAFKA_INTEGRATION=1 реальны
 
 `RegisterAt(ctx, Position)` регистрирует тот же вход с абсолютного NextOffset,
 сохранённого вместе с проекцией в SQL. Broker committed offsets не читаются.
-Проверяются topic/partition=0, неотрицательный offset и наличие позиции между
+Position.Source обязателен и должен совпасть с Config.Source; прежний offset
+с новой identity не принимается. Проверяются topic/partition=0, неотрицательный offset и наличие позиции между
 log-start и read_committed LSO; далее действует прежний NoResetOffset и контроль
 Done/Err. Позиция должна быть границей целой транзакции, полученной этим источником,
 а не произвольным offset. Ошибка не подменяется новой регистрацией с latest.
 Register/RegisterAt совместно допускают только одну успешную регистрацию на Source.
+
+## Source identity — OPS-060
+
+`Config.Source` — ожидаемая `kafkasource.Identity`;
+[общий контракт, ошибки и доверие](../../platform/kafkasource/README.md).
+Register/RegisterAt сверяют свежую metadata до и после выбора позиции;
+каждый PollRecords fetch проверяется до Records, включая commit/abort markers.
+Metadata повторно проверяется раз в секунду также при непрерывном потоке.
+Ошибка имеет приоритет над queued/inflight работой и Confirm, отменяет reader.
+`Start().Source` и `Record.Position.Source` копируют исходную identity и не
+меняются при новом broker metadata. Confirmed/NextOffset — только числа в
+рамках этой identity; хранить их отдельно от неё для resume нельзя.
+
+SQL binding/защита старых writers — OPS-061; NewResume и cmd/matcher — OPS-062.
+Нынешний runtime ещё не передаёт identity и получает явный отказ; fallback
+на discovery или автоматическое присвоение старому checkpoint не добавлены.

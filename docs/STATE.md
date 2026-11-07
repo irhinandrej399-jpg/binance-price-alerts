@@ -4,8 +4,9 @@
 
 ## Активная работа
 
-- Активная реализация: нет. Следующий шаг — сессионная проверка OPS-014 (безопасный префикс журнала Kafka). Незавершённые raw/code исследований сохранены по DEC-010; kernel/capacity квалификация локальный запуск не блокирует.
-- Последний завершённый тикет: [OPS-011](backlog/tickets/OPS-011.md), [graceful notifications](../cmd/notifications/README.md). SIGTERM/SIGINT отменяют intake/worker/HTTP/RPC, final PendingWrite получает свежий context, callbacks/Kafka присоединяются до pool.Close; общий предел 20 с. Process/race PostgreSQL/Kafka подтвердил before/during/after HTTP, uncertain/success, final SQL fault → exit 1 и recovery, duplicate bytes/SQL/broker Prefix без новой отправки. Общая race-регрессия/vet/build PASS; cleanup подтверждён. Неподтверждённый Kafka leave может ждать session expiry; внешний дубль при неизвестном исходе остаётся возможным.
+- Активная реализация: нет. Следующий шаг — сессионная проверка OPS-061 (SQL source binding). OPS-060 завершён; нынешний cmd/matcher до подключения OPS-062 явно отказывает без identity/PrepareSource. OPS-014/056 ждут OPS-061/062 и exporter/fixture OPS-057/058. Незавершённые raw/code исследований сохранены по DEC-010; kernel/capacity квалификация локальный запуск не блокирует.
+- Последний завершённый тикет: [OPS-060](backlog/tickets/OPS-060.md), [Kafka source identity](../internal/platform/kafkasource/README.md). Общие ClusterID/TopicID/Topic, metadata без auto-create и fetch-проверка до data/control dispatch на changefeed/direct/group. Resume/PrepareSource несут source-bound позиции; delete/recreate с совпадающими offsets отвергается. Disposable Kafka/race, общая race-регрессия/vet/build и cleanup PASS. SQL provenance и runtime — OPS-061/062; прежний matcher пока отказывает без нового контракта.
+- Предыдущий завершённый тикет: [OPS-011](backlog/tickets/OPS-011.md), [graceful notifications](../cmd/notifications/README.md). SIGTERM/SIGINT отменяют intake/worker/HTTP/RPC, final PendingWrite получает свежий context, callbacks/Kafka присоединяются до pool.Close; общий предел 20 с. Process/race PostgreSQL/Kafka подтвердил before/during/after HTTP, uncertain/success, final SQL fault → exit 1 и recovery, duplicate bytes/SQL/broker Prefix без новой отправки. Общая race-регрессия/vet/build PASS; cleanup подтверждён. Неподтверждённый Kafka leave может ждать session expiry; внешний дубль при неизвестном исходе остаётся возможным.
 - Предыдущий завершённый тикет: [OPS-055](backlog/tickets/OPS-055.md), [минимальный notifications](../cmd/notifications/README.md). Собраны intake/jobs/оба SQL limiter/Telegram/mTLS Admission/Result/report/handler/worker/health; явная конфигурация и terminal cleanup/join. Два PostgreSQL/Kafka process/race прогона: canonical bytes/IDs и SQL/broker Prefix, false Latest без HTTP, 429/unknown/success, SIGKILL/restart pending report без нового job/attempt/HTTP/outbox. Startup/terminal intake fault и cleanup подтверждены; общая race-регрессия/vet/build PASS. Graceful SIGTERM — OPS-011; риск внешнего дубля после неизвестной отправки сохраняется.
 - Предыдущий завершённый тикет: [OPS-054](backlog/tickets/OPS-054.md), [disposable notifications fixture](../internal/testutil/notificationsprocess/README.md). Общий apiprocess lifecycle/runner, только своя БД у child, родительские canonical API workflow/outbox, mTLS Admission/Result/Latest и управляемый Telegram HTTP. Два PostgreSQL/Kafka/race прогона: исходные bytes, SQL/broker Prefix, запрет Send при false Latest, success и восстановление report после потерянного ответа без нового HTTP/attempt/outbox. Изоляция/startup и аварийный owner-exit cleanup подтверждены; общая race-регрессия/vet/build PASS. Executable завершён в OPS-055; SIGTERM — OPS-011.
 - Предыдущий завершённый тикет: [OPS-010](backlog/tickets/OPS-010.md), [graceful shutdown matcher](../cmd/matcher/README.md). SIGTERM/SIGINT отменяют intake/оценки/RPC, присоединяют replica/readers/Kafka и отзывают grants до pool.Close; общий предел 20 с. Два успешных PostgreSQL/Kafka process/race прогона: частичный Pending/неоднозначный API commit, exit 0, все 16 grants отозваны, restart/canonical IDs без дублей, SQL/broker Prefix, SIGINT и явный exit 1 при SQL cleanup fault. Cleanup подтверждён; общая race-регрессия/vet/build PASS. Незавершённая работа восстанавливается после restart; полный E2E впереди.
@@ -144,7 +145,20 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-[OPS-014](backlog/tickets/OPS-014.md): сессионная проверка безопасного префикса журнала Kafka.
+[OPS-061](backlog/tickets/OPS-061.md): сессионная проверка атомарного SQL
+binding/checkpoint и защиты от старых writers. OPS-060 завершил transport:
+общий kafkasource.Identity, Config.Source, Position.Source и group PrepareSource
+с source-bound позициями. Контракт/ошибки/доверие — platform/kafkasource README.
+SQL и runtime ещё не подключены; cmd/matcher явно отказывает. После OPS-061
+в OPS-062 заменить replica Prepare, удалить неиспользуемый compilation bridge,
+передать durable IDs в resume и повторить process recovery на готовой fixture.
+После OPS-062 вернуться к OPS-056; его зависимость обновлена. Проверка metadata
+только при старте недостаточна, текущая конфигурация не доказывает происхождение
+исторического checkpoint. Исходное состояние/Pending сохраняется.
+OPS-014 не готов: локальные SQL readers не являются интерфейсом cleaner; нужны
+OPS-056/057 (matcher/notifications) и OPS-058 (совместная disposable fixture).
+Сессионная проверка сохранена в карточке OPS-014; реализация не начата,
+retention/pins не изменены, скорость cleaner по-прежнему считается нулевой.
 OPS-011 завершил SIGTERM/SIGINT [notifications](../cmd/notifications/README.md):
 отмена HTTP/RPC/intake, final PendingWrite и bounded Kafka leave/client join,
 20 с на весь signal drain. Process/race проверил before/during/after HTTP,
@@ -194,7 +208,7 @@ NTF-006 рассчитывает retry Plan и бюджет доказанных
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show OPS-014` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show OPS-061` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

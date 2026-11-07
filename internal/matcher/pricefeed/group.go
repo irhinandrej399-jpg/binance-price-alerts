@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 )
@@ -21,11 +22,14 @@ var ErrLost = errors.New("pricefeed: group assignment lost")
 type GroupConfig struct {
 	Config
 	Group string
-	// Prepare installs caller authority and returns absolute next offsets from
+	// PrepareSource installs caller authority and returns source-bound positions from
 	// the caller's checkpoint/bootstrap policy, NOT Kafka's committed offsets.
 	// It must honor ctx, finish within three seconds, and make no use of Group
 	// methods. ctx is also cancelled on group failure/Close. A late result never
 	// enables work. SQL token issuance is the caller's responsibility (MAT-010).
+	PrepareSource func(ctx context.Context, partitions []int32) (map[int32]Position, error)
+	// Deprecated: compilation bridge for the not-yet-migrated runtime (OPS-062).
+	// This callback is never called; without PrepareSource NewGroup refuses.
 	Prepare func(ctx context.Context, partitions []int32) (map[int32]int64, error)
 }
 
@@ -54,8 +58,14 @@ type Assignment struct {
 }
 
 func NewGroup(parent context.Context, cfg GroupConfig) (*Group, error) {
-	if len(cfg.Brokers) == 0 || strings.TrimSpace(cfg.Topic) == "" || strings.TrimSpace(cfg.Group) == "" || cfg.Prepare == nil || len(cfg.Partitions) != 0 || cfg.Buffer < 0 || cfg.Buffer > MaxBuffer {
+	if len(cfg.Brokers) == 0 || strings.TrimSpace(cfg.Topic) == "" || strings.TrimSpace(cfg.Group) == "" || cfg.PrepareSource == nil || len(cfg.Partitions) != 0 || cfg.Buffer < 0 || cfg.Buffer > MaxBuffer {
 		return nil, ErrConfig
+	}
+	if err := cfg.Source.Validate(); err != nil {
+		return nil, errors.Join(ErrConfig, err)
+	}
+	if cfg.Source.Topic != cfg.Topic {
+		return nil, errors.Join(ErrConfig, kafkasource.ErrMismatch)
 	}
 	for _, b := range cfg.Brokers {
 		if strings.TrimSpace(b) == "" {
@@ -99,22 +109,16 @@ func PairPartition(pair string) int32 {
 }
 
 func (g *Group) metadata(parent context.Context) error {
-	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
-	defer cancel()
-	req := kmsg.NewPtrMetadataRequest()
-	t := kmsg.NewMetadataRequestTopic()
-	t.Topic = &g.cfg.Topic
-	req.Topics = []kmsg.MetadataRequestTopic{t}
-	resp, err := req.RequestWith(ctx, g.client)
+	parts, err := g.cfg.Source.Verify(parent, g.client)
 	if err != nil {
-		return errors.Join(ErrContinuity, ErrPosition, ctx.Err())
+		return errors.Join(ErrContinuity, ErrPosition, err)
 	}
-	if len(resp.Topics) != 1 || resp.Topics[0].ErrorCode != 0 || len(resp.Topics[0].Partitions) != 16 {
+	if len(parts) != 16 {
 		return errors.Join(ErrContinuity, ErrConfig)
 	}
 	seen := map[int32]bool{}
-	for _, p := range resp.Topics[0].Partitions {
-		if p.ErrorCode != 0 || p.Partition < 0 || p.Partition >= 16 || seen[p.Partition] {
+	for _, p := range parts {
+		if p.Partition < 0 || p.Partition >= 16 || seen[p.Partition] {
 			return errors.Join(ErrContinuity, ErrConfig)
 		}
 		seen[p.Partition] = true
@@ -174,16 +178,16 @@ func (g *Group) assign(session context.Context, fetched map[string]map[int32]kgo
 		return nil, err
 	}
 	type prepared struct {
-		offsets map[int32]int64
+		offsets map[int32]Position
 		err     error
 	}
 	result := make(chan prepared, 1)
 	go func() {
-		offsets, err := g.cfg.Prepare(ctx, append([]int32(nil), parts...))
+		offsets, err := g.cfg.PrepareSource(ctx, append([]int32(nil), parts...))
 		// Caller transfers ownership of the returned map.
 		result <- prepared{offsets, err}
 	}()
-	var starts map[int32]int64
+	var starts map[int32]Position
 	select {
 	case r := <-result:
 		if r.err != nil {
@@ -204,16 +208,24 @@ func (g *Group) assign(session context.Context, fetched map[string]map[int32]kgo
 	copyStarts := make(map[int32]int64, len(parts))
 	for _, p := range parts {
 		o, ok := starts[p]
-		if !ok || o < 0 {
+		if !ok || o.Offset < 0 {
 			g.fail(ErrPrepare)
 			return nil, ErrPrepare
 		}
-		abs[p] = kgo.NoResetOffset().At(o).WithEpoch(-1)
+		if err := o.Source.Validate(); err != nil {
+			g.fail(err)
+			return nil, err
+		}
+		if o.Source != g.cfg.Source || o.Topic != g.cfg.Topic || o.Partition != p {
+			g.fail(kafkasource.ErrMismatch)
+			return nil, kafkasource.ErrMismatch
+		}
+		abs[p] = kgo.NoResetOffset().At(o.Offset).WithEpoch(-1)
 		assigned[p] = true
-		copyStarts[p] = o
+		copyStarts[p] = o.Offset
 	}
 	life, end := context.WithCancel(g.ctx)
-	s := &Source{client: g.client, topic: g.cfg.Topic, assigned: assigned, regs: make(map[string]*Registration), limit: g.cfg.Buffer, ctx: life, cancel: end}
+	s := &Source{identity: g.cfg.Source, client: g.client, topic: g.cfg.Topic, assigned: assigned, regs: make(map[string]*Registration), limit: g.cfg.Buffer, ctx: life, cancel: end}
 	// Validate the caller cursor before publishing any usable capability. Both
 	// ends are queried with read_committed isolation; no reset is performed.
 	for _, timestamp := range []int64{-2, -1} {
@@ -252,6 +264,11 @@ func (g *Group) assign(session context.Context, fetched map[string]map[int32]kgo
 			return nil, ErrPosition
 		}
 	}
+	if err := g.metadata(ctx); err != nil {
+		end()
+		g.fail(err)
+		return nil, err
+	}
 	a := &Assignment{source: s, starts: copyStarts, delivered: make(map[int32][]Position)}
 	s.groupAssignment = a
 	a.all = &Registration{source: s, changed: make(chan struct{}), terminated: make(chan struct{})}
@@ -287,10 +304,17 @@ func (g *Group) NextAssignment(ctx context.Context, after *Assignment) (*Assignm
 			g.mu.Unlock()
 			return nil, err
 		}
-		if g.current != nil && g.current != after {
+		if g.current != nil {
 			a := g.current
-			g.mu.Unlock()
-			return a, nil
+			if err := a.Err(); err != nil {
+				g.mu.Unlock()
+				g.fail(err)
+				return nil, err
+			}
+			if a != after {
+				g.mu.Unlock()
+				return a, nil
+			}
 		}
 		ch := g.changed
 		g.mu.Unlock()
@@ -301,13 +325,14 @@ func (g *Group) NextAssignment(ctx context.Context, after *Assignment) (*Assignm
 		}
 	}
 }
-func (g *Group) Done() <-chan struct{}         { return g.ctx.Done() }
-func (g *Group) Err() error                    { g.mu.Lock(); defer g.mu.Unlock(); return g.err }
-func (g *Group) Close()                        { g.closeOnce.Do(func() { g.fail(ErrClosed); <-g.done }) }
-func (a *Assignment) ID() uint64               { return a.id }
-func (a *Assignment) Context() context.Context { return a.source.ctx }
-func (a *Assignment) Done() <-chan struct{}    { return a.source.ctx.Done() }
-func (a *Assignment) Err() error               { a.source.mu.Lock(); defer a.source.mu.Unlock(); return a.source.err }
+func (g *Group) Done() <-chan struct{}                     { return g.ctx.Done() }
+func (g *Group) Err() error                                { g.mu.Lock(); defer g.mu.Unlock(); return g.err }
+func (g *Group) Close()                                    { g.closeOnce.Do(func() { g.fail(ErrClosed); <-g.done }) }
+func (a *Assignment) ID() uint64                           { return a.id }
+func (a *Assignment) Context() context.Context             { return a.source.ctx }
+func (a *Assignment) Done() <-chan struct{}                { return a.source.ctx.Done() }
+func (a *Assignment) Err() error                           { a.source.mu.Lock(); defer a.source.mu.Unlock(); return a.source.err }
+func (a *Assignment) SourceIdentity() kafkasource.Identity { return a.source.identity }
 func (a *Assignment) Starts() map[int32]int64 {
 	out := make(map[int32]int64, len(a.starts))
 	for p, o := range a.starts {
@@ -339,6 +364,13 @@ func (a *Assignment) Confirm(parent context.Context, pos Position) error {
 	}
 	if err := parent.Err(); err != nil {
 		return err
+	}
+	if pos.Source != s.identity {
+		return kafkasource.ErrMismatch
+	}
+	if _, err := s.identity.Verify(parent, s.client); err != nil {
+		s.failLocked(err)
+		return s.err
 	}
 	ps := a.delivered[pos.Partition]
 	if len(ps) == 0 || ps[0] != pos {
@@ -393,7 +425,15 @@ func (g *Group) read() {
 		g.mu.Lock()
 		a := g.current
 		g.mu.Unlock()
+		if err := g.cfg.Source.CheckFetches(fs); err != nil {
+			g.client.AllowRebalance()
+			g.fail(err)
+			return
+		}
 		for _, r := range fs.Records() {
+			if r.Attrs.IsControl() {
+				continue
+			}
 			if a == nil || !a.source.dispatch(r) {
 				g.client.AllowRebalance()
 				if a != nil {

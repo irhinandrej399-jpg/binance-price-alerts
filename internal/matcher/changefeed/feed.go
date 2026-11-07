@@ -11,6 +11,7 @@ import (
 
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/event"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/subscriptionchanged"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 )
@@ -31,12 +32,14 @@ const MaxBuffer = 1024
 const MaxPayload = 4096
 
 type Config struct {
+	Source  kafkasource.Identity // explicitly expected broker incarnation
 	Brokers []string
 	Topic   string
 	Buffer  int // records including assembly, queue and the unconfirmed delivery; zero = 1024
 	Dialer  func(context.Context, string, string) (net.Conn, error)
 }
 type Position struct {
+	Source    kafkasource.Identity
 	Topic     string
 	Partition int32
 	Offset    int64
@@ -90,6 +93,12 @@ func New(parent context.Context, cfg Config) (*Source, error) {
 	if len(cfg.Brokers) == 0 || cfg.Topic == "" || cfg.Buffer < 0 || cfg.Buffer > MaxBuffer {
 		return nil, ErrConfig
 	}
+	if err := cfg.Source.Validate(); err != nil {
+		return nil, errors.Join(ErrConfig, err)
+	}
+	if cfg.Source.Topic != cfg.Topic {
+		return nil, errors.Join(ErrConfig, kafkasource.ErrMismatch)
+	}
 	if cfg.Buffer == 0 {
 		cfg.Buffer = MaxBuffer
 	}
@@ -129,6 +138,12 @@ func (s *Source) Register(parent context.Context) (*Registration, error) {
 func (s *Source) RegisterAt(parent context.Context, position Position) (*Registration, error) {
 	if position.Topic != s.cfg.Topic || position.Partition != 0 || position.Offset < 0 {
 		return nil, ErrPosition
+	}
+	if err := position.Source.Validate(); err != nil {
+		return nil, err
+	}
+	if position.Source != s.cfg.Source {
+		return nil, kafkasource.ErrMismatch
 	}
 	return s.register(parent, &position)
 }
@@ -170,7 +185,10 @@ func (s *Source) register(parent context.Context, resume *Position) (*Registrati
 	if err = ctx.Err(); err != nil {
 		return nil, err
 	}
-	r := &Registration{topic: s.cfg.Topic, start: Position{s.cfg.Topic, 0, offset}, limit: s.cfg.Buffer, confirmed: offset, lastOffset: offset - 1, changed: make(chan struct{}), done: make(chan struct{}), ctx: ctx, cancel: cancel}
+	if err := s.singlePartition(ctx); err != nil {
+		return nil, err
+	}
+	r := &Registration{topic: s.cfg.Topic, start: Position{s.cfg.Source, s.cfg.Topic, 0, offset}, limit: s.cfg.Buffer, confirmed: offset, lastOffset: offset - 1, changed: make(chan struct{}), done: make(chan struct{}), ctx: ctx, cancel: cancel}
 	s.reg = r
 	s.client.AddConsumePartitions(map[string]map[int32]kgo.Offset{s.cfg.Topic: {0: kgo.NoResetOffset().At(offset)}})
 	s.readerDone = make(chan struct{})
@@ -179,21 +197,16 @@ func (s *Source) register(parent context.Context, resume *Position) (*Registrati
 	return r, nil
 }
 func (s *Source) singlePartition(parent context.Context) error {
-	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
-	defer cancel()
-	req := kmsg.NewPtrMetadataRequest()
-	t := kmsg.NewMetadataRequestTopic()
-	t.Topic = &s.cfg.Topic
-	req.Topics = []kmsg.MetadataRequestTopic{t}
-	resp, err := req.RequestWith(ctx, s.client)
+	parts, err := s.cfg.Source.Verify(parent, s.client)
 	if err != nil {
-		return errors.Join(ErrContinuity, ErrPosition, ctx.Err())
+		return errors.Join(ErrContinuity, ErrPosition, err)
 	}
-	if len(resp.Topics) != 1 || resp.Topics[0].ErrorCode != 0 || len(resp.Topics[0].Partitions) != 1 || resp.Topics[0].Partitions[0].Partition != 0 || resp.Topics[0].Partitions[0].ErrorCode != 0 {
+	if len(parts) != 1 || parts[0].Partition != 0 {
 		return errors.Join(ErrContinuity, ErrPosition)
 	}
 	return nil
 }
+
 func (s *Source) position(parent context.Context) (int64, error) {
 	return s.offsetAt(parent, -1)
 }
@@ -223,6 +236,7 @@ func (s *Source) offsetAt(parent context.Context, timestamp int64) (int64, error
 	return v.Offset, nil
 }
 func (s *Source) read(r *Registration) {
+	checked := time.Now()
 	for {
 		poll, cancel := context.WithTimeout(r.ctx, time.Second)
 		fs := s.client.PollRecords(poll, 1)
@@ -239,12 +253,21 @@ func (s *Source) read(r *Registration) {
 			r.fail(ErrPosition)
 			return
 		}
+		if err := s.cfg.Source.CheckFetches(fs); err != nil {
+			r.fail(err)
+			return
+		}
 		for _, v := range fs.Records() {
 			if !r.accept(v) {
 				return
 			}
 		}
-		if timedOut {
+		if time.Since(checked) >= time.Second {
+			checked = time.Now()
+			if err := s.singlePartition(r.ctx); err != nil {
+				r.fail(err)
+				return
+			}
 			if _, err := s.position(r.ctx); err != nil {
 				r.fail(err)
 				return
@@ -323,7 +346,7 @@ func (r *Registration) accept(v *kgo.Record) bool {
 	}
 	// Keep only wire bytes in the queue: decode on delivery to avoid holding both
 	// JSON and a second full after-image/envelope for every buffered record.
-	r.pending = append(r.pending, Record{Position: Position{v.Topic, v.Partition, v.Offset}, Key: string(v.Key), JSON: append([]byte(nil), v.Value...), Change: subscriptionchanged.Changed{Position: c.Position, TransactionEnd: c.TransactionEnd}})
+	r.pending = append(r.pending, Record{Position: Position{r.start.Source, v.Topic, v.Partition, v.Offset}, Key: string(v.Key), JSON: append([]byte(nil), v.Value...), Change: subscriptionchanged.Changed{Position: c.Position, TransactionEnd: c.TransactionEnd}})
 	r.buffered++
 	return true
 }

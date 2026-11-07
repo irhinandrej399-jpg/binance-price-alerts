@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/kafkafault"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
@@ -36,6 +37,10 @@ func integration(t *testing.T, partition int32, buffer int) (Config, *kgo.Client
 		t.Fatal(err)
 	}
 	t.Cleanup(p.Close)
+	cfg.Source, _, err = kafkasource.Metadata(bounded(t, 5*time.Second), p, cfg.Topic)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return cfg, p
 }
 func source(t *testing.T, cfg Config) *Source {
@@ -107,7 +112,7 @@ func TestIntegrationRegistrationIdentityAndDuplicates(t *testing.T) {
 				}
 			}
 		}
-		if u.Envelope.EventID != "original-event" || u.Quote.Revision.Generation != 2 || u.Quote.Revision.Sequence != 17 || u.Quote.SourceID != "9007199254740993" || u.Quote.Price.String() != "123.456789012345678901" || u.Key != "BTCUSDT" || u.Position != (Position{cfg.Topic, 0, sent.Offset}) || u.Position.Offset < r.Start().Offset {
+		if u.Envelope.EventID != "original-event" || u.Quote.Revision.Generation != 2 || u.Quote.Revision.Sequence != 17 || u.Quote.SourceID != "9007199254740993" || u.Quote.Price.String() != "123.456789012345678901" || u.Key != "BTCUSDT" || u.Position != (Position{cfg.Source, cfg.Topic, 0, sent.Offset}) || u.Position.Offset < r.Start().Offset {
 			t.Fatalf("identity changed: %+v", u)
 		}
 	}
@@ -240,10 +245,15 @@ func TestIntegrationCancellationRevocationClose(t *testing.T) {
 	s.Close()
 }
 func TestIntegrationUnavailableAndCursor(t *testing.T) {
-	cfg, _ := integration(t, 10, 0)
+	cfg, client := integration(t, 10, 0)
 	t.Run("cursor", func(t *testing.T) {
 		bad := cfg
 		bad.Topic = strings.TrimSuffix(cfg.Topic, "-prices") + "-subscription-changes"
+		var err error
+		bad.Source, _, err = kafkasource.Metadata(bounded(t, 5*time.Second), client, bad.Topic)
+		if err != nil {
+			t.Fatal(err)
+		}
 		bad.Partitions = []int32{1}
 		if s, err := New(bounded(t, 5*time.Second), bad); !errors.Is(err, ErrPosition) {
 			if s != nil {

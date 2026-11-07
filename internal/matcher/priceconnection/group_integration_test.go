@@ -11,6 +11,7 @@ import (
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/priceobserved"
 	pb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/marketdata/v1"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/matcher/pricefeed"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 )
@@ -41,11 +42,15 @@ func TestIntegrationGroupRegisterLatest(t *testing.T) {
 	if err != nil || len(created.Topics) != 1 || created.Topics[0].ErrorCode != 0 {
 		t.Fatal(created, err)
 	}
-	g, err := pricefeed.NewGroup(ctx, pricefeed.GroupConfig{Config: pricefeed.Config{Brokers: []string{broker}, Topic: topic}, Group: topic,
-		Prepare: func(_ context.Context, parts []int32) (map[int32]int64, error) {
-			out := map[int32]int64{}
+	identity, _, err := kafkasource.Metadata(ctx, p, topic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err := pricefeed.NewGroup(ctx, pricefeed.GroupConfig{Config: pricefeed.Config{Source: identity, Brokers: []string{broker}, Topic: topic}, Group: topic,
+		PrepareSource: func(_ context.Context, parts []int32) (map[int32]pricefeed.Position, error) {
+			out := map[int32]pricefeed.Position{}
 			for _, p := range parts {
-				out[p] = 0
+				out[p] = pricefeed.Position{Source: identity, Topic: topic, Partition: p, Offset: 0}
 			}
 			return out, nil
 		}})

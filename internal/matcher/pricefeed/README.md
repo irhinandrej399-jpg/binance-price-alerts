@@ -9,6 +9,7 @@ Durable обработка, SQL fencing, арбитраж ревизий, Latest
 ```go
 feed, err := pricefeed.New(ownerCtx, pricefeed.Config{
     Brokers: brokers, Topic: prefix + "-prices",
+    Source: expectedSource, // kafkasource.Identity из доверенного provisioning
     Partitions: assignedPartitions, // внешнее назначение, 0..15
     Buffer: 256,
 })
@@ -33,7 +34,7 @@ update, err := reg.Next(waitCtx)
 New получает у брокера last stable offset (LSO) всех назначенных партиций и
 устанавливает **абсолютные** позиции direct consumer. Register под блокировкой
 диспетчеризации повторно читает LSO своей партиции, устанавливает регистрацию,
-затем возвращает её. `Start()` — включённая граница `(topic, partition, offset)`.
+затем возвращает её. `Start()` — включённая граница `(Source, topic, partition, offset)`.
 Уже выданная диспетчером запись находится до нового LSO; запись, полученная
 во время запроса, ждёт установки регистрации. Это исключает окно между
 регистрацией и последующим Latest. Граница может включать уже открытую
@@ -43,7 +44,8 @@ committed события зарегистрированной пары сохр�
 Незарегистрированные пары не образуют очередь. Регистрация не обещает
 исторический replay до своей границы.
 
-Чтение — исключительно read_committed, без control records. `TryNext` неблокирующе
+Чтение — исключительно read_committed. Control records сохраняются до проверки
+TopicID fetch, затем отфильтровываются перед dispatch; caller их не получает. `TryNext` неблокирующе
 снимает уже накопленную запись (false/nil при пустой очереди); при ошибке источника накопленная работа не выдаётся. Update сохраняет
 ключ, envelope/event_id, generation/sequence, точную цену и транспортную позицию.
 Дубли выдаются отдельно с прежним event_id и своей Kafka-позицией. Kafka offset
@@ -99,3 +101,15 @@ OffsetOutOfRange без reset. Fault proxy SET-009 обрывает сущест
 
 Основание семантики direct assignment, read_committed и NoResetOffset:
 [исходники franz-go v1.22.2](https://github.com/twmb/franz-go/tree/v1.22.2/pkg/kgo).
+
+## Source identity — OPS-060
+
+Direct/group требуют явный `Config.Source`;
+[общие тип, ошибки и граница доверия](../../platform/kafkasource/README.md).
+Metadata сверяется при старте/регистрации, до и после выбора позиции и
+периодически раз в секунду. Каждый fetch проверяется до Records и dispatch,
+включая control records. Новое поколение/непроверяемый ID/metadata fault
+инвалидируют источник и все регистрации; накопленные записи не выдаются.
+Start и Update.Position содержат копию Source; прежним offset нельзя присвоить
+нынешнюю identity. Сигналы cancellation, read_committed, bounded dispatch и join
+сохранены; SQL provenance и runtime выполняются в OPS-061/062.

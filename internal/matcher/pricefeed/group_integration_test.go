@@ -11,6 +11,7 @@ import (
 
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/publish"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafka"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 )
@@ -33,10 +34,14 @@ func groupFixture(t *testing.T, count int32, buffer int) (GroupConfig, *kgo.Clie
 	if len(res.Topics) != 1 || res.Topics[0].ErrorCode != 0 {
 		t.Fatalf("create topic: %+v", res.Topics)
 	}
-	return GroupConfig{Config: cfg, Group: cfg.Topic + "-owners", Prepare: func(ctx context.Context, parts []int32) (map[int32]int64, error) {
-		out := map[int32]int64{}
+	cfg.Source, _, err = kafkasource.Metadata(bounded(t, 5*time.Second), p, cfg.Topic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return GroupConfig{Config: cfg, Group: cfg.Topic + "-owners", PrepareSource: func(ctx context.Context, parts []int32) (map[int32]Position, error) {
+		out := map[int32]Position{}
 		for _, part := range parts {
-			out[part] = 0
+			out[part] = Position{Source: cfg.Source, Topic: cfg.Topic, Partition: part, Offset: 0}
 		}
 		return out, ctx.Err()
 	}}, p
@@ -145,7 +150,7 @@ func TestIntegrationGroupTwoMembersAndRevoke(t *testing.T) {
 				if _, err := a.Register(context.Background(), pairAt(part), part); !errors.Is(err, ErrConfig) {
 					t.Fatal("foreign registration", err)
 				}
-				if err := a.Confirm(context.Background(), Position{cfg.Topic, part, 0}); !errors.Is(err, ErrConfirm) {
+				if err := a.Confirm(context.Background(), Position{cfg.Source, cfg.Topic, part, 0}); !errors.Is(err, ErrConfirm) {
 					t.Fatal("foreign confirmation", err)
 				}
 				break
@@ -388,23 +393,23 @@ func TestIntegrationGroupFailureBounds(t *testing.T) {
 			cfg, p := groupFixture(t, count, 1)
 			entered := make(chan struct{})
 			if mode == "prepare" {
-				cfg.Prepare = func(context.Context, []int32) (map[int32]int64, error) { return nil, errors.New("secret") }
+				cfg.PrepareSource = func(context.Context, []int32) (map[int32]Position, error) { return nil, errors.New("secret") }
 			}
 			if mode == "deadline" {
-				cfg.Prepare = func(ctx context.Context, _ []int32) (map[int32]int64, error) { <-ctx.Done(); return nil, ctx.Err() }
+				cfg.PrepareSource = func(ctx context.Context, _ []int32) (map[int32]Position, error) { <-ctx.Done(); return nil, ctx.Err() }
 			}
 			if mode == "close-prepare" {
-				cfg.Prepare = func(ctx context.Context, _ []int32) (map[int32]int64, error) {
+				cfg.PrepareSource = func(ctx context.Context, _ []int32) (map[int32]Position, error) {
 					close(entered)
 					<-ctx.Done()
 					return nil, ctx.Err()
 				}
 			}
 			if mode == "cursor" {
-				cfg.Prepare = func(_ context.Context, parts []int32) (map[int32]int64, error) {
-					m := map[int32]int64{}
+				cfg.PrepareSource = func(_ context.Context, parts []int32) (map[int32]Position, error) {
+					m := map[int32]Position{}
 					for _, p := range parts {
-						m[p] = 1 << 60
+						m[p] = Position{Source: cfg.Source, Topic: cfg.Topic, Partition: p, Offset: 1 << 60}
 					}
 					return m, nil
 				}

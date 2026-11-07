@@ -37,7 +37,7 @@ func TestTryNextDrainsAndFailureWins(t *testing.T) {
 	if _, ok, err := r.TryNext(); ok || err != nil {
 		t.Fatalf("empty: %v %v", ok, err)
 	}
-	r.queue = []queued{{Position{"prices", 0, 42}, "BTCUSDT", fixture()}}
+	r.queue = []queued{{Position{Topic: "prices", Partition: 0, Offset: 42}, "BTCUSDT", fixture()}}
 	s.buffered = 1
 	u, ok, err := r.TryNext()
 	if err != nil || !ok || u.Position.Offset != 42 || u.Envelope.EventID != "original-event" || s.buffered != 0 {

@@ -88,3 +88,12 @@ SQL row lock при отзыве authority проверяет exit 1 вмест�
 
 Без opt-in тест явно SKIP; при opt-in без конфигурации — FAIL. Это минимальный
 local runtime; полный E2E четырёх сервисов, production PKI и нагрузка остаются отдельно.
+
+## Временная граница после OPS-060
+
+Транспорт changefeed/pricefeed теперь требует явную broker source identity;
+group требует source-bound PrepareSource. Нынешний cmd/replica ещё не передаёт
+их и явно отказывает при запуске. SQL binding вводит OPS-061, конфигурацию и
+process recovery подключает OPS-062; до этого прежние команды этого README
+не подтверждают работающий runtime. Автоматически присваивать текущую metadata
+историческим checkpoints/Pending запрещено.

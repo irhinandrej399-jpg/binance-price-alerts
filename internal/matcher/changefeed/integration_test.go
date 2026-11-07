@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/kafkafault"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
@@ -35,6 +36,10 @@ func integration(t *testing.T, limit int) (Config, *kgo.Client) {
 		t.Fatal(err)
 	}
 	t.Cleanup(p.Close)
+	cfg.Source, _, err = kafkasource.Metadata(bounded(t, 5*time.Second), p, cfg.Topic)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return cfg, p
 }
 func source(t *testing.T, cfg Config) *Source {
@@ -301,6 +306,11 @@ func TestIntegrationUnavailableAndOutOfRange(t *testing.T) {
 	t.Run("not-single-partition", func(t *testing.T) {
 		bad := cfg
 		bad.Topic = os.Getenv("KAFKA_CHANGEFEED_TEST_PREFIX") + "-prices"
+		var err error
+		bad.Source, _, err = kafkasource.Metadata(bounded(t, 5*time.Second), p, bad.Topic)
+		if err != nil {
+			t.Fatal(err)
+		}
 		s := source(t, bad)
 		if _, err := s.Register(bounded(t, 5*time.Second)); !errors.Is(err, ErrPosition) {
 			t.Fatal(err)

@@ -23,7 +23,7 @@ func marker(offset int64) *kgo.Record {
 }
 func local(limit int) *Registration {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Registration{topic: "changes", limit: limit, ctx: ctx, cancel: cancel, changed: make(chan struct{}), done: make(chan struct{}), start: Position{"changes", 0, 10}, confirmed: 10}
+	return &Registration{topic: "changes", limit: limit, ctx: ctx, cancel: cancel, changed: make(chan struct{}), done: make(chan struct{}), start: Position{Topic: "changes", Partition: 0, Offset: 10}, confirmed: 10}
 }
 func TestWholeTransactionAndExplicitConfirmation(t *testing.T) {
 	r := local(4)

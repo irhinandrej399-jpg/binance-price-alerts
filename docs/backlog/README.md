@@ -212,7 +212,13 @@
 | [OPS-011](tickets/OPS-011.md) | Корректно остановить notification worker | NTF-012, NTF-013, OPS-055 | done |
 | [OPS-012](tickets/OPS-012.md) | Ограничить размер тела публичного запроса | IAM-003, IAM-004, SUB-003 | done |
 | [OPS-013](tickets/OPS-013.md) | Ограничить частоту входа и регистрации между репликами | IAM-003, IAM-004, DEC-003, DEC-006 | done |
-| [OPS-014](tickets/OPS-014.md) | Удалить безопасный префикс журнала Kafka | SET-005, SUB-022, MAT-011, NTF-001, DEC-007 | planned |
+| [OPS-060](tickets/OPS-060.md) | Проверить поколение Kafka-источника на входах matcher | MAT-015, MAT-018, SET-009 | done |
+| [OPS-061](tickets/OPS-061.md) | Сохранить source binding Kafka checkpoints matcher в SQL | OPS-060, MAT-017, MAT-016, MAT-009 | planned |
+| [OPS-062](tickets/OPS-062.md) | Подключить source binding к runtime и восстановлению matcher | OPS-060, OPS-061, OPS-053, OPS-010 | planned |
+| [OPS-056](tickets/OPS-056.md) | Экспортировать durable Kafka-прогресс matcher | MAT-011, MAT-009, SET-007, SET-008, OPS-053, OPS-062 | planned |
+| [OPS-057](tickets/OPS-057.md) | Экспортировать durable Kafka-прогресс notifications | NTF-001, SET-007, SET-008, OPS-055 | planned |
+| [OPS-058](tickets/OPS-058.md) | Подготовить disposable окружение проверки Kafka cleaner | OPS-056, OPS-057, OPS-052, OPS-054, SET-009 | planned |
+| [OPS-014](tickets/OPS-014.md) | Удалить безопасный префикс журнала Kafka | SET-005, SUB-022, MAT-011, NTF-001, DEC-007, OPS-056, OPS-057, OPS-058 | planned |
 | [OPS-015](tickets/OPS-015.md) | Остановить новый приём API при исчерпании бюджета | SUB-003, SUB-005, SUB-020, SUB-007, SUB-009, DEC-008, OPS-018 | planned |
 | [OPS-016](tickets/OPS-016.md) | Остановить приём рынка при исчерпании бюджета | MKT-017, MKT-014, DEC-008, OPS-018 | planned |
 | [OPS-018](tickets/OPS-018.md) | Квалифицировать таблицу стоимости и квоты durable приёма | OPS-022, DEC-008, OPS-029, OPS-032 | planned |
@@ -305,3 +311,4 @@ OPS-032/018 ждут готового observer.
 | [OPS-030](tickets/OPS-030.md) | [OPS-031](tickets/OPS-031.md), [OPS-032](tickets/OPS-032.md) | split |
 | [OPS-031](tickets/OPS-031.md) | [OPS-033](tickets/OPS-033.md), [OPS-034](tickets/OPS-034.md), [OPS-035](tickets/OPS-035.md), [OPS-036](tickets/OPS-036.md) | split |
 | [OPS-037](tickets/OPS-037.md) | [OPS-038](tickets/OPS-038.md), [OPS-039](tickets/OPS-039.md), [OPS-040](tickets/OPS-040.md) | split |
+| [OPS-059](tickets/OPS-059.md) | [OPS-060](tickets/OPS-060.md), [OPS-061](tickets/OPS-061.md), [OPS-062](tickets/OPS-062.md) | split |

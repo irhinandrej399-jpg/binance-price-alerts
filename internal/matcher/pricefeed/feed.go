@@ -12,6 +12,7 @@ import (
 
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/event"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/priceobserved"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 )
@@ -33,6 +34,7 @@ const maxPayload = 4096
 // Buffer is a source-wide record limit, 1..512; zero selects 256.
 // Dialer supports the existing disposable fault proxy.
 type Config struct {
+	Source     kafkasource.Identity // explicitly expected broker incarnation
 	Brokers    []string
 	Topic      string
 	Partitions []int32
@@ -41,6 +43,7 @@ type Config struct {
 }
 
 type Position struct {
+	Source    kafkasource.Identity
 	Topic     string
 	Partition int32
 	Offset    int64
@@ -58,6 +61,7 @@ type queued struct {
 }
 
 type Source struct {
+	identity        kafkasource.Identity
 	mu              sync.Mutex
 	client          *kgo.Client
 	topic           string
@@ -87,6 +91,12 @@ func New(parent context.Context, cfg Config) (*Source, error) {
 	if len(cfg.Brokers) == 0 || cfg.Topic == "" || len(cfg.Partitions) == 0 || len(cfg.Partitions) > 16 || cfg.Buffer < 0 || cfg.Buffer > MaxBuffer {
 		return nil, ErrConfig
 	}
+	if err := cfg.Source.Validate(); err != nil {
+		return nil, errors.Join(ErrConfig, err)
+	}
+	if cfg.Source.Topic != cfg.Topic {
+		return nil, errors.Join(ErrConfig, kafkasource.ErrMismatch)
+	}
 	assigned := make(map[int32]bool)
 	for _, p := range cfg.Partitions {
 		if p < 0 || p >= 16 || assigned[p] {
@@ -103,7 +113,7 @@ func New(parent context.Context, cfg Config) (*Source, error) {
 		cancel()
 		return nil, ErrConfig
 	}
-	s := &Source{client: c, topic: cfg.Topic, assigned: assigned, regs: make(map[string]*Registration), limit: cfg.Buffer, ctx: ctx, cancel: cancel, done: make(chan struct{})}
+	s := &Source{identity: cfg.Source, client: c, topic: cfg.Topic, assigned: assigned, regs: make(map[string]*Registration), limit: cfg.Buffer, ctx: ctx, cancel: cancel, done: make(chan struct{})}
 	offsets, err := s.positions(ctx, cfg.Partitions)
 	if err != nil {
 		cancel()
@@ -125,7 +135,7 @@ func New(parent context.Context, cfg Config) (*Source, error) {
 func clientOptions(ctx context.Context, cfg Config) []kgo.Opt {
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(cfg.Brokers...), kgo.WithContext(ctx),
-		kgo.FetchIsolationLevel(kgo.ReadCommitted()),
+		kgo.FetchIsolationLevel(kgo.ReadCommitted()), kgo.KeepControlRecords(),
 		kgo.ConsumeResetOffset(kgo.NoResetOffset()), kgo.KeepRetryableFetchErrors(),
 		kgo.FetchMaxWait(100 * time.Millisecond), kgo.FetchMaxBytes(64 << 10), kgo.FetchMaxPartitionBytes(64 << 10),
 		kgo.BrokerMaxReadBytes(1 << 20), kgo.MaxConcurrentFetches(1), kgo.MaxDecompressBatchBytes(64 << 10),
@@ -142,6 +152,9 @@ func clientOptions(ctx context.Context, cfg Config) []kgo.Opt {
 func (s *Source) positions(parent context.Context, partitions []int32) (map[int32]int64, error) {
 	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
 	defer cancel()
+	if _, err := s.identity.Verify(ctx, s.client); err != nil {
+		return nil, errors.Join(ErrContinuity, ErrPosition, err)
+	}
 	req := kmsg.NewPtrListOffsetsRequest()
 	req.IsolationLevel = 1
 	topic := kmsg.NewListOffsetsRequestTopic()
@@ -171,6 +184,9 @@ func (s *Source) positions(parent context.Context, partitions []int32) (map[int3
 	}
 	if len(result) != len(partitions) {
 		return nil, errors.Join(ErrContinuity, ErrPosition)
+	}
+	if _, err := s.identity.Verify(ctx, s.client); err != nil {
+		return nil, errors.Join(ErrContinuity, ErrPosition, err)
 	}
 	return result, nil
 }
@@ -210,7 +226,7 @@ func (s *Source) Register(ctx context.Context, pair string, partition int32) (*R
 	if err = ctx.Err(); err != nil {
 		return nil, err
 	}
-	reg := &Registration{source: s, pair: pair, start: Position{s.topic, partition, offsets[partition]}, changed: make(chan struct{}), terminated: make(chan struct{})}
+	reg := &Registration{source: s, pair: pair, start: Position{s.identity, s.topic, partition, offsets[partition]}, changed: make(chan struct{}), terminated: make(chan struct{})}
 	s.regs[pair] = reg
 	reg.stop = context.AfterFunc(ctx, func() { reg.close(ctx.Err()) })
 	return reg, nil
@@ -343,6 +359,7 @@ func (s *Source) Close()  { s.closeOnce.Do(func() { s.fail(ErrClosed); <-s.done 
 func (s *Source) read() {
 	defer close(s.done)
 	defer s.client.Close()
+	checked := time.Now()
 	for {
 		poll, cancel := context.WithTimeout(s.ctx, time.Second)
 		fs := s.client.PollRecords(poll, 1)
@@ -359,12 +376,20 @@ func (s *Source) read() {
 			s.fail(ErrPosition)
 			return
 		}
+		if err := s.identity.CheckFetches(fs); err != nil {
+			s.fail(err)
+			return
+		}
 		for _, r := range fs.Records() {
+			if r.Attrs.IsControl() {
+				continue
+			}
 			if !s.dispatch(r) {
 				return
 			}
 		}
-		if timedOut {
+		if time.Since(checked) >= time.Second {
+			checked = time.Now()
 			partitions := make([]int32, 0, len(s.assigned))
 			for p := range s.assigned {
 				partitions = append(partitions, p)
@@ -407,7 +432,7 @@ func (s *Source) dispatch(r *kgo.Record) bool {
 			s.failLocked(ErrOverflow)
 			return false
 		}
-		a.all.queue = append(a.all.queue, queued{Position{r.Topic, r.Partition, r.Offset}, string(r.Key), append([]byte(nil), r.Value...)})
+		a.all.queue = append(a.all.queue, queued{Position{s.identity, r.Topic, r.Partition, r.Offset}, string(r.Key), append([]byte(nil), r.Value...)})
 		s.buffered++
 		a.all.wake()
 	}
@@ -426,7 +451,7 @@ func (s *Source) dispatch(r *kgo.Record) bool {
 		s.failLocked(ErrOverflow)
 		return false
 	}
-	reg.queue = append(reg.queue, queued{Position{r.Topic, r.Partition, r.Offset}, string(r.Key), append([]byte(nil), r.Value...)})
+	reg.queue = append(reg.queue, queued{Position{s.identity, r.Topic, r.Partition, r.Offset}, string(r.Key), append([]byte(nil), r.Value...)})
 	s.buffered++
 	reg.wake()
 	return true

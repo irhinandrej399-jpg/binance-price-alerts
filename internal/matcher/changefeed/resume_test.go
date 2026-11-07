@@ -38,6 +38,7 @@ func TestIntegrationResumeUsesSQLPosition(t *testing.T) {
 		t.Fatal(got)
 	}
 	for _, pos := range []Position{{Topic: cfg.Topic + "other"}, {Topic: cfg.Topic, Partition: 1}, {Topic: cfg.Topic, Offset: -1}, {Topic: cfg.Topic, Offset: 1 << 60}} {
+		pos.Source = cfg.Source
 		s := source(t, cfg)
 		if _, err = s.RegisterAt(bounded(t, 5*time.Second), pos); !errors.Is(err, ErrPosition) {
 			t.Fatal(pos, err)

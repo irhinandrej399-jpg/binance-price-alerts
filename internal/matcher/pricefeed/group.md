@@ -8,9 +8,9 @@ DisableAutoCommit и NoResetOffset. Один PollRecords/dispatch обслужи
 
 ```go
 g, err := pricefeed.NewGroup(ownerCtx, pricefeed.GroupConfig{
-    Config: pricefeed.Config{Brokers: brokers, Topic: topic, Buffer: 256},
+    Config: pricefeed.Config{Brokers: brokers, Topic: topic, Source: expectedSource, Buffer: 256},
     Group: groupID,
-    Prepare: func(ctx context.Context, parts []int32) (map[int32]int64, error) {
+    PrepareSource: func(ctx context.Context, parts []int32) (map[int32]pricefeed.Position, error) {
         // MAT-010: установить SQL tokens MAT-017; получить абсолютные NEXT
         // offsets из SQL/согласованного bootstrap. Не брать их из broker commit.
         return prepareAuthorityAndCursors(ctx, parts)
@@ -39,9 +39,10 @@ if err := a.Confirm(ctx, u.Position); err != nil { return err }
 
 ## Подготовка, отзыв и потеря
 
-Перед началом чтения `Prepare` получает точный набор партиций из group protocol.
+Перед началом чтения `PrepareSource` получает точный набор партиций из group protocol.
 Возвращённая map передаётся адаптеру во владение и должна содержать ровно эти
-партиции с неотрицательными абсолютными next offsets. Перед выдачей назначения
+партиции с source-bound Position: Source должен совпасть с Config.Source,
+Topic/Partition — с назначением, Offset — неотрицательный абсолютный next offset. Перед выдачей назначения
 проверяется диапазон `[log start, LSO]`. Удалённая/будущая позиция — ErrPosition;
 reset на latest/start отсутствует. Broker committed offsets намеренно игнорируются,
 включая повторное назначение после успешного Confirm.
@@ -112,3 +113,23 @@ replay, переполнение до/после выдачи, неверный 
 Семантика callbacks/offset adjustment/gate/commits:
 [config.go franz-go v1.22.2](https://github.com/twmb/franz-go/blob/v1.22.2/pkg/kgo/config.go),
 [consumer_group.go](https://github.com/twmb/franz-go/blob/v1.22.2/pkg/kgo/consumer_group.go).
+
+## Source binding — OPS-060
+
+PrepareSource возвращает identity **вместе с каждой позицией** из SQL binding
+либо согласованного нового bootstrap. Нулевая/чужая Source, другой Topic/Partition
+отвергаются до публикации Assignment. Config.Source проверяется по broker metadata
+и каждому fetch; `Assignment.SourceIdentity()` возвращает неизменяемое значение.
+`Starts()` остаётся копией чисел в рамках этой identity, а Update.Position
+содержит её явно. Confirm проверяет identity доставленной позиции и новую
+metadata перед broker commit; ошибка metadata инвалидирует capability.
+Неверная позиция отклоняется без broker commit. После обнаруженного
+отказа NextAssignment не возвращает уже инвалидированное назначение.
+
+Поле Prepare со старым `map[int32]int64` оставлено только для компиляции
+нынешней replica: адаптер **не вызывает его** и без PrepareSource не запускается.
+Это не совместимый обход проверки. OPS-062 должен заменить callback, передать
+SQL binding OPS-061, мигрировать fixtures/process recovery и удалить это поле.
+До этого существующий cmd/matcher получает отказ; продуктовый runtime в OPS-060
+не подключается и его прежний process smoke не считается пройденным.
+Ожидаемые IDs нельзя автоматически подставить из config в исторический offset.
