@@ -204,7 +204,9 @@
 | [OPS-051](tickets/OPS-051.md) | Настроить стартовую HTTP-пробу process harness | OPS-047, OPS-049, OPS-006 | done |
 | [OPS-048](tickets/OPS-048.md) | Собрать минимальный процесс market-data | MKT-005, MKT-017, MKT-013, MKT-014, MKT-011, OPS-006, DEC-010, OPS-049, OPS-050, OPS-051 | done |
 | [OPS-009](tickets/OPS-009.md) | Корректно остановить market-data | MKT-013, MKT-014, MKT-015, MKT-016, OPS-048 | done |
-| [OPS-010](tickets/OPS-010.md) | Корректно остановить matcher | MAT-005 | planned |
+| [OPS-052](tickets/OPS-052.md) | Подготовить disposable окружение процесса matcher | OPS-047, MAT-011, SUB-016, MKT-006, DEC-010 | done |
+| [OPS-053](tickets/OPS-053.md) | Собрать минимальный процесс matcher | MAT-011, MAT-015, SUB-016, OPS-007, OPS-052, DEC-010 | planned |
+| [OPS-010](tickets/OPS-010.md) | Корректно остановить matcher | MAT-005, OPS-053 | planned |
 | [OPS-011](tickets/OPS-011.md) | Корректно остановить notification worker | NTF-012, NTF-013 | planned |
 | [OPS-012](tickets/OPS-012.md) | Ограничить размер тела публичного запроса | IAM-003, IAM-004, SUB-003 | done |
 | [OPS-013](tickets/OPS-013.md) | Ограничить частоту входа и регистрации между репликами | IAM-003, IAM-004, DEC-003, DEC-006 | done |

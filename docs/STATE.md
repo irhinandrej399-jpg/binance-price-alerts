@@ -4,8 +4,9 @@
 
 ## Активная работа
 
-- Активная реализация: нет. Незавершённые raw/code исследований сохранены по DEC-010; kernel/capacity квалификация локальный запуск не блокирует.
-- Последний завершённый тикет: [OPS-009](backlog/tickets/OPS-009.md), [graceful shutdown market-data](../cmd/market-data/README.md). SIGTERM/SIGINT отменяют приём/publish/reconnect, компоненты присоединяются до pool.Close; durable gap с fencing, pending outbox сохраняется. Общий предел 20 с; ошибки cleanup явные. Два успешных PostgreSQL/Kafka process/race прогона подтвердили потерянный EndTxn response, исходные bytes после lease/restart, handshake и закрытие активного WS; cleanup подтверждён. Общая race-регрессия/vet/build PASS. Feed unconfirmed; lease до 30 с и возможный дубль сохранены.
+- Активная реализация: нет. OPS-010 остаётся planned до минимального cmd/matcher (OPS-053); disposable matcher окружение готово в OPS-052. Незавершённые raw/code исследований сохранены по DEC-010; kernel/capacity квалификация локальный запуск не блокирует.
+- Последний завершённый тикет: [OPS-052](backlog/tickets/OPS-052.md), [disposable matcher fixture](../internal/testutil/matcherprocess/README.md). Общий lifecycle/runner apiprocess, только matcher DSN в child, родительская API fixture и mTLS Snapshot/Replay/Delivery/Latest. Целый canonical changefeed пакет совпал с API journal bytes; 16-partition bootstrap, partial/Pending/superseded, canonical trigger_id, SQL/broker Prefix и cleanup проверены на PostgreSQL/Kafka с race. Аварийный owner-exit cleanup подтверждён; общая race-регрессия/vet/build PASS. Product child/SIGTERM — OPS-053/010.
+- Предыдущий завершённый тикет: [OPS-009](backlog/tickets/OPS-009.md), [graceful shutdown market-data](../cmd/market-data/README.md). SIGTERM/SIGINT отменяют приём/publish/reconnect, компоненты присоединяются до pool.Close; durable gap с fencing, pending outbox сохраняется. Общий предел 20 с; ошибки cleanup явные. Два успешных PostgreSQL/Kafka process/race прогона подтвердили потерянный EndTxn response, исходные bytes после lease/restart, handshake и закрытие активного WS; cleanup подтверждён. Общая race-регрессия/vet/build PASS. Feed unconfirmed; lease до 30 с и возможный дубль сохранены.
 - Предыдущий завершённый тикет: [OPS-048](backlog/tickets/OPS-048.md), [минимальный raw trade процесс](../cmd/market-data/README.md). Durable поколение до каждого dial, Decode/Accept/outbox/relay и собственные health/Ping подключены. Реальные PostgreSQL/Kafka process/race проверки: исходные bytes, reconnect/restart, SQL fencing, startup и terminal relay — PASS; общая race-регрессия/vet/build PASS, cleanup подтверждён. Feed честно unconfirmed; graceful SIGTERM добавлен в OPS-009.
 - Предыдущий завершённый тикет: [OPS-051](backlog/tickets/OPS-051.md), [стартовая HTTP-проба process harness](../internal/testutil/apiprocess/README.md). Config.StartupProbePath выбирает локальный endpoint, default /readyz; /healthz допускает проверку честного readiness 503/unconfirmed. Целевые и общая race-регрессия/vet/build прошли; DB/Kafka opt-in не запускались. Подключено в OPS-048.
 - Предыдущий завершённый тикет: [OPS-050](backlog/tickets/OPS-050.md), [подготовка попытки WebSocket](../internal/marketdata/stream/README.md). ReconnectPrepared синхронно готовит отдельные callbacks до каждого dial; ошибки prepare/disconnect terminal. Общий retry/rotation/scheduler сохранён, WS/fake-clock и общая race-регрессия/vet/build прошли. Runtime/SQL подключены в OPS-048.
@@ -138,9 +139,13 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-[OPS-010](backlog/tickets/OPS-010.md): сессионная проверка graceful shutdown
-matcher. Сначала проверить фактический runtime и средства process-проверки;
-готовые matcher-компоненты и HTTP health сами по себе не заменяют executable.
+[OPS-053](backlog/tickets/OPS-053.md): сессионная проверка минимального
+cmd/matcher над replica. [Окружение OPS-052](../internal/testutil/matcherprocess/README.md)
+готово: `python3 scripts/check_matcher_process.py --package ./cmd/matcher`,
+matcherprocess.New/Seed/ChildEnv/Bootstrap/PauseDelivery. API DSN остаётся
+только в родительской fixture; bootstrap всех 16 prices partitions сохраняется
+до публикации, restart использует SQL Prefix. После OPS-053 вернуться к
+SIGTERM OPS-010. cmd/matcher пока пустой; product process/graceful не проверены.
 OPS-009 завершил остановку минимального market-data: SQL-outbox остаётся
 буфером принятой работы, повтор после неопределённого commit сохраняет bytes;
 SIGTERM во время publish/handshake и закрытие WS проверены на disposable стенде.
@@ -179,7 +184,7 @@ NTF-006 рассчитывает retry Plan и бюджет доказанных
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show OPS-009` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show OPS-053` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

@@ -19,7 +19,7 @@ func TestAbruptOwner(t *testing.T) {
 		_ = http.ListenAndServe(os.Getenv("HTTP_ADDR"), mux)
 		os.Exit(22)
 	}
-	if os.Getenv("API_PROCESS_INTEGRATION") != "1" && os.Getenv("MARKET_DATA_PROCESS_INTEGRATION") != "1" {
+	if os.Getenv("API_PROCESS_INTEGRATION") != "1" && os.Getenv("MARKET_DATA_PROCESS_INTEGRATION") != "1" && os.Getenv("MATCHER_PROCESS_INTEGRATION") != "1" {
 		t.Skip("disposable runner only")
 	}
 	executable, err := os.Executable()

@@ -108,3 +108,9 @@ OPS-049 переиспользует этот lifecycle и runner для вла�
 [marketprocess](../marketprocess/README.md), `scripts/check_marketdata_process.py`.
 API default/env/fixture остаются прежними; ownerexit fixture принимает также
 `MARKET_DATA_PROCESS_INTEGRATION=1`.
+
+OPS-052 использует этот же lifecycle для matcher:
+[matcherprocess](../matcherprocess/README.md), `scripts/check_matcher_process.py`.
+Runner передаёт API DSN только родительской fixture и matcher DSN её child;
+`matcherprocess.ChildEnv` не наследует API credential. Применяются API+matcher
+migrations, ownerexit fixture поддерживает `MATCHER_PROCESS_INTEGRATION=1`.
