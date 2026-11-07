@@ -175,6 +175,13 @@ func TestMarketDataProcess(t *testing.T) {
 		if _, e := pool.Exec(ctx, `INSERT INTO app.price_outbox(event_id,pair,data) VALUES('ops048-oversized','BTCUSDT',$1)`, bytes.Repeat([]byte("x"), storage.MaxEventBytes+1)); e != nil {
 			return errors.New("terminal fixture failed")
 		}
+		defer func() {
+			// Retire only the deliberately invalid terminal fixture on this disposable
+			// dataset so subsequent owner tests can publish their valid work.
+			if _, e := pool.Exec(ctx, `UPDATE app.price_outbox SET published=true,lease_until=NULL WHERE event_id='ops048-oversized'`); e != nil {
+				t.Error("retire terminal fixture")
+			}
+		}()
 		select {
 		case <-p.Done():
 			return nil
@@ -211,7 +218,7 @@ func TestPreparedSQLFencing(t *testing.T) {
 	pool := postgrestest.OpenWithDSN(t, "MARKET_DATA_DATABASE_URL")
 	repo := storage.New(pool)
 	var state atomic.Value
-	p := prepare(repo, "ETHUSDT", &state, func(bool) {})
+	p := prepare(repo, "ETHUSDT", &state, func(bool) {}, new(atomic.Uint64))
 	old, err := p(ctx)
 	if err != nil {
 		t.Fatal(err)

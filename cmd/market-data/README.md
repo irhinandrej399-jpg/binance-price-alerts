@@ -2,7 +2,7 @@
 
 Один фиксированный raw trade поток → durable market_data latest/outbox → serial
 Kafka relay. Используются готовые Decode, storage, ReconnectPrepared, relay и
-health. Это executable для последующей проверки shutdown OPS-009.
+health. SIGTERM/SIGINT обрабатываются владельцем процесса (OPS-009).
 
 Перед запуском отдельно поднимите PostgreSQL/Kafka по `infra/*/README.md`,
 примените `migrations/market_data` через `scripts/migrate.py --owner market_data`
@@ -62,8 +62,34 @@ Runner использует только disposable PostgreSQL/Kafka и пров
 Без opt-in процессные SQL/Kafka тесты явно SKIP. Обычная проверка config/startup:
 `GOCACHE=/tmp/binance-go-build GOTOOLCHAIN=local go test -race ./cmd/market-data`.
 
-Ограничения: SIGTERM пока завершает процесс обычным способом ОС, graceful/drain
-ещё OPS-009. Нет динамического каталога, внутренних RPC, backfill, нескольких
+При SIGTERM/SIGINT HTTP снимается с обслуживания, отменяются ingest/Accept,
+публикация и reconnect/backoff. HTTP имеет 2 с на завершение; ingest и relay
+присоединяются до закрытия SQL pool. Весь процесс имеет предел 20 с, включая
+существующий handshake ≤10 с и финальную SQL-запись/проверку ≤5 с. Превышение
+предела — явная ошибка и exit 1, а не успешная graceful остановка.
+
+После join сохраняются unconfirmed + gap_detected=true с fencing последнего
+поколения владельца. Если поколение уже сменил другой процесс, stale status
+не меняет его состояние. Ошибка записи gap или чтения pending-публикаций
+выводится явно и завершает процесс с ошибкой. Штатное завершение сообщает
+feed disconnected и число pending publications без payloads/credentials.
+
+Принятый буфер — durable outbox, поэтому остановка не ждёт его полного
+опустошения. Отменённая SQL-транзакция не объявляется принятой; committed
+latest/outbox сохраняются. Неопределённый Kafka commit оставляет исходные
+bytes/event_id без SQL-отметки; после DB-clock lease до 30 с следующий
+владелец с тем же transactional.id повторяет публикацию. Возможны дубли.
+При недоступной БД или аварийном выходе запись разрыва не гарантируется;
+следующий BeginGeneration всё равно отмечает исторический gap.
+
+Процессный тест скрывает успешный EndTxn response готовым kafkafault dialer
+в test child, который вызывает тот же execute/run с production обработчиком
+сигналов. Независимый consumer подтверждает commit до SIGTERM. Настоящий
+executable затем повторяет bytes после lease, принимает новую сделку и
+закрывает активный WebSocket по SIGTERM. Отдельный зависший handshake
+проверяет завершение reconnect без принудительного kill из harness.
+
+Ограничения: нет динамического каталога, внутренних RPC, backfill, нескольких
 feed-реплик, полного E2E, capacity и нагрузочных гарантий. Kafka/SQL retry и
 возможные дубли после неопределённого commit следуют контракту relay/storage.
 Живое соединение Binance этим тестом не проверяется.

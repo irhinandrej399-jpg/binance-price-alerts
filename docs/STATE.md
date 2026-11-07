@@ -5,7 +5,8 @@
 ## Активная работа
 
 - Активная реализация: нет. Незавершённые raw/code исследований сохранены по DEC-010; kernel/capacity квалификация локальный запуск не блокирует.
-- Последний завершённый тикет: [OPS-048](backlog/tickets/OPS-048.md), [минимальный raw trade процесс](../cmd/market-data/README.md). Durable поколение до каждого dial, Decode/Accept/outbox/relay и собственные health/Ping подключены. Реальные PostgreSQL/Kafka process/race проверки: исходные bytes, reconnect/restart, SQL fencing, startup и terminal relay — PASS; общая race-регрессия/vet/build PASS, cleanup подтверждён. Feed честно unconfirmed; graceful SIGTERM — далее OPS-009.
+- Последний завершённый тикет: [OPS-009](backlog/tickets/OPS-009.md), [graceful shutdown market-data](../cmd/market-data/README.md). SIGTERM/SIGINT отменяют приём/publish/reconnect, компоненты присоединяются до pool.Close; durable gap с fencing, pending outbox сохраняется. Общий предел 20 с; ошибки cleanup явные. Два успешных PostgreSQL/Kafka process/race прогона подтвердили потерянный EndTxn response, исходные bytes после lease/restart, handshake и закрытие активного WS; cleanup подтверждён. Общая race-регрессия/vet/build PASS. Feed unconfirmed; lease до 30 с и возможный дубль сохранены.
+- Предыдущий завершённый тикет: [OPS-048](backlog/tickets/OPS-048.md), [минимальный raw trade процесс](../cmd/market-data/README.md). Durable поколение до каждого dial, Decode/Accept/outbox/relay и собственные health/Ping подключены. Реальные PostgreSQL/Kafka process/race проверки: исходные bytes, reconnect/restart, SQL fencing, startup и terminal relay — PASS; общая race-регрессия/vet/build PASS, cleanup подтверждён. Feed честно unconfirmed; graceful SIGTERM добавлен в OPS-009.
 - Предыдущий завершённый тикет: [OPS-051](backlog/tickets/OPS-051.md), [стартовая HTTP-проба process harness](../internal/testutil/apiprocess/README.md). Config.StartupProbePath выбирает локальный endpoint, default /readyz; /healthz допускает проверку честного readiness 503/unconfirmed. Целевые и общая race-регрессия/vet/build прошли; DB/Kafka opt-in не запускались. Подключено в OPS-048.
 - Предыдущий завершённый тикет: [OPS-050](backlog/tickets/OPS-050.md), [подготовка попытки WebSocket](../internal/marketdata/stream/README.md). ReconnectPrepared синхронно готовит отдельные callbacks до каждого dial; ошибки prepare/disconnect terminal. Общий retry/rotation/scheduler сохранён, WS/fake-clock и общая race-регрессия/vet/build прошли. Runtime/SQL подключены в OPS-048.
 - Предыдущий завершённый тикет: [OPS-049](backlog/tickets/OPS-049.md), [disposable market-data process environment](../internal/testutil/marketprocess/README.md). Общий runner/lifecycle OPS-047, только market_data DSN/migrations, raw WS child, canonical outbox и read_committed bytes. Реальные market-data/API и аварийный owner-exit cleanup прошли; общая race-регрессия/vet/build прошли. Минимальный продуктовый runtime завершён в OPS-048.
@@ -137,12 +138,12 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-[OPS-009](backlog/tickets/OPS-009.md): сессионная проверка graceful shutdown
-market-data на готовом минимальном [executable OPS-048](../cmd/market-data/README.md).
-Использовать OPS-049 и StartupProbePath=/healthz; отдельно проверять
-/readyz=503/unconfirmed. OPS-048 проверил durable trade/read_committed bytes,
-поколения/reconnect/restart и terminal выход владельца. SIGTERM пока обычное
-завершение ОС; drain/publish/reconnect при остановке ещё не реализованы.
+[OPS-010](backlog/tickets/OPS-010.md): сессионная проверка graceful shutdown
+matcher. Сначала проверить фактический runtime и средства process-проверки;
+готовые matcher-компоненты и HTTP health сами по себе не заменяют executable.
+OPS-009 завершил остановку минимального market-data: SQL-outbox остаётся
+буфером принятой работы, повтор после неопределённого commit сохраняет bytes;
+SIGTERM во время publish/handshake и закрытие WS проверены на disposable стенде.
 Полный динамический каталог и внутренние RPC для E2E не подключены.
 OPS-008 завершил HTTP-компонент health/readiness notifications и Worker.Running;
 listener, Ping своей БД и startup/shutdown инициализацию подключить при сборке runtime.

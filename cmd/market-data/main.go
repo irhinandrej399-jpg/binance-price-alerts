@@ -11,10 +11,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/event"
@@ -74,7 +76,7 @@ func loadConfig(get func(string) string) (config, error) {
 
 // prepare binds all callbacks to the durable generation before the transport dials.
 // The fixed raw endpoint provides no independent live confirmation.
-func prepare(repo *storage.Repository, pair string, state *atomic.Value, initialized func(bool)) stream.PrepareAttempt {
+func prepare(repo *storage.Repository, pair string, state *atomic.Value, initialized func(bool), generation *atomic.Uint64) stream.PrepareAttempt {
 	return func(ctx context.Context) (stream.AttemptCallbacks, error) {
 		op, cancel := context.WithTimeout(ctx, 5*time.Second)
 		gen, err := repo.BeginGeneration(op, pair)
@@ -82,6 +84,7 @@ func prepare(repo *storage.Repository, pair string, state *atomic.Value, initial
 		if err != nil {
 			return stream.AttemptCallbacks{}, err
 		}
+		generation.Store(gen)
 		state.Store(health.Unconfirmed)
 		initialized(true)
 		return stream.AttemptCallbacks{
@@ -146,6 +149,7 @@ func run(parent context.Context, c config) error {
 	done()
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
+	var generation atomic.Uint64
 	var state atomic.Value
 	state.Store(health.Starting)
 	h := health.New(pool.Ping, func(context.Context) (health.FeedState, error) { return state.Load().(health.FeedState), nil }, time.Second)
@@ -156,28 +160,91 @@ func run(parent context.Context, c config) error {
 	repo := storage.New(pool)
 	go func() { results <- relay.Run(ctx, repo, c.producer, c.topic, nil) }()
 	go func() {
-		results <- stream.ReconnectPrepared(ctx, c.endpoint, stream.DefaultConfig(), stream.DefaultRetryConfig(), nil, prepare(repo, c.pair, &state, h.SetInitialized))
+		results <- stream.ReconnectPrepared(ctx, c.endpoint, stream.DefaultConfig(), stream.DefaultRetryConfig(), nil, prepare(repo, c.pair, &state, h.SetInitialized, &generation))
 	}()
 	go func() { results <- server.Serve(listener) }()
-	<-results
+	remaining := 3
+	componentFailed := false
+	record := func(err error) {
+		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, http.ErrServerClosed) {
+			componentFailed = true
+		}
+	}
+	select {
+	case <-parent.Done():
+	case err := <-results:
+		remaining--
+		record(err)
+	}
 	h.SetInitialized(false)
 	cancel()
-	_ = server.Close()
-	// Join ingest and relay before closing their SQL pool. Immediate close only;
-	// graceful signal handling and HTTP drain belong to OPS-009.
-	for i := 0; i < 2; i++ {
-		<-results
+	httpStop, stopHTTP := context.WithTimeout(context.Background(), 2*time.Second)
+	httpErr := server.Shutdown(httpStop)
+	stopHTTP()
+	if httpErr != nil {
+		_ = server.Close()
 	}
-	if parent.Err() != nil {
-		return parent.Err()
+	// Cancellation stops admission, Accept, publication and retry. The durable
+	// outbox is the accepted buffer; no drain-to-empty claim is made.
+	for i := 0; i < remaining; i++ {
+		record(<-results)
 	}
+	state.Store(health.Disconnected)
+	// The reconnect loop skips its observer on owner cancellation. After joining
+	// it, persist the gap with the last generation owned by this process. A newer
+	// owner fences this write. Cleanup uses an independent, bounded SQL context.
+	cleanup, finish := context.WithTimeout(context.Background(), 5*time.Second)
+	defer finish()
+	if gen := generation.Load(); gen != 0 {
+		err = repo.SetStatus(cleanup, c.pair, gen, priceobserved.Unconfirmed, true)
+		if err != nil && !errors.Is(err, storage.ErrStale) {
+			return errors.New("market-data: stopped; durable gap write failed")
+		}
+	}
+	var pending int64
+	if err = pool.QueryRow(cleanup, `SELECT count(*) FROM app.price_outbox WHERE NOT published`).Scan(&pending); err != nil {
+		return errors.New("market-data: stopped; publication status unavailable")
+	}
+	fmt.Fprintf(os.Stderr, "market-data: stopped; feed disconnected; pending publications=%d (unconfirmed outcomes retained)\n", pending)
+	if httpErr != nil {
+		return errors.New("market-data: HTTP shutdown incomplete")
+	}
+	if parent.Err() != nil && !componentFailed {
+		return nil
+	}
+
 	// Component errors may contain credentials/remote response bodies.
 	return errors.New("market-data: required component stopped")
+}
+
+// execute is shared with process fault tests; production main uses this exact
+// signal and deadline owner. Deadline failure is explicit, never graceful success.
+func execute(c config) error {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
+	defer stop()
+	finished := make(chan struct{})
+	defer close(finished)
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-finished:
+			return
+		}
+		timer := time.NewTimer(20 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-finished:
+		case <-timer.C:
+			fmt.Fprintln(os.Stderr, "market-data: shutdown deadline exceeded; publication/gap status may be unconfirmed")
+			os.Exit(1)
+		}
+	}()
+	return run(ctx, c)
 }
 func main() {
 	c, err := loadConfig(os.Getenv)
 	if err == nil {
-		err = run(context.Background(), c)
+		err = execute(c)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
