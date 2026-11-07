@@ -114,3 +114,7 @@ OPS-052 использует этот же lifecycle для matcher:
 Runner передаёт API DSN только родительской fixture и matcher DSN её child;
 `matcherprocess.ChildEnv` не наследует API credential. Применяются API+matcher
 migrations, ownerexit fixture поддерживает `MATCHER_PROCESS_INTEGRATION=1`.
+
+`Process.ExitCode()` возвращает только безопасный код reaped child и признак
+готовности: до `Done` — `ok=false`, после signal exit — `code=-1`. Это позволяет
+проверять штатный exit 0, не принимая fallback TERM/KILL за graceful успех.

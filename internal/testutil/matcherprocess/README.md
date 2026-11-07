@@ -40,7 +40,7 @@ parent secret проверяются внутри child. Невалидный DS
 Тестовый child не запускает replica и не проверяет продуктовый graceful shutdown.
 
 `f.Seed(ctx)` создаёт аккаунт, binding и три active подписки через API quota/Create,
-затем один journal.Append с сохранёнными after-image для целой транзакции. Возвращает Dataset с OwnerID/Pair/IDs. Частичный Seed
+затем один journal.Append с сохранёнными after-image для целой транзакции. Возвращает Dataset с OwnerID/Pair/IDs; Telegram binding уникален для каждого набора в одной disposable БД. Частичный Seed
 не переиспользуют: удаляют весь disposable dataset. `PublishChanges(ctx)` явно
 вызывает готовый API relay до пустого хвоста; фоновой подмены/пересборки bytes нет.
 `Changes(ctx, pos)` открывает настоящий changefeed: регистрация LSO до replay H,

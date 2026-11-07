@@ -10,6 +10,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/deliveryrpc"
@@ -26,6 +28,8 @@ import (
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/postgres"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/serviceauth"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type registration struct {
@@ -126,27 +130,73 @@ func run(parent context.Context, c config) error {
 	go func() { results <- r.Run(ctx) }()
 	go func() { results <- server.Serve(listener) }()
 	remaining := 2
+	componentFailed := false
+	record := func(err error) {
+		if errors.Is(err, replica.ErrCleanup) {
+			componentFailed = true
+			return
+		}
+		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, http.ErrServerClosed) && status.Code(err) != codes.Canceled {
+			componentFailed = true
+		}
+	}
 	select {
 	case <-parent.Done():
-	case <-results:
+	case err := <-results:
 		remaining--
+		record(err)
 	}
 	h.SetInitialized(false)
 	cancel()
-	_ = server.Close()
+	httpStop, stopHTTP := context.WithTimeout(context.Background(), 2*time.Second)
+	httpErr := server.Shutdown(httpStop)
+	stopHTTP()
+	if httpErr != nil {
+		_ = server.Close()
+	}
 	// Join the replica/readers before closing the pool and RPC clients.
 	for i := 0; i < remaining; i++ {
-		<-results
+		record(<-results)
 	}
-	if parent.Err() != nil {
-		return parent.Err()
+	if httpErr != nil {
+		return errors.New("matcher: HTTP shutdown incomplete")
+	}
+	if parent.Err() != nil && !componentFailed {
+		return nil
 	}
 	return errors.New("matcher: required component stopped")
 }
+
+// Cancellation stops admission immediately; accepted SQL work is the drain
+// buffer. A hard bound also covers stuck dependency joins/pool.Close. Exceeding
+// it is an explicit failure with durable outcomes left for the successor.
+func execute(c config) error {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
+	defer stop()
+	finished := make(chan struct{})
+	defer close(finished)
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-finished:
+			return
+		}
+		timer := time.NewTimer(20 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-finished:
+		case <-timer.C:
+			fmt.Fprintln(os.Stderr, "matcher: shutdown deadline exceeded; durable work requires recovery")
+			os.Exit(1)
+		}
+	}()
+	return run(ctx, c)
+}
+
 func main() {
 	c, e := loadConfig(os.Getenv)
 	if e == nil {
-		e = run(context.Background(), c)
+		e = execute(c)
 	}
 	if e != nil {
 		fmt.Fprintln(os.Stderr, e)

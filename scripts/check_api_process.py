@@ -97,8 +97,11 @@ def main(owner="api"):
         if market or matcher:
             run(['go', 'test', '-race', '-count=1', '-v', '-timeout', '30s',
                  './internal/testutil/apiprocess'], env, timeout=60)
-        run(['go', 'test', '-race', '-count=1', '-v', '-timeout', '90s',
-             args.package], env, timeout=120)
+        # Matcher runs crash/startup plus graceful/recovery/fault scenarios in
+        # one package (85s + 60s local budgets); retain room for both.
+        run(['go', 'test', '-race', '-count=1', '-v', '-timeout',
+             '150s' if matcher else '90s', args.package], env,
+            timeout=180 if matcher else 120)
     finally:
         # Go's test timeout/panic does not execute defers. Kill any registered
         # child process groups before removing their disposable infrastructure.

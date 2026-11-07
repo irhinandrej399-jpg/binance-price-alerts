@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -171,7 +172,12 @@ func (f *Fixture) Seed(ctx context.Context) (Dataset, error) {
 		return d, err
 	}
 	d.OwnerID, d.Pair = owner.ID, "BTCUSDT"
-	if _, err = tx.Exec(ctx, `UPDATE app.users SET telegram_chat_id=1451,telegram_version=1 WHERE id=$1`, owner.ID); err != nil {
+	// Independent datasets in one disposable DB need distinct channel bindings.
+	chat, err := strconv.ParseInt(strings.ReplaceAll(owner.ID, "-", "")[:15], 16, 64)
+	if err != nil {
+		return d, err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE app.users SET telegram_chat_id=$2,telegram_version=1 WHERE id=$1`, owner.ID, chat+1); err != nil {
 		return d, err
 	}
 	quota, err := sub.LockQuota(ctx, tx, owner.ID)

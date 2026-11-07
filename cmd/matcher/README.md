@@ -1,4 +1,4 @@
-# Минимальный matcher — OPS-053
+# Минимальный matcher — OPS-053 / OPS-010
 
 `go run ./cmd/matcher` запускает одну готовую `replica`: Kafka group → SQL
 fencing → snapshot/replay/live → Latest → canonical RequestDelivery API.
@@ -52,9 +52,20 @@ prefix. Changes открывает отдельный Source на каждую �
 своей БД и replica.Status: 503 до full view/recovery/первой оценки, 200 после.
 SQL/RPC/Kafka/pin ошибки завершают владельца; reset и автоматического нового
 snapshot нет. Pin имеет фиксированный срок, HEAD_INTERVAL его не продлевает.
-Terminal cleanup отменяет workers, закрывает HTTP, присоединяет replica, затем
-закрывает pool/RPC. Обработка SIGTERM/drain будет добавлена в OPS-010; сейчас
-сигналы имеют штатное поведение ОС. Restart после SIGKILL проверен отдельно.
+SIGTERM/SIGINT снимают readiness, отменяют Kafka intake, новые оценки и RPC.
+HTTP admission закрывается через Shutdown с бюджетом 2 с. Replica присоединяет
+live/changefeed/quote readers и Kafka group, отзывает SQL grants; только после
+этого владелец закрывает pool/RPC. Drain опирается на durable Pending/исходы:
+заканчивать всех кандидатов при остановке не требуется. Незавершённая цена не
+получает broker ack; SQL Prefix остаётся источником восстановления.
+
+Общий предел от сигнала до выхода — 20 с: он включает HTTP, joins, отзыв grants
+(бюджет revoke-прохода 3 с) и закрытие ресурсов. Штатная отмена после успешного
+cleanup даёт exit 0. Ошибка cleanup, зависимость или превышение общего предела
+даёт exit 1 с безопасным сообщением; дедлайн не объявляется graceful успехом.
+При нём successor восстанавливает durable работу и fencing, как после crash.
+SIGKILL/restart проверен отдельно. Terminal component также отменяет и
+присоединяет workers до закрытия ресурсов; SQL/pin reset не выполняется.
 
 Проверка настоящего executable (Docker Desktop, Go и локальная PostgreSQL
 secret-конфигурация по infra/postgres/README):
@@ -67,6 +78,13 @@ GOCACHE=/tmp/binance-go-build python3 scripts/check_matcher_process.py --package
 Snapshot/Replay/Delivery/Latest fixture. Проверяет readiness 503 при задержанной
 первой оценке, несколько кандидатов, API commit до ответа, SIGKILL, SQL recovery,
 canonical trigger_id/outbox без дубля, Pending/SQL Prefix до broker ack, terminal
-потерю SQL authority и startup failures. Без opt-in тест явно SKIP; при opt-in
-без конфигурации — FAIL. Это минимальный local runtime; полный E2E четырёх
-сервисов, production PKI, graceful shutdown и нагрузка остаются отдельно.
+потерю SQL authority и startup failures. Дополнительно запускается тот же
+настоящий executable: SIGTERM после части кандидатов/неоднозначного API ответа,
+exit 0 без harness Kill, отзыв всех 16 grants, неизменные Pending/исходы и
+отсутствие преждевременного broker ack. Restart при новой подходящей цене
+завершает кандидатов: уникальные trigger_id/outbox совпадают с каноническим API,
+SQL/broker Prefix сходятся. SIGINT после recovery также даёт exit 0. Реальная
+SQL row lock при отзыве authority проверяет exit 1 вместо скрытого успеха.
+
+Без opt-in тест явно SKIP; при opt-in без конфигурации — FAIL. Это минимальный
+local runtime; полный E2E четырёх сервисов, production PKI и нагрузка остаются отдельно.

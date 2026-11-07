@@ -269,4 +269,5 @@ func TestMatcherProcess(t *testing.T) {
 			t.Fatal("startup failure not observed", tc.k, e)
 		}
 	}
+	t.Run("graceful", func(t *testing.T) { testMatcherShutdown(t, binary) })
 }

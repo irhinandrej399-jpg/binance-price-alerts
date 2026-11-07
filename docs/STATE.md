@@ -4,8 +4,9 @@
 
 ## Активная работа
 
-- Активная реализация: нет. Минимальный cmd/matcher завершён в OPS-053; следующий шаг — SIGTERM/drain OPS-010. Незавершённые raw/code исследований сохранены по DEC-010; kernel/capacity квалификация локальный запуск не блокирует.
-- Последний завершённый тикет: [OPS-053](backlog/tickets/OPS-053.md), [минимальный matcher](../cmd/matcher/README.md). Явный 16-partition bootstrap/identity, mTLS Snapshot/Replay/Delivery/Latest и OPS-007 HTTP над replica. Настоящий executable/race на PostgreSQL/Kafka: readiness 503/200, partial outcomes → SIGKILL → SQL/changefeed recovery, canonical trigger_id/outbox без дубля, SQL/broker Prefix и terminal SQL/pin/startup failures PASS; cleanup подтверждён. Общая race-регрессия/vet/build PASS. Graceful SIGTERM остаётся OPS-010.
+- Активная реализация: нет. SIGTERM/drain matcher завершён в OPS-010; следующий шаг — сессионная проверка OPS-011. Незавершённые raw/code исследований сохранены по DEC-010; kernel/capacity квалификация локальный запуск не блокирует.
+- Последний завершённый тикет: [OPS-010](backlog/tickets/OPS-010.md), [graceful shutdown matcher](../cmd/matcher/README.md). SIGTERM/SIGINT отменяют intake/оценки/RPC, присоединяют replica/readers/Kafka и отзывают grants до pool.Close; общий предел 20 с. Два успешных PostgreSQL/Kafka process/race прогона: частичный Pending/неоднозначный API commit, exit 0, все 16 grants отозваны, restart/canonical IDs без дублей, SQL/broker Prefix, SIGINT и явный exit 1 при SQL cleanup fault. Cleanup подтверждён; общая race-регрессия/vet/build PASS. Незавершённая работа восстанавливается после restart; полный E2E впереди.
+- Предыдущий завершённый тикет: [OPS-053](backlog/tickets/OPS-053.md), [минимальный matcher](../cmd/matcher/README.md). Явный 16-partition bootstrap/identity, mTLS Snapshot/Replay/Delivery/Latest и OPS-007 HTTP над replica. Настоящий executable/race на PostgreSQL/Kafka: readiness 503/200, partial outcomes → SIGKILL → SQL/changefeed recovery, canonical trigger_id/outbox без дубля, SQL/broker Prefix и terminal SQL/pin/startup failures PASS; cleanup подтверждён. Общая race-регрессия/vet/build PASS. Graceful SIGTERM остаётся OPS-010.
 - Предыдущий завершённый тикет: [OPS-052](backlog/tickets/OPS-052.md), [disposable matcher fixture](../internal/testutil/matcherprocess/README.md). Общий lifecycle/runner apiprocess, только matcher DSN в child, родительская API fixture и mTLS Snapshot/Replay/Delivery/Latest. Целый canonical changefeed пакет совпал с API journal bytes; 16-partition bootstrap, partial/Pending/superseded, canonical trigger_id, SQL/broker Prefix и cleanup проверены на PostgreSQL/Kafka с race. Аварийный owner-exit cleanup подтверждён; общая race-регрессия/vet/build PASS. Product child/SIGTERM — OPS-053/010.
 - Предыдущий завершённый тикет: [OPS-009](backlog/tickets/OPS-009.md), [graceful shutdown market-data](../cmd/market-data/README.md). SIGTERM/SIGINT отменяют приём/publish/reconnect, компоненты присоединяются до pool.Close; durable gap с fencing, pending outbox сохраняется. Общий предел 20 с; ошибки cleanup явные. Два успешных PostgreSQL/Kafka process/race прогона подтвердили потерянный EndTxn response, исходные bytes после lease/restart, handshake и закрытие активного WS; cleanup подтверждён. Общая race-регрессия/vet/build PASS. Feed unconfirmed; lease до 30 с и возможный дубль сохранены.
 - Предыдущий завершённый тикет: [OPS-048](backlog/tickets/OPS-048.md), [минимальный raw trade процесс](../cmd/market-data/README.md). Durable поколение до каждого dial, Decode/Accept/outbox/relay и собственные health/Ping подключены. Реальные PostgreSQL/Kafka process/race проверки: исходные bytes, reconnect/restart, SQL fencing, startup и terminal relay — PASS; общая race-регрессия/vet/build PASS, cleanup подтверждён. Feed честно unconfirmed; graceful SIGTERM добавлен в OPS-009.
@@ -140,12 +141,14 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-[OPS-010](backlog/tickets/OPS-010.md): проверить готовность и добавить SIGTERM/drain
-минимального [cmd/matcher](../cmd/matcher/README.md), завершённого в OPS-053.
-Использовать готовый [OPS-052 fixture](../internal/testutil/matcherprocess/README.md)
-и `python3 scripts/check_matcher_process.py --package ./cmd/matcher`.
-SIGKILL/restart с durable outcomes/changefeed cursor/Prefix проверен; terminal
-SQL/pin ошибки завершают владельца без reset. Graceful сигнал пока не реализован.
+[OPS-011](backlog/tickets/OPS-011.md): сессионная проверка graceful shutdown
+notification worker. До реализации проверить executable cmd/notifications и
+наличие process fixture; недостающую сборку/окружение выделить отдельно.
+OPS-010 завершил SIGTERM/SIGINT минимального matcher: SQL Pending/исходы
+сохраняются, intake/оценки/RPC отменяются, replica/readers/Kafka присоединяются,
+grants отзываются до закрытия БД. Процессные PostgreSQL/Kafka проверки подтвердили
+exit 0 после частичных кандидатов, recovery/canonical IDs и SQL/broker Prefix;
+SQL cleanup fault даёт exit 1. Общий предел 20 с; полный E2E ещё не проверен.
 OPS-009 завершил остановку минимального market-data: SQL-outbox остаётся
 буфером принятой работы, повтор после неопределённого commit сохраняет bytes;
 SIGTERM во время publish/handshake и закрытие WS проверены на disposable стенде.
@@ -184,7 +187,7 @@ NTF-006 рассчитывает retry Plan и бюджет доказанных
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show OPS-010` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show OPS-011` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

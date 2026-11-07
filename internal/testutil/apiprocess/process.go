@@ -51,6 +51,17 @@ type Process struct {
 func (p *Process) PID() int              { return p.cmd.Process.Pid }
 func (p *Process) Done() <-chan struct{} { return p.done }
 
+// ExitCode observes reaped child metadata without exposing its command/output.
+// A signal exit has code -1; ok is false until Done is closed.
+func (p *Process) ExitCode() (code int, ok bool) {
+	select {
+	case <-p.done:
+		return p.cmd.ProcessState.ExitCode(), true
+	default:
+		return 0, false
+	}
+}
+
 // Stop sends TERM to the process group, then KILL, and always reaps the child.
 // Both waits have a finite budget. Repeated/concurrent calls are safe.
 func (p *Process) Stop() error {

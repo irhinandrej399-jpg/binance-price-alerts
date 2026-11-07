@@ -30,6 +30,10 @@ import (
 
 var ErrConfig = errors.New("replica: invalid configuration or assignment")
 
+// ErrCleanup marks failure to retire durable SQL authority. Owners must not
+// hide it when the same result also includes cancellation during shutdown.
+var ErrCleanup = errors.New("replica: SQL authority cleanup failed")
+
 // ID is a durable replica identity, unique among concurrent replicas. Bootstrap
 // is an explicitly selected absolute next offset for each of the 16 partitions,
 // used ONLY if SQL has no prefix. The caller owns latest-price bootstrap policy;
@@ -166,7 +170,7 @@ func (r *Replica) revoke(grants []fencing.Grant) {
 		e := fencing.New(r.cfg.Pool).Revoke(ctx, g)
 		if e != nil && !errors.Is(e, fencing.ErrAuthority) {
 			r.mu.Lock()
-			r.prepareErr = errors.Join(r.prepareErr, e)
+			r.prepareErr = errors.Join(r.prepareErr, ErrCleanup, e)
 			r.mu.Unlock()
 		}
 	}

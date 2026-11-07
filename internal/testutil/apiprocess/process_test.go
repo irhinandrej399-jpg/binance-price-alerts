@@ -89,9 +89,14 @@ func TestLifecycle(t *testing.T) {
 	sentinel := errors.New("verification failed")
 	for _, fail := range []bool{false, true} {
 		pid := 0
+		var child *Process
 		cfg := childConfig(t, "unconfirmed")
 		cfg.StartupProbePath = "/healthz"
 		err := With(context.Background(), cfg, func(p *Process) error {
+			child = p
+			if _, ok := p.ExitCode(); ok {
+				t.Fatal("exit code available before child exit")
+			}
 			pid = p.PID()
 			if _, err := os.Stat(filepath.Join(registry, strconv.Itoa(pid))); err != nil {
 				t.Fatal("missing child registry entry")
@@ -114,6 +119,9 @@ func TestLifecycle(t *testing.T) {
 			t.Fatal(err)
 		}
 		assertDead(t, pid)
+		if code, ok := child.ExitCode(); !ok || code != -1 {
+			t.Fatalf("signalled child exit code=%d reaped=%v", code, ok)
+		}
 		entries, e := os.ReadDir(registry)
 		if e != nil || len(entries) != 0 {
 			t.Fatal("stale child registry entry")

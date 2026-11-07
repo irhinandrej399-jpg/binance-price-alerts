@@ -30,7 +30,9 @@ CAS выдаёт новый SQL Grant; один неизменный RequestID/E
 реплика завершается, условный cleanup отзывает и ожидаемый Grant. Prepare
 возвращает только SQL checkpoint либо явный Bootstrap. Старые полномочия
 отзываются условно; отзыв старого token не затрагивает преемника. Ошибки cleanup
-возвращаются caller, а не обозначаются успехом.
+возвращаются caller, а не обозначаются успехом. Ошибка revoke помечается
+`ErrCleanup`: caller обязан проверять её даже при `errors.Is(err, context.Canceled)`,
+поскольку объединённый результат может содержать обе причины.
 
 Scope — hash фиксированной Environment/Group/Topic/Partition, независимый от
 replica/PID/token. Полная projection ID — hash Environment/Group/Topic/replica ID
