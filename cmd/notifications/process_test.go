@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -18,7 +19,9 @@ import (
 
 	domain "github.com/irhinandrej399-jpg/binance-price-alerts/internal/domain/subscription"
 	pb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/api/v1"
+	progresspb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/notifications/v1"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/intake"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/progressrpc"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/apiprocess"
 	np "github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/notificationsprocess"
@@ -114,6 +117,26 @@ func TestNotificationsProcess(t *testing.T) {
 		t.Fatal("startup created binding")
 	}
 	must(f.Provision(ctx, reader))
+	testSQLProgress(t, ctx, f, reader, record, d)
+	// SQL is now ahead of the absent broker commit. A fresh canonical duplicate
+	// lets the resumed consumer acknowledge its next read without a new job.
+	replayProducer, err := kgo.NewClient(kgo.SeedBrokers(f.Broker), kgo.RecordPartitioner(kgo.ManualPartitioner()))
+	must(err)
+	replay := &kgo.Record{Topic: record.Topic, Partition: record.Partition, Key: d.Key, Value: d.Body}
+	err = replayProducer.ProduceSync(ctx, replay).FirstErr()
+	replayProducer.Close()
+	must(err)
+	record = replay
+	progress := progressrpc.NewClient(f.ProgressConn(t, f.RPCAddr))
+	proof := func(part int32, next int64) {
+		t.Helper()
+		b := f.Binding
+		out, err := progress.ReadProgress(ctx, &progresspb.ReadProgressRequest{ConsumerId: b.ConsumerID, Generation: b.Generation, ClusterId: b.Source.ClusterID, TopicId: b.Source.TopicID[:], Topic: b.Source.Topic, Partition: part})
+		must(err)
+		if out.NextOffset == nil || *out.NextOffset != next || out.Generation != b.Generation || out.ConsumerId != b.ConsumerID {
+			t.Fatal("runtime progress mismatch", out)
+		}
+	}
 	for k, v := range f.ChildEnv(os.Getenv("NOTIFICATIONS_DATABASE_URL")) {
 		env[k] = v
 	}
@@ -237,6 +260,7 @@ func TestNotificationsProcess(t *testing.T) {
 			n, e := f.BrokerOffset(ctx, env["NOTIFICATIONS_GROUP"], record.Partition)
 			return e == nil && n == record.Offset+1
 		})
+		proof(record.Partition, record.Offset+1)
 		crashEvidence = observe()
 		kill(p)
 		return nil
@@ -248,6 +272,7 @@ func TestNotificationsProcess(t *testing.T) {
 			t.Fatal("pending recovery changed evidence")
 		}
 		assertBinding()
+		proof(record.Partition, record.Offset+1)
 		// Let this new member complete assignment before killing it later at the
 		// report boundary; an abandoned JoinGroup otherwise waits for session expiry.
 		resumed := &kgo.Record{Topic: record.Topic, Key: d.Key, Value: d.Body}
@@ -335,7 +360,17 @@ func TestNotificationsProcess(t *testing.T) {
 			t.Fatal("outbox duplicated")
 		}
 		confirmIntake()
-		must(apiprocess.With(ctx, cfg, func(member *apiprocess.Process) error {
+		memberConfig := cfg
+		memberEnv := make(map[string]string, len(env))
+		for k, v := range env {
+			memberEnv[k] = v
+		}
+		memberListener, err := net.Listen("tcp", "127.0.0.1:0")
+		must(err)
+		memberEnv["RPC_ADDR"] = memberListener.Addr().String()
+		must(memberListener.Close())
+		memberConfig.Env = memberEnv
+		must(apiprocess.With(ctx, memberConfig, func(member *apiprocess.Process) error {
 			wait("two group members", func() bool {
 				req := kmsg.NewPtrDescribeGroupsRequest()
 				req.Groups = []string{env["NOTIFICATIONS_GROUP"]}
@@ -463,7 +498,7 @@ func TestNotificationsProcess(t *testing.T) {
 	}
 	// Fail startup before any readiness for missing credentials, foreign SQL owner,
 	// identity mismatch, bad Telegram config and unavailable SQL.
-	for _, tc := range []struct{ k, v string }{{"NOTIFICATIONS_CONSUMER_ID", "foreign"}, {"NOTIFICATIONS_GENERATION", "foreign"}, {"KAFKA_CLUSTER_ID", "foreign"}, {"DELIVERY_REQUESTS_TOPIC_ID", "0102030405060708090a0b0c0d0e0f10"}, {"RPC_CERT_FILE", "/unavailable/secret"}, {"RPC_CA_FILE", f.KeyFile}, {"NOTIFICATIONS_DATABASE_URL", "postgres://notifications_runtime:secret@127.0.0.1:1/notifications?sslmode=disable&connect_timeout=1"}, {"RPC_IDENTITY", "spiffe://process.test/wrong"}, {"NOTIFICATIONS_DATABASE_URL", "postgres://api_runtime:secret@localhost/api"}, {"TELEGRAM_BASE_URL", "https://secret@host"}} {
+	for _, tc := range []struct{ k, v string }{{"RPC_SERVER_CERT_FILE", "/unavailable/exporter"}, {"RPC_SERVER_KEY_FILE", f.CertFile}, {"NOTIFICATIONS_CONSUMER_ID", "foreign"}, {"NOTIFICATIONS_GENERATION", "foreign"}, {"KAFKA_CLUSTER_ID", "foreign"}, {"DELIVERY_REQUESTS_TOPIC_ID", "0102030405060708090a0b0c0d0e0f10"}, {"RPC_CERT_FILE", "/unavailable/secret"}, {"RPC_CA_FILE", f.KeyFile}, {"NOTIFICATIONS_DATABASE_URL", "postgres://notifications_runtime:secret@127.0.0.1:1/notifications?sslmode=disable&connect_timeout=1"}, {"RPC_IDENTITY", "spiffe://process.test/wrong"}, {"NOTIFICATIONS_DATABASE_URL", "postgres://api_runtime:secret@localhost/api"}, {"TELEGRAM_BASE_URL", "https://secret@host"}} {
 		bad := map[string]string{}
 		for k, v := range env {
 			bad[k] = v

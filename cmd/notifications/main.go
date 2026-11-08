@@ -16,12 +16,14 @@ import (
 
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/admissionrpc"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/resultrpc"
+	progresspb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/notifications/v1"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/botlimit"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/chatlimit"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/handler"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/health"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/intake"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/jobs"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/progressrpc"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/report"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/retry"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/telegram"
@@ -125,8 +127,42 @@ func run(parent context.Context, c config) error {
 		return errors.New("notifications: HTTP bind failed")
 	}
 	defer listener.Close()
+	rpcCert, e := read(c.rpcCert)
+	if e != nil {
+		return e
+	}
+	rpcKey, e := read(c.rpcKey)
+	if e != nil {
+		return e
+	}
+	opts, e := progressrpc.ServerOptions(rpcCert, rpcKey, ca, c.cleanerURI)
+	if e != nil {
+		return errors.New("notifications: invalid exporter credentials")
+	}
+	rpcListener, e := net.Listen("tcp", c.rpcAddr)
+	if e != nil {
+		return errors.New("notifications: RPC bind failed")
+	}
+	defer rpcListener.Close()
+	rpcServer := grpc.NewServer(opts...)
+	progresspb.RegisterNotificationsProgressServer(rpcServer, progressrpc.NewServer(intakeStore))
+	defer rpcServer.Stop()
+	serveRPC := func(ctx context.Context) error {
+		ctx, stopRPC := context.WithCancel(ctx)
+		defer stopRPC()
+		joined := make(chan struct{})
+		go func() { defer close(joined); <-ctx.Done(); rpcServer.Stop() }()
+		err := rpcServer.Serve(rpcListener)
+		// A terminal Serve failure must also release the cancellation waiter.
+		stopRPC()
+		<-joined
+		if errors.Is(err, grpc.ErrServerStopped) {
+			return nil
+		}
+		return err
+	}
 	probe := health.New(pool.Ping, w.Running, time.Second)
-	return supervise(parent, listener, probe, consumer.Run, w.Run)
+	return supervise(parent, listener, probe, consumer.Run, w.Run, serveRPC)
 }
 
 // Validate every persisted partition before exposing HTTP or starting workers.

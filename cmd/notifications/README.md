@@ -12,6 +12,9 @@ SQL checkpoint определяет resume, а ack Kafka выполняется 
 | --- | --- |
 | `NOTIFICATIONS_DATABASE_URL` | DSN своей БД, роль `notifications_runtime` |
 | `HTTP_ADDR` | `127.0.0.1:8083` |
+| `RPC_ADDR` | отдельный exporter listener, например `127.0.0.1:8086` |
+| `RPC_SERVER_CERT_FILE`, `RPC_SERVER_KEY_FILE` | PEM ServerAuth certificate/key с DNS SAN notifications |
+| `CLEANER_SERVICE_URI` | точный URI SAN cleaner, например `spiffe://local/cleaner` |
 | `KAFKA_BROKERS` | `localhost:9092`, несколько через запятую |
 | `DELIVERY_REQUESTS_TOPIC` | canonical delivery topic с 16 partitions |
 | `NOTIFICATIONS_GROUP` | стабильная consumer group окружения |
@@ -55,7 +58,7 @@ TLS 1.3, явные CA/server authority, certificate/key и точный URI SAN
 `/healthz` отвечает 200; `/readyz` — 503 до инициализации/старта worker, после
 выхода любого компонента и при SQL Ping failure; после старта и успешного Ping
 — 200. Readiness не доказывает доступность Telegram/API, синхронизацию intake
-или производительность. Telegram 429 не снимает liveness. Intake/worker/HTTP
+или производительность. Telegram 429 не снимает liveness. Intake/worker/HTTP/progress RPC
 обязательны: их выход снимает readiness, отменяет siblings и присоединяет их
 перед Close Kafka/SQL/RPC. Terminal failure завершает executable с кодом 1.
 
@@ -142,3 +145,22 @@ Process/race проверка также покрывает SIGKILL pending job/
 attempt IDs/bytes, binding всех partitions и двух одновременных members, чужие IDs до readiness, живой
 процесс при recreate с перекрывающимся offset=0, сохранность SQL evidence и
 отсутствие ack/HTTP, legacy отказ и новый пустой SQL с новой Generation.
+
+## Durable progress RPC — OPS-057
+
+Отдельный `RPC_ADDR` обслуживает только
+`notifications.v1.NotificationsProgress/ReadProgress`. Сервер использует
+`RPC_SERVER_CERT_FILE`/`RPC_SERVER_KEY_FILE`, доверяет client CA из `RPC_CA_FILE`
+и разрешает метод только `CLEANER_SERVICE_URI`. Исходящие API credentials
+`RPC_CERT_FILE`/`RPC_KEY_FILE` остаются отдельными ClientAuth credentials.
+Cleaner проверяет DNS SAN notifications через свою authority и использует свой
+ClientAuth certificate, без SQL-доступа. Все четыре новые настройки обязательны.
+
+Запрос связывает consumer + SQL generation + Kafka ClusterID/TopicID/topic/partition
+с persisted SQL next; чтение не вызывает Bootstrap/Checkpoint и не меняет pending
+job/attempt/report. Бюджет SQL/RPC — 1 с, request/response — 4096 bytes, строки —
+256 bytes. Неподтверждённый прогресс возвращает ошибку без offset.
+Startup bind/PEM error не даёт readiness; выход сервера останавливает siblings.
+При signal/terminal cancellation gRPC Stop отменяет активные запросы и ждёт
+SQL handlers до pool.Close в существующем общем drain budget 20 с.
+Wire/errors/cleaner obligations — [progressrpc](../../internal/notifications/progressrpc/README.md).

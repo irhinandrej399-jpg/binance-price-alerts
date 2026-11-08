@@ -18,6 +18,7 @@ import (
 
 type config struct {
 	binding                                                                   intake.Binding
+	rpcAddr, rpcCert, rpcKey, cleanerURI                                      string
 	addr, dsn, topic, group, api, serverName, identity, ca, cert, key, botID  string
 	brokers                                                                   []string
 	telegram                                                                  telegram.Config
@@ -36,6 +37,7 @@ func addressOK(s string) bool {
 }
 func loadConfig(get func(string) string) (config, error) {
 	c := config{addr: get("HTTP_ADDR"), dsn: get("NOTIFICATIONS_DATABASE_URL"), topic: get("DELIVERY_REQUESTS_TOPIC"), group: get("NOTIFICATIONS_GROUP"), api: get("API_RPC_ADDR"), serverName: get("RPC_SERVER_NAME"), identity: get("RPC_IDENTITY"), ca: get("RPC_CA_FILE"), cert: get("RPC_CERT_FILE"), key: get("RPC_KEY_FILE")}
+	c.rpcAddr, c.rpcCert, c.rpcKey, c.cleanerURI = get("RPC_ADDR"), get("RPC_SERVER_CERT_FILE"), get("RPC_SERVER_KEY_FILE"), get("CLEANER_SERVICE_URI")
 	c.binding.ConsumerID = get("NOTIFICATIONS_CONSUMER_ID")
 	c.binding.Generation = get("NOTIFICATIONS_GENERATION")
 	c.binding.Source.ClusterID = get("KAFKA_CLUSTER_ID")
@@ -48,7 +50,7 @@ func loadConfig(get func(string) string) (config, error) {
 	if c.binding.Validate() != nil {
 		return config{}, errConfig
 	}
-	for _, s := range []string{c.addr, c.api} {
+	for _, s := range []string{c.addr, c.api, c.rpcAddr} {
 		if !addressOK(s) {
 			return config{}, errConfig
 		}
@@ -62,13 +64,17 @@ func loadConfig(get func(string) string) (config, error) {
 			return config{}, errConfig
 		}
 	}
-	for _, s := range []string{c.serverName, c.ca, c.cert, c.key} {
+	for _, s := range []string{c.serverName, c.ca, c.cert, c.key, c.rpcCert, c.rpcKey} {
 		if strings.TrimSpace(s) == "" {
 			return config{}, errConfig
 		}
 	}
 	id, e := url.Parse(c.identity)
 	if e != nil || id.Scheme != "spiffe" || id.Host == "" || id.User != nil || id.RawQuery != "" || id.Fragment != "" || id.Path == "" {
+		return config{}, errConfig
+	}
+	cleaner, err := url.Parse(c.cleanerURI)
+	if err != nil || cleaner.Scheme != "spiffe" || cleaner.Host == "" || cleaner.Path == "" || cleaner.User != nil || cleaner.RawQuery != "" || cleaner.Fragment != "" {
 		return config{}, errConfig
 	}
 	c.brokers = strings.Split(get("KAFKA_BROKERS"), ",")

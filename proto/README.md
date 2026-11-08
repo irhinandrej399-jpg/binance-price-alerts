@@ -81,3 +81,7 @@ AcknowledgeReplay/AbandonReplay, [контракт SUB-022](../internal/api/repl
 Matcher progress: `matcher/v1/progress.proto` (OPS-056), read-only exact-consumer
 SQL Kafka next-offset proof over mTLS. Presence `next_offset` is required;
 failed RPC never confirms deletion. See `internal/matcher/progressrpc/README.md`.
+
+Notifications progress: `notifications/v1/progress.proto` (OPS-057), exact logical
+intake + SQL bootstrap generation + Kafka source/partition, optional SQL-confirmed
+`next_offset`. Errors never authorize cleanup. [Контракт](../internal/notifications/progressrpc/README.md).

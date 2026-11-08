@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -37,20 +38,25 @@ import (
 	"google.golang.org/grpc"
 )
 
+const CleanerURI = "spiffe://process.test/cleaner"
+
 const NotificationsURI = "spiffe://process.test/notifications"
 const apiURI = "spiffe://process.test/api"
 const ServerName = "market.test"
 
 // Fixture includes ephemeral secret paths: never log it or its environment.
 type Fixture struct {
-	Binding                   intake.Binding
-	Conn                      *grpc.ClientConn
-	Target, Broker, Prefix    string
-	CAFile, CertFile, KeyFile string
-	Telegram                  *Telegram
-	api                       *pgxpool.Pool
-	quotes                    *quotes
-	gates                     *rpcGates
+	Binding                                      intake.Binding
+	RPCAddr, RPCServerCertFile, RPCServerKeyFile string
+	cleaner                                      pair
+	caPEM                                        []byte
+	Conn                                         *grpc.ClientConn
+	Target, Broker, Prefix                       string
+	CAFile, CertFile, KeyFile                    string
+	Telegram                                     *Telegram
+	api                                          *pgxpool.Pool
+	quotes                                       *quotes
+	gates                                        *rpcGates
 }
 type quotes struct {
 	mu    sync.Mutex
@@ -71,12 +77,21 @@ func New(t testing.TB, api *pgxpool.Pool, broker, prefix string) *Fixture {
 	f := &Fixture{api: api, Broker: broker, Prefix: prefix, quotes: &quotes{}, gates: &rpcGates{}}
 	f.Telegram = NewTelegram(t)
 	ca := newAuthority(t)
+	f.caPEM = ca.pem
+	f.cleaner = ca.issue(t, []string{CleanerURI}, false, false)
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.RPCAddr = lis.Addr().String()
+	_ = lis.Close()
 	server := ca.issue(t, nil, true, false)
 	notification := ca.issue(t, []string{NotificationsURI}, false, false)
 	apiClient := ca.issue(t, []string{apiURI}, false, false)
 	dir := t.TempDir()
 	f.CAFile, f.CertFile, f.KeyFile = filepath.Join(dir, "ca.pem"), filepath.Join(dir, "notifications.pem"), filepath.Join(dir, "notifications.key")
-	for path, data := range map[string][]byte{f.CAFile: ca.pem, f.CertFile: notification.cert, f.KeyFile: notification.key} {
+	f.RPCServerCertFile, f.RPCServerKeyFile = filepath.Join(dir, "exporter.pem"), filepath.Join(dir, "exporter.key")
+	for path, data := range map[string][]byte{f.RPCServerCertFile: server.cert, f.RPCServerKeyFile: server.key, f.CAFile: ca.pem, f.CertFile: notification.cert, f.KeyFile: notification.key} {
 		if os.WriteFile(path, data, 0600) != nil {
 			t.Fatal("write ephemeral credentials")
 		}
@@ -137,6 +152,7 @@ func (f *Fixture) Provision(ctx context.Context, pool *pgxpool.Pool) error {
 
 func (f *Fixture) ChildEnv(dsn string) map[string]string {
 	return map[string]string{
+		"RPC_ADDR": f.RPCAddr, "RPC_SERVER_CERT_FILE": f.RPCServerCertFile, "RPC_SERVER_KEY_FILE": f.RPCServerKeyFile, "CLEANER_SERVICE_URI": CleanerURI,
 		"NOTIFICATIONS_DATABASE_URL": dsn, "KAFKA_BROKERS": f.Broker, "DELIVERY_REQUESTS_TOPIC": f.Prefix + "-delivery-requests",
 		"NOTIFICATIONS_CONSUMER_ID": f.Binding.ConsumerID, "NOTIFICATIONS_GENERATION": f.Binding.Generation,
 		"KAFKA_CLUSTER_ID": f.Binding.Source.ClusterID, "DELIVERY_REQUESTS_TOPIC_ID": hex.EncodeToString(f.Binding.Source.TopicID[:]),
@@ -232,4 +248,19 @@ func (f *Fixture) Publish(ctx context.Context) error {
 }
 func (f *Fixture) Result(ctx context.Context, d Dataset) (sub.Record, error) {
 	return sub.New(f.api).ByID(ctx, d.Record.OwnerID, d.Record.ID)
+}
+
+// ProgressConn uses a distinct cleaner identity; it receives no SQL credentials.
+func (f *Fixture) ProgressConn(t testing.TB, addr string) *grpc.ClientConn {
+	t.Helper()
+	creds, err := serviceauth.ClientCredentials(f.cleaner.cert, f.cleaner.key, f.caPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(creds), grpc.WithAuthority(ServerName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	return conn
 }

@@ -112,3 +112,12 @@ Process tests проверяют старое и новое поколение, 
 SIGKILL/restart pending job/report и двух Stable members с прежними IDs, SIGTERM/SIGINT и SQL cleanup
 fault, live topic recreate с перекрывающимися offsets, отсутствие новых jobs/HTTP/
 ack и точную сохранность claims/attempts/outcomes/reports/checkpoints.
+
+OPS-057: `ChildEnv` также передаёт отдельный `RPC_ADDR`, ServerAuth PEM и
+`CLEANER_SERVICE_URI`. `ProgressConn(t, addr)` выдаёт клиентское соединение
+с отдельной cleaner identity и проверкой ServerName, без SQL credentials.
+`RPCAddr`/`RPCServerCertFile`/`RPCServerKeyFile` относятся к exporter child.
+Для двух одновременно работающих members задавайте разные listener addresses;
+consumer/generation/source остаются общими. Process qualification в
+cmd/notifications проверяет RPC над независимым read-only SQL pool и настоящим
+executable до/после SIGKILL, вместе с существующими broker/SQL observers.
