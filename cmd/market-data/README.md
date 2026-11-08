@@ -18,6 +18,7 @@ export RAW_TRADE_URL=wss://stream.binance.com:9443/ws/btcusdt@trade
 export KAFKA_BROKERS=127.0.0.1:9092
 export PRICES_TOPIC=local-prices
 export MARKET_DATA_RELAY_TRANSACTIONAL_ID=local-market-data-relay-shard-0
+# Также задайте RPC/каталог из раздела OPS-069 ниже.
 GOTOOLCHAIN=local go run ./cmd/market-data
 ```
 
@@ -27,7 +28,7 @@ GOTOOLCHAIN=local go run ./cmd/market-data
 не проверяются. Все владельцы relay используют один stable transactional.id
 фиксированного шарда; случайный ID на каждый запуск недопустим.
 
-Startup ограничен 15 с: bind HTTP, подключение своей БД, наличие схемы и
+Startup ограничен 15 с: credentials, bind HTTP/RPC, подключение своей БД, наличие схемы и
 инициализация Kafka producer epoch без Claim. Затем relay получает свой epoch
 перед Claim. Ошибка startup закрывает ресурсы; ошибки пользователю выводятся
 без DSN, URL, брокерских response bodies и исходных payloads.
@@ -89,7 +90,51 @@ executable затем повторяет bytes после lease, принима�
 закрывает активный WebSocket по SIGTERM. Отдельный зависший handshake
 проверяет завершение reconnect без принудительного kill из harness.
 
-Ограничения: нет динамического каталога, внутренних RPC, backfill, нескольких
+Ограничения: нет динамического каталога потоков, backfill, нескольких
 feed-реплик, полного E2E, capacity и нагрузочных гарантий. Kafka/SQL retry и
 возможные дубли после неопределённого commit следуют контракту relay/storage.
 Живое соединение Binance этим тестом не проверяется.
+
+## Catalog/Latest RPC (OPS-069)
+
+Тот же процесс обслуживает один mTLS listener с Catalog/Fetch и Quotes/Latest.
+Дополнительно обязательны:
+
+```sh
+export RPC_ADDR=127.0.0.1:9081
+export RPC_CERT_FILE=/path/to/market-data-cert.pem
+export RPC_KEY_FILE=/path/to/market-data-key.pem
+export RPC_CA_FILE=/path/to/service-ca.pem
+export API_SERVICE_URI=spiffe://local/api
+export MATCHER_SERVICE_URI=spiffe://local/matcher
+export CATALOG_BASE_URL=https://data-api.binance.vision
+```
+
+URI API и matcher должны отличаться. Общая serviceauth policy разрешает API
+Fetch/Latest, matcher только Latest; остальные identities не получают прав.
+Клиент проверяет DNS SAN серверного сертификата через свою явную authority.
+PEM берутся из внешних файлов; ключ доступен только владельцу/secret mount.
+Catalog использует готовый catalog.Client без кэша; URL задаёт origin без пути,
+query, userinfo и fragment. Для тестов обязателен loopback fixture origin.
+HTTP transport каталога принадлежит процессу, не использует proxy/redirect,
+ограничен RPC budget 1 с и закрывается при остановке.
+Latest читает storage.Repository своей БД; исходные цена, source ID, revision,
+времена, unconfirmed и sticky gap сохраняются. До запуска listener выполняется
+BeginGeneration фиксированной пары, чтобы прежний live не пережил рестарт.
+
+Startup проверяет credentials/политику, bind HTTP/RPC, схему и Kafka за прежние
+15 с. SIGTERM и terminal failure снимают готовность, отменяют ingest/relay,
+останавливают RPC с отменой и join активных handlers, затем закрывают свою БД.
+Это входит в существующий общий shutdown budget 20 с.
+
+Для фиксированного raw-профиля ожидание запуска: `/healthz` → 200 и успешный
+mTLS Fetch/Latest. `/readyz` остаётся **503**, `feed=unconfirmed` после первой
+сделки; при disconnect также 503. Этот профиль не доказывает live и не должен
+проверяться ожиданием readyz=200. Динамический каталог потоков сюда не входит.
+
+```sh
+GOCACHE=/tmp/binance-go-build PYTHONDONTWRITEBYTECODE=1 python3 scripts/check_marketdata_process.py --package ./cmd/market-data
+```
+
+Runner создаёт disposable PostgreSQL/Kafka; тест выпускает ephemeral CA и
+использует только loopback catalog/raw fixtures. Реальный Binance не вызывается.

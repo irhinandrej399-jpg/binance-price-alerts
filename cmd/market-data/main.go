@@ -21,7 +21,11 @@ import (
 
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/event"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/priceobserved"
+	pb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/marketdata/v1"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/catalog"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/catalogrpc"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/health"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/latest"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/publish"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/relay"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/storage"
@@ -29,12 +33,15 @@ import (
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/trade"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafka"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/postgres"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/serviceauth"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"google.golang.org/grpc"
 )
 
 type config struct {
-	addr, dsn, endpoint, pair, topic string
-	producer                         kafka.Config
+	addr, dsn, endpoint, pair, topic                                string
+	producer                                                        kafka.Config
+	rpcAddr, rpcCert, rpcKey, rpcCA, apiURI, matcherURI, catalogURL string
 }
 
 var kafkaName = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
@@ -42,11 +49,27 @@ var pairName = regexp.MustCompile(`^[A-Z0-9]+USDT$`)
 
 func loadConfig(get func(string) string) (config, error) {
 	c := config{addr: get("HTTP_ADDR"), dsn: get("MARKET_DATA_DATABASE_URL"), endpoint: get("RAW_TRADE_URL"), pair: get("RAW_TRADE_PAIR"), topic: get("PRICES_TOPIC")}
+	c.rpcAddr, c.rpcCert, c.rpcKey, c.rpcCA = get("RPC_ADDR"), get("RPC_CERT_FILE"), get("RPC_KEY_FILE"), get("RPC_CA_FILE")
+	c.apiURI, c.matcherURI, c.catalogURL = get("API_SERVICE_URI"), get("MATCHER_SERVICE_URI"), get("CATALOG_BASE_URL")
 	bad := errors.New("market-data: invalid configuration")
 	addressOK := func(s string) bool {
 		host, port, err := net.SplitHostPort(s)
 		n, e := strconv.Atoi(port)
 		return err == nil && e == nil && host != "" && n > 0 && n <= 65535
+	}
+	identityOK := func(id string) bool {
+		u, err := url.Parse(id)
+		return err == nil && u.Scheme != "" && u.Host != "" && u.User == nil && u.RawQuery == "" && !u.ForceQuery && u.Fragment == "" && u.String() == id
+	}
+	if !addressOK(c.rpcAddr) || c.rpcCert == "" || c.rpcKey == "" || c.rpcCA == "" || !identityOK(c.apiURI) || !identityOK(c.matcherURI) || c.apiURI == c.matcherURI {
+		return config{}, bad
+	}
+	origin, err := url.Parse(c.catalogURL)
+	if err != nil || origin.ForceQuery || origin.RawPath != "" {
+		return config{}, bad
+	}
+	if _, err := catalog.New(&http.Client{}, c.catalogURL, time.Now); err != nil {
+		return config{}, bad
 	}
 	if !addressOK(c.addr) || c.dsn == "" || !pairName.MatchString(c.pair) {
 		return config{}, bad
@@ -127,6 +150,46 @@ func run(parent context.Context, c config) error {
 		return errors.New("market-data: HTTP bind failed")
 	}
 	defer listener.Close()
+	read := func(path string) ([]byte, error) {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return nil, errors.New("market-data: RPC credentials unavailable")
+		}
+		return b, nil
+	}
+	cert, err := read(c.rpcCert)
+	if err != nil {
+		return err
+	}
+	key, err := read(c.rpcKey)
+	if err != nil {
+		return err
+	}
+	ca, err := read(c.rpcCA)
+	if err != nil {
+		return err
+	}
+	opts, err := serviceauth.ServerOptions(cert, key, ca, map[string][]string{
+		c.apiURI:     {pb.Catalog_Fetch_FullMethodName, pb.Quotes_Latest_FullMethodName},
+		c.matcherURI: {pb.Quotes_Latest_FullMethodName},
+	})
+	if err != nil {
+		return errors.New("market-data: invalid RPC credentials or policy")
+	}
+	rpcListener, err := net.Listen("tcp", c.rpcAddr)
+	if err != nil {
+		return errors.New("market-data: RPC bind failed")
+	}
+	defer rpcListener.Close()
+	// Stop cancels active calls and waits for handlers before pool.Close.
+	rpcServer := grpc.NewServer(append(opts, grpc.WaitForHandlers(true))...)
+	defer rpcServer.Stop()
+	transport := &http.Transport{Proxy: nil, TLSHandshakeTimeout: time.Second, ResponseHeaderTimeout: time.Second}
+	defer transport.CloseIdleConnections()
+	catalogClient, err := catalog.New(&http.Client{Transport: transport, Timeout: time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, c.catalogURL, time.Now)
+	if err != nil {
+		return errors.New("market-data: invalid catalog origin")
+	}
 	startup, done := context.WithTimeout(parent, 15*time.Second)
 	defer done()
 	pool, err := postgres.Open(startup, c.dsn)
@@ -146,7 +209,6 @@ func run(parent context.Context, c config) error {
 		return errors.New("market-data: Kafka startup failed")
 	}
 	producer.Close()
-	done()
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	var generation atomic.Uint64
@@ -156,17 +218,34 @@ func run(parent context.Context, c config) error {
 	defer h.SetInitialized(false)
 	server := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
 	defer server.Close()
-	results := make(chan error, 3)
+	results := make(chan error, 4)
 	repo := storage.New(pool)
+	prepared := prepare(repo, c.pair, &state, h.SetInitialized, &generation)
+	initial, err := prepared(startup)
+	if err != nil {
+		return errors.New("market-data: generation startup failed")
+	}
+	done()
+	pb.RegisterCatalogServer(rpcServer, catalogrpc.NewServer(catalogClient))
+	pb.RegisterQuotesServer(rpcServer, latest.NewServer(repo, time.Now))
+	first := true
+	attempts := func(ctx context.Context) (stream.AttemptCallbacks, error) {
+		if first {
+			first = false
+			return initial, nil
+		}
+		return prepared(ctx)
+	}
+	go func() { results <- rpcServer.Serve(rpcListener) }()
 	go func() { results <- relay.Run(ctx, repo, c.producer, c.topic, nil) }()
 	go func() {
-		results <- stream.ReconnectPrepared(ctx, c.endpoint, stream.DefaultConfig(), stream.DefaultRetryConfig(), nil, prepare(repo, c.pair, &state, h.SetInitialized, &generation))
+		results <- stream.ReconnectPrepared(ctx, c.endpoint, stream.DefaultConfig(), stream.DefaultRetryConfig(), nil, attempts)
 	}()
 	go func() { results <- server.Serve(listener) }()
-	remaining := 3
+	remaining := 4
 	componentFailed := false
 	record := func(err error) {
-		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, http.ErrServerClosed) {
+		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, grpc.ErrServerStopped) {
 			componentFailed = true
 		}
 	}
@@ -178,6 +257,7 @@ func run(parent context.Context, c config) error {
 	}
 	h.SetInitialized(false)
 	cancel()
+	rpcServer.Stop()
 	httpStop, stopHTTP := context.WithTimeout(context.Background(), 2*time.Second)
 	httpErr := server.Shutdown(httpStop)
 	stopHTTP()

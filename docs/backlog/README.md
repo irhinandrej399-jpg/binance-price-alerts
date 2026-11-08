@@ -271,12 +271,22 @@ vendor source/build binding остаётся открытым. По DEC-010 ти
 [Старые raw](../measurements/OPS-031/README.md) остаются unknown, peak=null;
 OPS-032/018 ждут готового observer.
 
+### Сборка интерфейсов процессов для E2E
+
+| ID | Один результат | Зависимости | Статус |
+| --- | --- | --- | --- |
+| [OPS-069](tickets/OPS-069.md) | Подключить Catalog и Latest RPC к процессу market-data | OPS-009, MKT-006, MKT-018, SET-008 | done |
+| [OPS-070](tickets/OPS-070.md) | Подключить RPC matcher к процессу API | OPS-004, SUB-016, SUB-022, SUB-014, SET-008 | planned |
+| [OPS-071](tickets/OPS-071.md) | Подключить RPC notifications к процессу API | OPS-070, SUB-018, SUB-020, SUB-027, MKT-006 | planned |
+| [OPS-072](tickets/OPS-072.md) | Подключить Telegram-привязку к процессу API | OPS-004, OPS-012, IAM-006, IAM-007, IAM-008, E2E-004 | planned |
+| [OPS-073](tickets/OPS-073.md) | Подключить создание и список подписок к процессу API | OPS-071, OPS-072, SUB-003, SUB-004, SUB-011, MKT-018 | planned |
+
 ### Сквозная проверка
 
 | ID | Один результат | Зависимости | Статус |
 | --- | --- | --- | --- |
 | [E2E-001](tickets/E2E-001.md) | Проверить один полный пользовательский сценарий | SUB-003, SUB-004, SUB-011, SUB-012, SUB-007, SUB-009, MAT-004, NTF-012, NTF-013, E2E-002 | planned |
-| [E2E-002](tickets/E2E-002.md) | Запустить четыре процесса в одном локальном стенде | E2E-003, E2E-004, OPS-001, OPS-006, OPS-007, OPS-008 | planned |
+| [E2E-002](tickets/E2E-002.md) | Запустить четыре процесса в одном локальном стенде | E2E-003, E2E-004, OPS-001, OPS-006, OPS-007, OPS-008, OPS-069, OPS-070, OPS-071, OPS-072, OPS-073 | planned |
 | [E2E-003](tickets/E2E-003.md) | Поднять управляемый fake Binance для стенда | MKT-001, MKT-002, CON-003 | done |
 | [E2E-004](tickets/E2E-004.md) | Поднять управляемый fake Telegram для стенда | IAM-007, NTF-003 | done |
 

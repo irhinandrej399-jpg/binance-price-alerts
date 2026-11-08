@@ -75,6 +75,7 @@ func TestShutdownProcess(t *testing.T) {
 		t.Fatal("seed")
 	}
 	env := validEnv()
+	configureRPC(t, env)
 	delete(env, "HTTP_ADDR")
 	env["MARKET_DATA_DATABASE_URL"] = os.Getenv("MARKET_DATA_DATABASE_URL")
 	env["KAFKA_BROKERS"] = os.Getenv("KAFKA_TEST_BROKER")

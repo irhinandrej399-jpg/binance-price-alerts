@@ -4,9 +4,10 @@
 
 ## Активная работа
 
-- Активная реализация: нет. E2E-004 завершён; следующий шаг — сессионная проверка E2E-002 (стенд четырёх процессов).
+- Активная реализация: нет. OPS-069 завершён; следующий шаг — OPS-070–073 перед повторной проверкой E2E-002 (planned).
 - Независимый сбой Kafka-регрессии: [OPS-067](backlog/tickets/OPS-067.md) — changefeed metadata unavailable сразу после recreate в fixture; причина пока гипотеза, production guards не ослаблялись.
-- Последний завершённый тикет: [E2E-004](backlog/tickets/E2E-004.md), [управляемый fake Telegram](../internal/testutil/telegramfake/README.md). Явные success/message_id, 429/retry_after, 403, TCP drop и журнал sendMessage; Link посылает private /start update только в loopback webhook с тестовым секретом. Настоящие sender/webhook/link handlers, десять race-повторов, общая race-регрессия/vet/build PASS. Cleanup held/неполного HTTP подтверждён. Реальных сообщений не было; полный E2E и лимиты нагрузки ещё впереди.
+- Последний завершённый тикет: [OPS-069](backlog/tickets/OPS-069.md), [Catalog/Latest RPC market-data](../cmd/market-data/README.md#cataloglatest-rpc-ops-069). Один mTLS listener, API Fetch/Latest и matcher только Latest; startup BeginGeneration до Serve, Stop/cancel/join handlers до pool.Close. Настоящий executable на disposable PostgreSQL/Kafka подтвердил точную цену/revision, права, restart/прежний live, SIGTERM с удерживаемым Fetch, bind/TLS/schema failure и cleanup. Общая race-регрессия/vet/build PASS. Raw feed остаётся unconfirmed, readyz=503; полный E2E впереди.
+- Предыдущий завершённый тикет: [E2E-004](backlog/tickets/E2E-004.md), [управляемый fake Telegram](../internal/testutil/telegramfake/README.md). Явные success/message_id, 429/retry_after, 403, TCP drop и журнал sendMessage; Link посылает private /start update только в loopback webhook с тестовым секретом. Настоящие sender/webhook/link handlers, десять race-повторов, общая race-регрессия/vet/build PASS. Cleanup held/неполного HTTP подтверждён. Реальных сообщений не было; полный E2E и лимиты нагрузки ещё впереди.
 - Предыдущий завершённый тикет: [E2E-003](backlog/tickets/E2E-003.md), [управляемый fake Binance](../internal/testutil/binancefake/README.md). Локальный fixture-каталог и два raw trade endpoint; явные цены/uint64 ID/T/E, ping с подтверждением pong, TCP drop/close/reconnect и cleanup сокетов. Настоящие catalog/stream/trade adapters, десять race-повторов, общая race-регрессия/vet/build PASS. Публичный Binance не вызывался; полный E2E/нагрузка ещё впереди.
 - Предыдущий завершённый тикет: [OPS-014](backlog/tickets/OPS-014.md), [локальный kafka-cleaner](../cmd/kafka-cleaner/README.md). Durable file registry/межпроцессный flock, exact SQL/mTLS proofs всех consumers, monotonic fsync floor перед bounded DeleteRecords, explicit register/retire и tombstones. Два PostgreSQL/Kafka/race прогона подтвердили разные Prefix, unknown/generation/RPC fault, concurrent membership, lost broker responses/retry, canonical pending job и необработанные bytes; настоящий CLI без DSN, crash/lock/write-fault tests и cleanup PASS. Общая race-регрессия/vet/build PASS. Single-host/local filesystem; скорость для capacity остаётся 0.
 - Предыдущий завершённый тикет: [OPS-058](backlog/tickets/OPS-058.md), [совместная cleaner fixture](../internal/testutil/cleanerprocess/README.md). Два изолированных SQL/mTLS exporter owners, caller без DSN, RPC/Kafka gates и независимые SQL/log-start/read_committed observers. Disposable PostgreSQL/Kafka/race подтвердил разные Prefix, unknown/Pending, lost OffsetCommit/DeleteRecords responses, сохранность canonical job/необработанных bytes и повтор удаления. Startup/callback/аварийный owner exit с двумя child groups и cleanup подтверждены; общая race-регрессия/vet/build PASS. Реестр и safe boundary — OPS-014; скорость cleaner остаётся 0.
@@ -114,7 +115,7 @@
 - [SUB-005](backlog/tickets/SUB-005.md). [HTTP-отмена](../internal/api/subscription/README.md): DELETE /v1/subscriptions/{id} атомарно проверяет владельца/версию, отменяет любое незавершённое состояние и освобождает слот один раз. Повторы стабильны, ответ явно предупреждает о возможной отправке при наличии workflow. Реальные сессии/PostgreSQL и race detector прошли, включая 20 конкурентных отмен и ожидание новой версии допуска. Journal/outbox подключён к отмене в SUB-012; runtime и result writer ещё отсутствуют; storage-допуск и сетевой интерфейс готовы в SUB-017/018.
 - [SUB-004](backlog/tickets/SUB-004.md). [HTTP-список](../internal/api/subscription/README.md): GET /v1/subscriptions возвращает до 15 собственных незавершённых подписок в порядке UUID, включая workflow и причину blocked; показывает сохранённый результат восстановления с прежним порогом. Проверены реальные сессии/PostgreSQL, изоляция двух владельцев, все состояния и ошибки чтения с race detector. Runtime и само восстановление канала остаются отдельными задачами.
 - [SUB-003](backlog/tickets/SUB-003.md). [HTTP-создание](../internal/api/subscription/README.md): POST /v1/subscriptions по цене/проценту, владелец из сессии, проверка пары через внутренний каталог, исходная котировка и предупреждения. Транзакционная квота/Telegram, active даже при true; реальный PostgreSQL/race-прогон пройден, runtime ещё отсутствует; journal/outbox создания подключён в SUB-011.
-- [MKT-018](backlog/tickets/MKT-018.md). [Внутренний каталог](../internal/marketdata/catalogrpc/README.md): unary gRPC Fetch и Go-клиент, полный снимок с исходным UpdatedAt, mTLS-доступ только API, бюджет 1 с и передача отмены источнику. Проверено на защищённом loopback и локальном Binance fixture; runtime не подключён.
+- [MKT-018](backlog/tickets/MKT-018.md). [Внутренний каталог](../internal/marketdata/catalogrpc/README.md): unary gRPC Fetch и Go-клиент, полный снимок с исходным UpdatedAt, mTLS-доступ только API, бюджет 1 с и передача отмены источнику. Проверено на защищённом loopback и локальном Binance fixture; runtime подключён в OPS-069.
 - [SUB-002](backlog/tickets/SUB-002.md). [Транзакционная квота API](../internal/api/subscription/README.md): общий user lock, проверка Telegram, создание с лимитом 15 и однократное освобождение terminal-слота. Миграция 006 и конкурентные сценарии проверены на disposable PostgreSQL с race detector; HTTP-создание подключает квоту в SUB-003 и журнал в SUB-011; runtime ещё отсутствует.
 - Последняя работа над процессом: добавлен проектный skill `binance-ticket-session` с автоматическим выбором и обязательным чтением через AGENTS.md. Он восстанавливает контекст одного тикета, сообщает модель из карточки и ведёт до проверки и передачи результата. Проверены формат skill, YAML, локальные ссылки и целостность бэклога; выбор skill в отдельном новом чате ещё не проверялся. Короткие запросы и проверка новой сессии — в WORKING.md. Продуктовые тикеты этим не закрывались.
 
@@ -160,7 +161,13 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-[E2E-002](backlog/tickets/E2E-002.md): сессионная проверка стенда четырёх процессов.
+[OPS-070](backlog/tickets/OPS-070.md): подключить RPC matcher к API.
+OPS-069 завершил Catalog/Latest RPC market-data; конфигурация и проверки — cmd/market-data/README.md.
+Сессионная проверка [E2E-002](backlog/tickets/E2E-002.md) не пройдена:
+выделены OPS-069–073 для market-data RPC, API RPC matcher/notifications,
+Telegram HTTP и subscriptions HTTP. Карточки/ORDER синхронизированы;
+E2E-002 остаётся planned, общий стенд не запускался. Недостающие интерфейсы
+нельзя заменять fixture серверами внутри E2E.
 E2E-004 завершил fake Telegram; использовать internal/testutil/telegramfake/README.md,
 явные BaseURL/Token и тестовый Secret для webhook, Next/Reply/RateLimit/Forbid/Disconnect.
 Полное runtime wiring проверить до ready; недостающие adapters выделять отдельно.
@@ -194,7 +201,7 @@ SQL cleanup fault даёт exit 1. Общий предел 20 с; полный E
 OPS-009 завершил остановку минимального market-data: SQL-outbox остаётся
 буфером принятой работы, повтор после неопределённого commit сохраняет bytes;
 SIGTERM во время publish/handshake и закрытие WS проверены на disposable стенде.
-Полный динамический каталог и внутренние RPC для E2E не подключены.
+Динамический каталог потоков не подключён; Catalog/Latest RPC завершены в OPS-069.
 OPS-008 завершил HTTP-компонент health/readiness notifications и Worker.Running;
 listener, Ping своей БД и инициализация подключены в OPS-055; SIGTERM завершён в OPS-011.
 OPS-007 завершил HTTP-компонент matcher и Status проекции/реплики; listener,
@@ -229,7 +236,7 @@ NTF-006 рассчитывает retry Plan и бюджет доказанных
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show E2E-002` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show OPS-070` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

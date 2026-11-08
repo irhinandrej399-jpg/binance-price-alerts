@@ -8,7 +8,7 @@ import (
 )
 
 func validEnv() map[string]string {
-	return map[string]string{"HTTP_ADDR": "127.0.0.1:8081", "MARKET_DATA_DATABASE_URL": "postgres://market_data_runtime:secret@127.0.0.1:5432/market_data", "RAW_TRADE_URL": "ws://127.0.0.1:9000/ws/btcusdt@trade", "RAW_TRADE_PAIR": "BTCUSDT", "KAFKA_BROKERS": "127.0.0.1:9092", "PRICES_TOPIC": "local-prices", "MARKET_DATA_RELAY_TRANSACTIONAL_ID": "local-market-data-relay-shard-0"}
+	return map[string]string{"HTTP_ADDR": "127.0.0.1:8081", "RPC_ADDR": "127.0.0.1:8082", "RPC_CERT_FILE": "cert.pem", "RPC_KEY_FILE": "key.pem", "RPC_CA_FILE": "ca.pem", "API_SERVICE_URI": "spiffe://local/api", "MATCHER_SERVICE_URI": "spiffe://local/matcher", "CATALOG_BASE_URL": "http://127.0.0.1:9000", "MARKET_DATA_DATABASE_URL": "postgres://market_data_runtime:secret@127.0.0.1:5432/market_data", "RAW_TRADE_URL": "ws://127.0.0.1:9000/ws/btcusdt@trade", "RAW_TRADE_PAIR": "BTCUSDT", "KAFKA_BROKERS": "127.0.0.1:9092", "PRICES_TOPIC": "local-prices", "MARKET_DATA_RELAY_TRANSACTIONAL_ID": "local-market-data-relay-shard-0"}
 }
 func TestConfig(t *testing.T) {
 	env := validEnv()
@@ -27,6 +27,10 @@ func TestConfig(t *testing.T) {
 	}
 	for k, values := range map[string][]string{
 		"HTTP_ADDR":                          {"bad", ":8081", "127.0.0.1:0"},
+		"RPC_ADDR":                           {"bad", ":9081", "127.0.0.1:0"},
+		"API_SERVICE_URI":                    {"bad", "spiffe://local/matcher", "spiffe://local/api?secret=x"},
+		"MATCHER_SERVICE_URI":                {"bad", "spiffe://local/api"},
+		"CATALOG_BASE_URL":                   {"ftp://localhost", "http://localhost/path", "http://localhost?", "http://user:secret@localhost"},
 		"MARKET_DATA_DATABASE_URL":           {"postgres://api_runtime:secret@localhost/api", "secret"},
 		"RAW_TRADE_URL":                      {"https://localhost/ws/btcusdt@trade", "ws://user:secret@localhost/ws/btcusdt@trade", "ws://localhost/ws/ethusdt@trade", "ws://localhost/ws/btcusdt@trade?timeUnit=MICROSECOND"},
 		"RAW_TRADE_PAIR":                     {"btcusdt", "BTCUSD", "BTCUSDT/"},
@@ -65,4 +69,30 @@ func TestStartupFailureReleasesListener(t *testing.T) {
 		t.Fatal("listener leaked")
 	}
 	l.Close()
+}
+
+func TestRPCStartupFailureReleasesListeners(t *testing.T) {
+	env := validEnv()
+	_, addr := configureRPC(t, env)
+	env["MARKET_DATA_DATABASE_URL"] = "postgres://market_data_runtime:secret@127.0.0.1:1/market_data"
+	c, err := loadConfig(func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	http, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.addr = http.Addr().String()
+	http.Close()
+	if err := run(context.Background(), c); err == nil || !strings.Contains(err.Error(), "database startup failed") {
+		t.Fatal("DB startup failure hidden")
+	}
+	for _, a := range []string{c.addr, addr} {
+		l, err := net.Listen("tcp", a)
+		if err != nil {
+			t.Fatal("startup listener leaked")
+		}
+		l.Close()
+	}
 }

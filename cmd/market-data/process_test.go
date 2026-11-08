@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/priceobserved"
+	pb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/marketdata/v1"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/health"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/storage"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/apiprocess"
@@ -50,6 +51,7 @@ func TestMarketDataProcess(t *testing.T) {
 		t.Fatalf("build: %s", out)
 	}
 	env := validEnv()
+	ca, rpcAddr := configureRPC(t, env)
 	delete(env, "HTTP_ADDR")
 	env["MARKET_DATA_DATABASE_URL"] = os.Getenv("MARKET_DATA_DATABASE_URL")
 	env["KAFKA_BROKERS"] = os.Getenv("KAFKA_TEST_BROKER")
@@ -60,6 +62,7 @@ func TestMarketDataProcess(t *testing.T) {
 	env["PRICES_TOPIC"] = prefix + "-prices"
 	env["MARKET_DATA_RELAY_TRANSACTIONAL_ID"] = prefix + "-market-relay"
 	env["RAW_TRADE_URL"] = feed.URL
+	rpc := rpcConn(t, ca, rpcAddr, env["API_SERVICE_URI"])
 	cfg := apiprocess.Config{Executable: binary, Env: env, StartupProbePath: "/healthz", StartupTimeout: 20 * time.Second, StopTimeout: time.Second}
 	consumer, err := kgo.NewClient(kgo.SeedBrokers(env["KAFKA_BROKERS"]), kgo.ConsumeTopics(env["PRICES_TOPIC"]), kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()), kgo.FetchIsolationLevel(kgo.ReadCommitted()), kgo.FetchMaxWait(100*time.Millisecond))
 	if err != nil {
@@ -184,6 +187,14 @@ func TestMarketDataProcess(t *testing.T) {
 		}()
 		select {
 		case <-p.Done():
+			if code, ok := p.ExitCode(); !ok || code == 0 {
+				return errors.New("terminal failure exited successfully")
+			}
+			call, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
+			defer cancel()
+			if _, e := pb.NewQuotesClient(rpc).Latest(call, &pb.LatestRequest{Pair: "BTCUSDT"}); e == nil {
+				return errors.New("terminal failure left RPC alive")
+			}
 			return nil
 		case <-time.After(8 * time.Second):
 			return errors.New("terminal relay left owner running")
