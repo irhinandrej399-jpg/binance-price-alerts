@@ -118,3 +118,10 @@ migrations, ownerexit fixture поддерживает `MATCHER_PROCESS_INTEGRAT
 `Process.ExitCode()` возвращает только безопасный код reaped child и признак
 готовности: до `Done` — `ok=false`, после signal exit — `code=-1`. Это позволяет
 проверять штатный exit 0, не принимая fallback TERM/KILL за graceful успех.
+
+OPS-058 расширяет тот же runner режимом `cleaner`: штатные миграции и
+parent-only credentials API+matcher+notifications, два изолированных SQL exporter
+owners и отдельный caller без DSN. Контракты и команды —
+[cleanerprocess](../cleanerprocess/README.md). Python-owned TMPDIR удаляет также
+временные credentials после аварийного выхода Go owner; ownerexit в этом режиме
+оставляет две зарегистрированные exporter groups для проверки cleanup.

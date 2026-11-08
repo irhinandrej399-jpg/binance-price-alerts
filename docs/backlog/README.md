@@ -224,7 +224,7 @@
 | [OPS-066](tickets/OPS-066.md) | Подключить source binding к runtime notifications | OPS-064, OPS-065, OPS-055, OPS-011, OPS-054 | done |
 | [OPS-057](tickets/OPS-057.md) | Экспортировать durable Kafka-прогресс notifications | NTF-001, SET-007, SET-008, OPS-055, OPS-066 | done |
 | [OPS-068](tickets/OPS-068.md) | Управлять отказами OffsetCommit и DeleteRecords в Kafka fault proxy | SET-009 | done |
-| [OPS-058](tickets/OPS-058.md) | Подготовить disposable окружение проверки Kafka cleaner | OPS-056, OPS-057, OPS-052, OPS-054, SET-009, OPS-068 | planned |
+| [OPS-058](tickets/OPS-058.md) | Подготовить disposable окружение проверки Kafka cleaner | OPS-056, OPS-057, OPS-052, OPS-054, SET-009, OPS-068 | done |
 | [OPS-014](tickets/OPS-014.md) | Удалить безопасный префикс журнала Kafka | SET-005, SUB-022, MAT-011, NTF-001, DEC-007, OPS-056, OPS-057, OPS-058 | planned |
 | [OPS-015](tickets/OPS-015.md) | Остановить новый приём API при исчерпании бюджета | SUB-003, SUB-005, SUB-020, SUB-007, SUB-009, DEC-008, OPS-018 | planned |
 | [OPS-016](tickets/OPS-016.md) | Остановить приём рынка при исчерпании бюджета | MKT-017, MKT-014, DEC-008, OPS-018 | planned |

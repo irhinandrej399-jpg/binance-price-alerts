@@ -39,14 +39,15 @@ def run(command, env, timeout=180, **kwargs):
 
 
 def main(owner="api"):
-    if owner not in ("api", "market_data", "matcher", "notifications"):
+    if owner not in ("api", "market_data", "matcher", "notifications", "cleaner"):
         raise RuntimeError("unsupported process environment owner")
+    cleaner = owner == "cleaner"
     market = owner == "market_data"
     matcher = owner == "matcher"
     notifications = owner == "notifications"
-    label = "notifications" if notifications else ("matcher" if matcher else ("market-data" if market else "API"))
+    label = "cleaner" if cleaner else "notifications" if notifications else ("matcher" if matcher else ("market-data" if market else "API"))
     parser = argparse.ArgumentParser(description=f"Verify a {label} child on disposable PostgreSQL/Kafka projects.")
-    parser.add_argument('--package', default='./internal/testutil/notificationsprocess' if notifications else ('./internal/testutil/matcherprocess' if matcher else ('./internal/testutil/marketprocess' if market else './internal/testutil/apiprocess')),
+    parser.add_argument('--package', default='./internal/testutil/cleanerprocess' if cleaner else ('./internal/testutil/notificationsprocess' if notifications else ('./internal/testutil/matcherprocess' if matcher else ('./internal/testutil/marketprocess' if market else './internal/testutil/apiprocess'))),
                         help='Go test package for this disposable owner environment')
     args = parser.parse_args()
     if not args.package.startswith('./') or '..' in Path(args.package).parts:
@@ -57,6 +58,7 @@ def main(owner="api"):
     prefix = 'process-' + suffix
     # Remove all inherited owner DSNs and app settings. Only the selected runtime
     # credential (plus parent-only API fixture for matcher/notifications) is supplied to tests.
+    # The joint cleaner fixture receives API+matcher+notifications only in its parent.
     # Child env is explicitly constructed by apiprocess.Config, with no parent inheritance.
     env = {k: v for k, v in os.environ.items()
            if k in ('PATH', 'HOME', 'TMPDIR', 'DOCKER_HOST', 'DOCKER_CONTEXT',
@@ -72,10 +74,14 @@ def main(owner="api"):
              str(ROOT / 'infra/kafka/compose.yaml')]
     registry = tempfile.TemporaryDirectory(prefix="binance-process-pids-")
     env["API_PROCESS_PID_DIR"] = registry.name
+    # t.TempDir credentials must also disappear when the Go owner exits without
+    # defers. Keep its temporary files under a Python-owned disposable root.
+    test_temp = tempfile.TemporaryDirectory(prefix="binance-process-temp-")
+    env["TMPDIR"] = test_temp.name
     cleanup_errors = []
     try:
         run(pg + ['up', '-d', '--wait', '--wait-timeout', '120'], env)
-        for db_owner in (("api", owner) if matcher or notifications else (owner,)):
+        for db_owner in (("api", "matcher", "notifications") if cleaner else (("api", owner) if matcher or notifications else (owner,))):
             if notifications and db_owner == 'notifications':
                 # Trusted test-only SQL, installed only on this disposable DB.
                 with tempfile.TemporaryDirectory(prefix='binance-notifications-migrations-') as tmp:
@@ -105,18 +111,18 @@ def main(owner="api"):
         with (ROOT / 'infra/kafka/init-topics.sh').open() as script:
             run(kafka + ['exec', '-T', 'kafka', 'timeout', '90', 'bash', '-s', '--', prefix],
                 env, timeout=100, stdin=script)
-        env['NOTIFICATIONS_PROCESS_INTEGRATION' if notifications else ('MATCHER_PROCESS_INTEGRATION' if matcher else ('MARKET_DATA_PROCESS_INTEGRATION' if market else 'API_PROCESS_INTEGRATION'))] = '1'
+        env['CLEANER_PROCESS_INTEGRATION' if cleaner else ('NOTIFICATIONS_PROCESS_INTEGRATION' if notifications else ('MATCHER_PROCESS_INTEGRATION' if matcher else ('MARKET_DATA_PROCESS_INTEGRATION' if market else 'API_PROCESS_INTEGRATION')))] = '1'
         env.update(POSTGRES_TEST='1',
                    KAFKA_TEST_BROKER='127.0.0.1:' + env['KAFKA_PORT'],
                    KAFKA_TEST_PREFIX=prefix)
-        if market or matcher or notifications:
+        if market or matcher or notifications or cleaner:
             run(['go', 'test', '-race', '-count=1', '-v', '-timeout', '30s',
                  './internal/testutil/apiprocess'], env, timeout=60)
         # Keep room for crash/startup and graceful/recovery/fault scenarios,
         # including Kafka membership expiry after SIGKILL.
         run(['go', 'test', '-race', '-count=1', '-v', '-timeout',
-             '300s' if notifications else ('150s' if matcher else '90s'), args.package], env,
-            timeout=330 if notifications else (180 if matcher else 120))
+             '300s' if notifications or cleaner else ('150s' if matcher else '90s'), args.package], env,
+            timeout=330 if notifications or cleaner else (180 if matcher else 120))
     finally:
         # Go's test timeout/panic does not execute defers. Kill any registered
         # child process groups before removing their disposable infrastructure.
@@ -138,6 +144,10 @@ def main(owner="api"):
             except Exception:
                 cleanup_errors.append('registered child group')
         registry.cleanup()
+        try:
+            test_temp.cleanup()
+        except Exception:
+            cleanup_errors.append('test temporary files')
         # Try BOTH cleanups even when one fails. Verify resources by exact
         # Compose label, including stopped containers, networks and volumes.
         for compose, project in ((kafka, kafka_project), (pg, pg_project)):

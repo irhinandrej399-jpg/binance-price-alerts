@@ -4,9 +4,10 @@
 
 ## Активная работа
 
-- Активная реализация: нет. OPS-068 завершён; следующий шаг — сессионная проверка OPS-058 (совместная disposable fixture для cleaner). OPS-014 ждёт OPS-058.
+- Активная реализация: нет. OPS-058 завершён; следующий шаг — сессионная проверка OPS-014 (безопасный cleaner Kafka и обязательный реестр consumers).
 - Независимый сбой Kafka-регрессии: [OPS-067](backlog/tickets/OPS-067.md) — changefeed metadata unavailable сразу после recreate в fixture; причина пока гипотеза, production guards не ослаблялись.
-- Последний завершённый тикет: [OPS-068](backlog/tickets/OPS-068.md), [Kafka fault gates](../internal/testutil/kafkafault/README.md). OffsetCommit/DeleteRecords с настоящими decoded responses, BeforeRequest/AfterResponse, persistent Fail и идемпотентным Release. Disposable Kafka/race подтвердил committed offset, log-start, потерю успешных ответов, отказ до удаления и retained read_committed bytes при повторе; прежний EndTxn, общая race-регрессия/vet/build PASS. Cleanup успеха/ошибки подтверждён; SQL/RPC fixture и cleaner впереди.
+- Последний завершённый тикет: [OPS-058](backlog/tickets/OPS-058.md), [совместная cleaner fixture](../internal/testutil/cleanerprocess/README.md). Два изолированных SQL/mTLS exporter owners, caller без DSN, RPC/Kafka gates и независимые SQL/log-start/read_committed observers. Disposable PostgreSQL/Kafka/race подтвердил разные Prefix, unknown/Pending, lost OffsetCommit/DeleteRecords responses, сохранность canonical job/необработанных bytes и повтор удаления. Startup/callback/аварийный owner exit с двумя child groups и cleanup подтверждены; общая race-регрессия/vet/build PASS. Реестр и safe boundary — OPS-014; скорость cleaner остаётся 0.
+- Предыдущий завершённый тикет: [OPS-068](backlog/tickets/OPS-068.md), [Kafka fault gates](../internal/testutil/kafkafault/README.md). OffsetCommit/DeleteRecords с настоящими decoded responses, BeforeRequest/AfterResponse, persistent Fail и идемпотентным Release. Disposable Kafka/race подтвердил committed offset, log-start, потерю успешных ответов, отказ до удаления и retained read_committed bytes при повторе; прежний EndTxn, общая race-регрессия/vet/build PASS. Cleanup успеха/ошибки подтверждён; SQL/RPC fixture и cleaner впереди.
 - Предыдущий завершённый тикет: [OPS-057](backlog/tickets/OPS-057.md), [notifications progress RPC](../internal/notifications/progressrpc/README.md). Read-only SQL proof по exact consumer/generation/source/partition, mTLS cleaner-only, 1 с/4096 bytes и runtime Stop/join до pool.Close. Disposable PostgreSQL/Kafka executable/race подтвердил commit/rollback, отсутствие INSERT/legacy relabel, SQL deadline/fault/join, lost broker ack и pending job/restart; общая race-регрессия/vet/build/protobuf PASS, cleanup подтверждён. Реестр/cleaner остаются впереди.
 - Предыдущий завершённый тикет: [OPS-066](backlog/tickets/OPS-066.md), [source-bound notifications runtime](../cmd/notifications/README.md#source-bound-runtime--ops-066). Обязательные consumer/generation/ClusterID/TopicID, read-only startup validation всех 16 partitions до worker/HTTP; provisioning отдельно. PostgreSQL/Kafka executable/race подтвердил pending job/report/attempt IDs/bytes, два members, SQL/broker Prefix, legacy/recreate отказ без relabel/reset и потери исходов, новое SQL поколение, signals/cleanup fault. Финальные process и fixture runners, общая race-регрессия/vet/build PASS; cleanup подтверждён. Exporter завершён в OPS-057, миграции legacy/источника нет.
 - Предыдущий завершённый тикет: [OPS-065](backlog/tickets/OPS-065.md), [source-bound intake transport](../internal/notifications/intake/README.md#source-bound-consumer--ops-065). Обязательный Binding, read-only SQL resume, metadata при assignment/позициях/idle и fetch TopicID до data/control decode/SQL/ack. Реальные PostgreSQL/Kafka/race подтвердили restart/lost ack/broker ahead, CAS, legacy/lost history, overlapping recreate и rebalance с теми же IDs. Финальный полный runner, общая race-регрессия/vet/build PASS; cleanup подтверждён. Runtime подключён в OPS-066; exporter завершён в OPS-057.
@@ -155,31 +156,25 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-[OPS-058](backlog/tickets/OPS-058.md): сессионная проверка совместной disposable
-fixture для cleaner. Kafka fault adapter OPS-068 завершён: Intercept выбирает
-API 8/21, Events подтверждают реальные frames, Fail удерживает fault на повторах,
-Release снимает его; BeforeRequest DeleteRecords не пересылает запрос broker.
-Контракт — internal/testutil/kafkafault/README.md. Общий apiprocess lifecycle
-и exporters готовы; SQL/RPC окружение и безопасный cleaner остаются впереди.
-OPS-057 завершён: notifications.v1.NotificationsProgress/
-ReadProgress читает intake.ReadProgress по ожидаемым consumer/generation/source/
-partition без записи. Runtime требует RPC_ADDR, RPC_SERVER_CERT_FILE/
-RPC_SERVER_KEY_FILE и CLEANER_SERVICE_URI; 1 с/4096 bytes, mTLS и Stop/join.
-Контракт — internal/notifications/progressrpc/README.md.
-OPS-064/065/066 завершили bound SQL, transport и runtime с обязательными IDs,
-read-only startup validation и process recovery. Bootstrap явный, новый пустой SQL
-требует новой Generation во внешнем inventory/ожиданиях cleaner; legacy/source
-migration отсутствует. Контракт — intake/README и cmd/notifications/README.
-OPS-056 экспортирует точный SQL cursor matcher по projection_id либо prices scope
-через mTLS MatcherProgress/ReadProgress; runtime требует отдельный RPC listener,
-ServerAuth PEM и CLEANER_SERVICE_URI. Source из запроса сверяется с SQL;
-отсутствующий cursor/legacy/mismatch запрещает очистку. Cleaner должен запросить
-все обязательные consumers и проверить минимум; полнота реестра не доказывается
-одним ответом. Подробности — progressrpc/README и cmd/matcher/README.
-OPS-014 не готов: локальные SQL readers не являются интерфейсом cleaner; нужна
-OPS-058 (совместная disposable fixture); OPS-056/057 exporters готовы.
-Сессионная проверка сохранена в карточке OPS-014; реализация не начата,
-retention/pins не изменены, скорость cleaner по-прежнему считается нулевой.
+[OPS-014](backlog/tickets/OPS-014.md): сессионная проверка безопасного cleaner
+Kafka с обязательным реестром consumers. Все прямые зависимости done, включая
+совместную fixture OPS-058. Её runner — scripts/check_cleaner_process.py;
+контракт — internal/testutil/cleanerprocess/README.md. Он поднимает отдельные
+SQL/mTLS exporter owners matcher/notifications через apiprocess, оставляет
+родительские SQL observers независимыми и выдаёт caller только RPC/Kafka config.
+RPC gates и generic barriers доступны для проверки настоящего будущего
+registry/registration/retirement; fixture не имитирует их безопасность.
+Kafka fault adapter OPS-068 обеспечивает BeforeRequest/AfterResponse,
+реальные decoded responses, persistent Fail и Release. Реальные прогоны OPS-058
+подтвердили Prefix fast/lagging/Pending, unknown consumer, lost broker ack,
+удаление/потерю response/повтор, сохранность pending job и необработанных bytes,
+cleanup после успеха, startup/callback error и аварийного owner exit.
+OPS-056/057 экспортируют только exact source-bound SQL proof по mTLS, с прежними
+лимитами 1 с/4096 bytes. Полноту обязательного inventory доказывает cleaner,
+один ответ exporter этого не подтверждает. Продуктовый реестр и safe boundary
+ещё не реализованы; retention/pins не менялись, скорость cleaner остаётся 0.
+Старая сессионная проверка OPS-014 отражает историю недостающих adapters;
+перед реализацией сверить готовые контракты и размер задачи заново.
 OPS-011 завершил SIGTERM/SIGINT [notifications](../cmd/notifications/README.md):
 отмена HTTP/RPC/intake, final PendingWrite и bounded Kafka leave/client join,
 20 с на весь signal drain. Process/race проверил before/during/after HTTP,
