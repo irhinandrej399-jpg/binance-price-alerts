@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -17,7 +18,13 @@ import (
 )
 
 func TestDynamicCatalogReconcileTradesAndReconnect(t *testing.T) {
-	f := binancefake.New()
+	for _, explicit := range []bool{false, true} {
+		t.Run(fmt.Sprintf("explicit=%t", explicit), func(t *testing.T) { dynamicCatalogReconcileTradesAndReconnect(t, explicit) })
+	}
+}
+
+func dynamicCatalogReconcileTradesAndReconnect(t *testing.T, explicit bool) {
+	f := newFixture(t, explicit)
 	defer f.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -145,7 +152,13 @@ func TestDynamicCatalogReconcileTradesAndReconnect(t *testing.T) {
 }
 
 func TestDynamicExactACKAndUnclaimedCleanup(t *testing.T) {
-	f := binancefake.New()
+	for _, explicit := range []bool{false, true} {
+		t.Run(fmt.Sprintf("explicit=%t", explicit), func(t *testing.T) { dynamicExactACKAndUnclaimedCleanup(t, explicit) })
+	}
+}
+
+func dynamicExactACKAndUnclaimedCleanup(t *testing.T, explicit bool) {
+	f := newFixture(t, explicit)
 	defer f.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -178,7 +191,13 @@ func TestDynamicExactACKAndUnclaimedCleanup(t *testing.T) {
 }
 
 func TestConcurrentCatalogReplacement(t *testing.T) {
-	f := binancefake.New()
+	for _, explicit := range []bool{false, true} {
+		t.Run(fmt.Sprintf("explicit=%t", explicit), func(t *testing.T) { concurrentCatalogReplacement(t, explicit) })
+	}
+}
+
+func concurrentCatalogReplacement(t *testing.T, explicit bool) {
+	f := newFixture(t, explicit)
 	defer f.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()

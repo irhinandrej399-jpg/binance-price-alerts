@@ -1,4 +1,4 @@
-// Package telegramfake provides a controlled loopback Telegram fixture.
+// Package telegramfake provides a controlled Telegram fixture.
 package telegramfake
 
 import (
@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -60,6 +61,7 @@ func (s *Send) resolve(r response) { s.once.Do(func() { s.action <- r }) }
 
 type Fake struct {
 	server *httptest.Server
+	origin string
 	calls  chan *Send
 	closed chan struct{}
 	once   sync.Once
@@ -73,7 +75,41 @@ func New() *Fake {
 	f.server = httptest.NewServer(http.HandlerFunc(f.serve))
 	return f
 }
-func (f *Fake) URL() string { return f.server.URL }
+
+// NewWithListener serves the existing fixture on an already-open listener.
+// Ownership transfers on entry, including validation failure. origin is the
+// caller-selected HTTP origin reachable by its clients, never a wildcard URL.
+// Only isolated test scenarios may opt in to a non-loopback listener.
+// Listen/bind errors belong to the caller; this function validates configuration
+// before starting any goroutine. The caller must not reuse or close the listener.
+func NewWithListener(listener net.Listener, origin string) (*Fake, error) {
+	if listener == nil {
+		return nil, errors.New("telegramfake: nil listener")
+	}
+	u, err := url.Parse(origin)
+	valid := err == nil && u.Scheme == "http" && u.Hostname() != "" && u.Hostname() != "*" && u.User == nil && u.Path == "" && u.RawQuery == "" && !u.ForceQuery && u.Fragment == "" && u.RawFragment == "" && u.Opaque == ""
+	if valid {
+		port, e := strconv.Atoi(u.Port())
+		ip := net.ParseIP(u.Hostname())
+		valid = e == nil && port > 0 && port <= 65535 && (ip == nil || !ip.IsUnspecified())
+	}
+	if !valid {
+		_ = listener.Close()
+		return nil, errors.New("telegramfake: invalid client origin")
+	}
+	f := &Fake{calls: make(chan *Send, 16), closed: make(chan struct{})}
+	f.origin = origin
+	f.server = &httptest.Server{Listener: listener, Config: &http.Server{Handler: http.HandlerFunc(f.serve)}}
+	f.server.Start()
+	return f, nil
+}
+
+func (f *Fake) URL() string {
+	if f.origin != "" {
+		return f.origin
+	}
+	return f.server.URL
+}
 
 // Close unblocks held requests and joins handlers. It is safe to repeat.
 func (f *Fake) Close() {

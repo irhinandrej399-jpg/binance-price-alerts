@@ -19,7 +19,13 @@ import (
 )
 
 func TestScriptedResponses(t *testing.T) {
-	f := telegramfake.New()
+	for _, explicit := range []bool{false, true} {
+		t.Run(fmt.Sprintf("explicit=%t", explicit), func(t *testing.T) { scriptedResponses(t, explicit) })
+	}
+}
+
+func scriptedResponses(t *testing.T, explicit bool) {
+	f := newFixture(t, explicit)
 	defer f.Close()
 	c, err := telegram.New(telegram.Config{Token: telegramfake.Token, BaseURL: f.URL(), Timeout: time.Second})
 	if err != nil {
@@ -131,7 +137,13 @@ func TestUpdateBoundary(t *testing.T) {
 	}
 }
 func TestCloseHeldAndNext(t *testing.T) {
-	f := telegramfake.New()
+	for _, explicit := range []bool{false, true} {
+		t.Run(fmt.Sprintf("explicit=%t", explicit), func(t *testing.T) { closeHeldAndNext(t, explicit) })
+	}
+}
+
+func closeHeldAndNext(t *testing.T, explicit bool) {
+	f := newFixture(t, explicit)
 	c, e := telegram.New(telegram.Config{Token: telegramfake.Token, BaseURL: f.URL(), Timeout: time.Second})
 	if e != nil {
 		t.Fatal(e)
@@ -155,7 +167,7 @@ func TestCloseHeldAndNext(t *testing.T) {
 	if _, e = f.Next(ctx); e == nil {
 		t.Fatal("closed Next")
 	}
-	g := telegramfake.New()
+	g := newFixture(t, explicit)
 	defer g.Close()
 	cancelled, stop := context.WithCancel(context.Background())
 	stop()
@@ -165,9 +177,15 @@ func TestCloseHeldAndNext(t *testing.T) {
 }
 
 func TestRejectedRequestsAndIsolation(t *testing.T) {
-	f := telegramfake.New()
+	for _, explicit := range []bool{false, true} {
+		t.Run(fmt.Sprintf("explicit=%t", explicit), func(t *testing.T) { rejectedRequestsAndIsolation(t, explicit) })
+	}
+}
+
+func rejectedRequestsAndIsolation(t *testing.T, explicit bool) {
+	f := newFixture(t, explicit)
 	defer f.Close()
-	other := telegramfake.New()
+	other := newFixture(t, explicit)
 	defer other.Close()
 	for _, tc := range []struct {
 		method, path, body string
@@ -198,7 +216,13 @@ func TestRejectedRequestsAndIsolation(t *testing.T) {
 }
 
 func TestConcurrentRequests(t *testing.T) {
-	f := telegramfake.New()
+	for _, explicit := range []bool{false, true} {
+		t.Run(fmt.Sprintf("explicit=%t", explicit), func(t *testing.T) { concurrentRequests(t, explicit) })
+	}
+}
+
+func concurrentRequests(t *testing.T, explicit bool) {
+	f := newFixture(t, explicit)
 	defer f.Close()
 	client, e := telegram.New(telegram.Config{Token: telegramfake.Token, BaseURL: f.URL(), Timeout: 2 * time.Second})
 	if e != nil {
@@ -244,7 +268,13 @@ func TestConcurrentRequests(t *testing.T) {
 }
 
 func TestHeldCancellation(t *testing.T) {
-	f := telegramfake.New()
+	for _, explicit := range []bool{false, true} {
+		t.Run(fmt.Sprintf("explicit=%t", explicit), func(t *testing.T) { heldCancellation(t, explicit) })
+	}
+}
+
+func heldCancellation(t *testing.T, explicit bool) {
+	f := newFixture(t, explicit)
 	defer f.Close()
 	c, e := telegram.New(telegram.Config{Token: telegramfake.Token, BaseURL: f.URL(), Timeout: time.Second})
 	if e != nil {
@@ -316,7 +346,13 @@ func TestUpdateWireAndSecret(t *testing.T) {
 }
 
 func TestCloseIncompleteBody(t *testing.T) {
-	f := telegramfake.New()
+	for _, explicit := range []bool{false, true} {
+		t.Run(fmt.Sprintf("explicit=%t", explicit), func(t *testing.T) { closeIncompleteBody(t, explicit) })
+	}
+}
+
+func closeIncompleteBody(t *testing.T, explicit bool) {
+	f := newFixture(t, explicit)
 	conn, e := net.DialTimeout("tcp", strings.TrimPrefix(f.URL(), "http://"), time.Second)
 	if e != nil {
 		t.Fatal(e)

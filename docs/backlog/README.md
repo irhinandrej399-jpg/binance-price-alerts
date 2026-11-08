@@ -9,12 +9,13 @@
 
 ## Порядок работ
 
-В очереди 8 незавершённых практических задач выпуска. MKT-019 завершён:
+В очереди 6 незавершённых практических задач выпуска. MKT-019 завершён:
 общий каталог и динамический durable ingest подключены; feed остаётся unconfirmed.
-Сессионная проверка OPS-074 выявила две предпосылки: следующий — OPS-078
-(явный source provisioning), затем E2E-009 (listener существующих fake) и OPS-074
-(постоянный запуск). Затем HTTPS/секреты, backup/restore, базовое наблюдение, малый restart smoke и
-реальный сценарий Binance → свой Telegram. Подробные критерии — в карточках.
+Предпосылки OPS-074 готовы: OPS-078 (явный source provisioning) и E2E-009
+(listener существующих fake). Следующий — сессионная проверка OPS-074
+(постоянный запуск). Затем HTTPS/секреты, backup/restore, базовое наблюдение,
+малый restart smoke и реальный сценарий Binance → свой Telegram.
+Подробные критерии — в карточках.
 
 22 бывшие planned задачи сняты с плана как `cancelled`: kernel/inode/temp peak,
 квалификация дисковых ledger, measurement collector race и все оставшиеся LOAD.
@@ -276,7 +277,7 @@
 | [E2E-008](tickets/E2E-008.md) | Расширить fake Binance для плана каталога | E2E-003, MKT-016 | done |
 | [MKT-019](tickets/MKT-019.md) | Подключить каталог торговых пар к runtime market-data | DEC-011, MKT-016, MKT-017, OPS-069, MKT-020, E2E-008 | done |
 | [OPS-078](tickets/OPS-078.md) | Подготовить явный source provisioning постоянного стенда | OPS-062, OPS-066, E2E-005 | done |
-| [E2E-009](tickets/E2E-009.md) | Разрешить явный listener существующих vendor fake | E2E-008, E2E-004 | planned |
+| [E2E-009](tickets/E2E-009.md) | Разрешить явный listener существующих vendor fake | E2E-008, E2E-004 | done |
 | [OPS-074](tickets/OPS-074.md) | Собрать постоянный запуск четырёх сервисов | DEC-011, MKT-019, E2E-002, OPS-078, E2E-009 | planned |
 | [OPS-075](tickets/OPS-075.md) | Защитить публичный вход и секреты развёртывания | DEC-011, OPS-074, OPS-013, OPS-072 | planned |
 | [OPS-076](tickets/OPS-076.md) | Подготовить резервную копию и восстановление стенда | DEC-011, OPS-074, OPS-014 | planned |

@@ -3,6 +3,7 @@ package binancefake_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -15,7 +16,13 @@ import (
 )
 
 func TestCatalogPricesPingDisconnectAndReconnect(t *testing.T) {
-	f := binancefake.New()
+	for _, explicit := range []bool{false, true} {
+		t.Run(fmt.Sprintf("explicit=%t", explicit), func(t *testing.T) { catalogPricesPingDisconnectAndReconnect(t, explicit) })
+	}
+}
+
+func catalogPricesPingDisconnectAndReconnect(t *testing.T, explicit bool) {
+	f := newFixture(t, explicit)
 	defer f.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -92,7 +99,13 @@ func TestCatalogPricesPingDisconnectAndReconnect(t *testing.T) {
 }
 
 func TestCloseJoinsUnclaimedAndClaimedSockets(t *testing.T) {
-	f := binancefake.New()
+	for _, explicit := range []bool{false, true} {
+		t.Run(fmt.Sprintf("explicit=%t", explicit), func(t *testing.T) { closeJoinsUnclaimedAndClaimedSockets(t, explicit) })
+	}
+}
+
+func closeJoinsUnclaimedAndClaimedSockets(t *testing.T, explicit bool) {
+	f := newFixture(t, explicit)
 	defer f.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -135,7 +148,13 @@ func TestCloseJoinsUnclaimedAndClaimedSockets(t *testing.T) {
 }
 
 func TestRoutingAndCancelledNext(t *testing.T) {
-	f := binancefake.New()
+	for _, explicit := range []bool{false, true} {
+		t.Run(fmt.Sprintf("explicit=%t", explicit), func(t *testing.T) { routingAndCancelledNext(t, explicit) })
+	}
+}
+
+func routingAndCancelledNext(t *testing.T, explicit bool) {
+	f := newFixture(t, explicit)
 	defer f.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

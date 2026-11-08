@@ -4,12 +4,13 @@
 
 ## Активная работа
 
-- Активная реализация: нет. После OPS-078 осталось 7 planned; следующий — E2E-009.
-- OPS-074 остаётся planned: ожидается [E2E-009](backlog/tickets/E2E-009.md),
-  явный listener vendor fake для Compose-сети. Source provisioning OPS-078 готов. Подробности —
-  [в карточке OPS-074](backlog/tickets/OPS-074.md).
+- Активная реализация: нет. Осталось 6 planned; следующий — OPS-074.
+- OPS-074 остаётся planned до повторной сессионной проверки. Предпосылки
+  [OPS-078](backlog/tickets/OPS-078.md) (source provisioning) и
+  [E2E-009](backlog/tickets/E2E-009.md) (listener готовых fake) завершены.
 - 22 тяжёлые задачи cancelled по [DEC-011](decisions/DEC-011.md).
-- Последний завершённый тикет: [OPS-078](backlog/tickets/OPS-078.md). Явная команда init/resume/verify, durable inventory до SQL, metadata/zero vectors и source-bound notifications bootstrap под runtime ролью. Проверка после ненулевого SQL прогресса без reset, missing/mismatch и cleanup — PASS; целевые/общие race, vet/build, Protobuf — PASS. [Порядок и runtime env](../cmd/source-provision/README.md).
+- Последний завершённый тикет: [E2E-009](backlog/tickets/E2E-009.md). Оба vendor fake принимают собственный listener и явный клиентский origin; прежние New остаются loopback-only. Владение/валидация/Close и прежние протоколы проверены целевым и общим race; vet/build/Protobuf PASS. [Сетевой контракт](../internal/testutil/binancefake/README.md) для OPS-074 готов; маршрут из Compose ещё не проверялся. Link остаётся loopback-only.
+- Предыдущий завершённый тикет: [OPS-078](backlog/tickets/OPS-078.md). Явная команда init/resume/verify, durable inventory до SQL, metadata/zero vectors и source-bound notifications bootstrap под runtime ролью. Проверка после ненулевого SQL прогресса без reset, missing/mismatch и cleanup — PASS; целевые/общие race, vet/build, Protobuf — PASS. [Порядок и runtime env](../cmd/source-provision/README.md).
 - Предыдущий завершённый тикет: [MKT-019](backlog/tickets/MKT-019.md). Общий ASCII USDT snapshot для Catalog RPC и prepared ingest, refresh/reconnect, fencing всех сохранённых пар до Latest и отдельные поколения каждой попытки. Удалённые пары сохраняют данные/gap; raw unconfirmed/readyz=503. Малый process/race smoke и прежние restart/shutdown проверки, общая race/vet/build, Protobuf PASS; cleanup подтверждён. [Настройки](../cmd/market-data/README.md).
 - Предыдущий завершённый тикет: [E2E-008](backlog/tickets/E2E-008.md). Динамический binancefake: bare /ws, точные ACK, управляемый каталог, снимок потоков и TradePair. Настоящие catalog/reconciler/decode подтвердили 2 → 3 → 2 → 0 пар, разные цены, reconnect и cleanup. Целевой/общий race, vet/build, Protobuf PASS. Runtime/SQL не менялись.
 - Предыдущий завершённый тикет: [MKT-020](backlog/tickets/MKT-020.md). Prepared reconciler готовит immutable callbacks до каждого dial; смена плана снимает старые подписки и присоединяет callbacks до нового владельца. Wait наблюдает terminal failure после возврата Reconcile. Целевые/общие race, vet/build, Protobuf и backlog PASS. При смене каталога пересоздаются все группы; runtime/SQL не менялись.
@@ -189,9 +190,9 @@ p99 и дисковым резервам не являются условиям�
 
 ## Следующий рекомендуемый шаг
 
-`python3 scripts/backlog.py next` → [E2E-009](backlog/tickets/E2E-009.md), planned:
-явный listener готовых fake. Затем повторная сессионная проверка OPS-074 с
-готовым [source provisioning](../cmd/source-provision/README.md); OPS-078 завершён.
+`python3 scripts/backlog.py next` → [OPS-074](backlog/tickets/OPS-074.md), planned:
+повторная сессионная проверка с готовыми [source provisioning](../cmd/source-provision/README.md)
+и [listener vendor fake](../internal/testutil/binancefake/README.md); OPS-078/E2E-009 завершены.
 
 Практический выпуск: OPS-074 (постоянный запуск), OPS-075 (HTTPS/секреты),
 OPS-076 (backup/restore), OPS-077 (наблюдение/диск/maintenance), E2E-007

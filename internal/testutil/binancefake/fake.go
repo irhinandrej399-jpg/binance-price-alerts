@@ -1,4 +1,4 @@
-// Package binancefake provides an explicitly controlled, loopback-only Binance
+// Package binancefake provides an explicitly controlled Binance
 // fixture for parent tests driving real service processes. It never dials out.
 package binancefake
 
@@ -7,9 +7,12 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +30,7 @@ var ErrNotSubscribed = errors.New("binancefake: pair not subscribed")
 // Fake owns its HTTP listener and all upgraded sockets. Call Close after use.
 type Fake struct {
 	server  *httptest.Server
+	origin  string
 	next    chan *Connection
 	done    chan struct{}
 	mu      sync.Mutex
@@ -41,6 +45,34 @@ func New() *Fake {
 	f := &Fake{next: make(chan *Connection), done: make(chan struct{}), conns: make(map[*Connection]struct{}), catalog: catalogFixture}
 	f.server = httptest.NewServer(http.HandlerFunc(f.serve))
 	return f
+}
+
+// NewWithListener serves the existing fixture on an already-open listener.
+// Ownership transfers on entry, including validation failure. origin is the
+// caller-selected HTTP origin reachable by its clients, never a wildcard URL.
+// Only isolated test scenarios may opt in to a non-loopback listener.
+// Listen/bind errors belong to the caller; this function validates configuration
+// before starting any goroutine. The caller must not reuse or close the listener.
+func NewWithListener(listener net.Listener, origin string) (*Fake, error) {
+	if listener == nil {
+		return nil, errors.New("binancefake: nil listener")
+	}
+	u, err := url.Parse(origin)
+	valid := err == nil && u.Scheme == "http" && u.Hostname() != "" && u.Hostname() != "*" && u.User == nil && u.Path == "" && u.RawQuery == "" && !u.ForceQuery && u.Fragment == "" && u.RawFragment == "" && u.Opaque == ""
+	if valid {
+		port, e := strconv.Atoi(u.Port())
+		ip := net.ParseIP(u.Hostname())
+		valid = e == nil && port > 0 && port <= 65535 && (ip == nil || !ip.IsUnspecified())
+	}
+	if !valid {
+		_ = listener.Close()
+		return nil, errors.New("binancefake: invalid client origin")
+	}
+	f := &Fake{next: make(chan *Connection), done: make(chan struct{}), conns: make(map[*Connection]struct{}), catalog: catalogFixture}
+	f.origin = origin
+	f.server = &httptest.Server{Listener: listener, Config: &http.Server{Handler: http.HandlerFunc(f.serve)}}
+	f.server.Start()
+	return f, nil
 }
 
 // WSURL returns the bare endpoint for catalog-driven subscriptions.
@@ -76,7 +108,12 @@ func (f *Fake) SetCatalog(pairs []catalog.Pair) error {
 	return nil
 }
 
-func (f *Fake) URL() string          { return f.server.URL }
+func (f *Fake) URL() string {
+	if f.origin != "" {
+		return f.origin
+	}
+	return f.server.URL
+}
 func (f *Fake) Client() *http.Client { return f.server.Client() }
 
 // StreamURL selects a raw stream present in the fixture (BTCUSDT or SOLUSDT).
@@ -187,6 +224,7 @@ func (f *Fake) Close() {
 			_ = c.ws.Close()
 		}
 		f.mu.Unlock()
+		f.server.CloseClientConnections()
 		f.server.Close()
 		f.wg.Wait()
 	})
