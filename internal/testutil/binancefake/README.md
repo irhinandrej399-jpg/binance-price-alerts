@@ -1,4 +1,4 @@
-# Управляемый Binance fixture (E2E-003)
+# Управляемый Binance fixture (E2E-003 / E2E-008)
 
 `binancefake.New()` открывает отдельный случайный loopback HTTP/WS порт.
 Родитель E2E владеет fake, а дочернему market-data передаёт `f.URL()` для
@@ -49,12 +49,44 @@ context; каждая запись ограничена меньшим из dead
 Проверка через настоящие catalog.Client, stream.Read и trade.Decode:
 
 ```sh
-GOCACHE=/tmp/binance-go-build GOTOOLCHAIN=local go test -race -count=10 ./internal/testutil/binancefake
+GOCACHE=/tmp/binance-go-build GOTOOLCHAIN=local go test -race ./internal/testutil/binancefake
 ```
 
 Проверяются каталог, две точные цены и максимальные ID, независимые T/E,
 ping/pong, TCP drop, reconnect с повтором fixture, close 1001,
 отмена Next/timeout Ping, неизвестные пути и cleanup незабранных sockets.
 Это Go helper для стенда с настоящими процессами; отдельный CLI/control HTTP,
-combined streams/SUBSCRIBE, rate limits, fake Telegram, полный E2E четырёх
+combined-stream wrappers, rate limits, fake Telegram, полный E2E четырёх
 процессов и нагрузочный генератор в этот результат не входят.
+
+## Динамический каталог и bare /ws (E2E-008)
+
+Для reconciler используйте `f.WSURL()` (bare `/ws`). `f.SetCatalog([]catalog.Pair{...})`
+атомарно заменяет REST-ответ: каждая переданная пара получает TRADING и spot=true,
+настоящий catalog.Client продолжает фильтрацию по USDT. Срез копируется в JSON;
+`SetCatalog(nil)` задаёт пустой каталог. Исходный fixture и raw endpoints сохраняются
+до явной замены. После Close SetCatalog возвращает ErrClosed.
+
+На bare-соединении `conn.Symbol == ""`. Fake принимает SUBSCRIBE/UNSUBSCRIBE
+с непустыми params имён `lowercase@trade`, отвечает `{"result":null,"id":...}`
+с исходным JSON ID без float64. Повторная подписка/отписка идемпотентна;
+некорректная или неподдерживаемая команда закрывает соединение. Это узкий fixture,
+не полная эмуляция Binance protocol/errors/rate limits.
+
+`conn.Streams()` возвращает независимый отсортированный снимок набора этого
+соединения. Дожидайтесь успешного Reconcile/ACK перед проверкой набора или сделкой.
+`conn.TradePair(ctx, "ETHUSDT", trade)` отправляет raw trade только в подписанную
+пару; иначе возвращает ErrNotSubscribed без записи. На raw-соединениях прежний
+`Trade` сохранён. Записи, ACK и изменение набора сериализуются; Streams безопасен
+при параллельных командах, SetCatalog — при параллельном Fetch.
+
+Замена каталога сама не меняет подписки: родитель запускает refresh/reconcile
+в приложении и наблюдает результат. После Disconnect новый Next возвращает
+новое соединение с пустым набором до SUBSCRIBE. Автоматических цен, replay,
+поколений или подтверждения live нет. Ping/Close/отмена и cleanup работают для
+обоих видов соединений, включая bare socket без вызова Next.
+
+Тесты через catalog.Client, stream.Reconciler и trade.Decode проверяют две
+точные различные цены, переходы 2 → 3 → 2 → 0 пар, подавление сделки удалённой
+пары, reconnect, exact ACK большого ID, конкурентный каталог/Streams и cleanup.
+SQL/outbox и процессный smoke остаются в MKT-019.

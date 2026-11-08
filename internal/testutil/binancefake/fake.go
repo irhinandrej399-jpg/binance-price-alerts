@@ -9,35 +9,73 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/catalog"
 )
 
 //go:embed testdata/exchange_info.json
 var catalogFixture []byte
 
 var ErrClosed = errors.New("binancefake: closed")
+var ErrNotSubscribed = errors.New("binancefake: pair not subscribed")
 
 // Fake owns its HTTP listener and all upgraded sockets. Call Close after use.
 type Fake struct {
-	server *httptest.Server
-	next   chan *Connection
-	done   chan struct{}
-	mu     sync.Mutex
-	closed bool
-	conns  map[*Connection]struct{}
-	wg     sync.WaitGroup
-	once   sync.Once
+	server  *httptest.Server
+	next    chan *Connection
+	done    chan struct{}
+	mu      sync.Mutex
+	closed  bool
+	catalog []byte
+	conns   map[*Connection]struct{}
+	wg      sync.WaitGroup
+	once    sync.Once
 }
 
 func New() *Fake {
-	f := &Fake{next: make(chan *Connection), done: make(chan struct{}), conns: make(map[*Connection]struct{})}
+	f := &Fake{next: make(chan *Connection), done: make(chan struct{}), conns: make(map[*Connection]struct{}), catalog: catalogFixture}
 	f.server = httptest.NewServer(http.HandlerFunc(f.serve))
 	return f
 }
+
+// WSURL returns the bare endpoint for catalog-driven subscriptions.
+func (f *Fake) WSURL() string { return "ws" + strings.TrimPrefix(f.URL(), "http") + "/ws" }
+
+// SetCatalog atomically replaces exchangeInfo with explicit tradable pairs.
+// It copies the input before returning; nil represents an empty catalog.
+// Existing socket subscriptions remain controlled by client commands.
+func (f *Fake) SetCatalog(pairs []catalog.Pair) error {
+	type symbol struct {
+		Symbol string `json:"symbol"`
+		Base   string `json:"baseAsset"`
+		Quote  string `json:"quoteAsset"`
+		Status string `json:"status"`
+		Spot   bool   `json:"isSpotTradingAllowed"`
+	}
+	payload := struct {
+		Symbols []symbol `json:"symbols"`
+	}{Symbols: make([]symbol, 0, len(pairs))}
+	for _, p := range pairs {
+		payload.Symbols = append(payload.Symbols, symbol{p.Symbol, p.BaseAsset, p.QuoteAsset, "TRADING", true})
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.closed {
+		return ErrClosed
+	}
+	f.catalog = b
+	return nil
+}
+
 func (f *Fake) URL() string          { return f.server.URL }
 func (f *Fake) Client() *http.Client { return f.server.Client() }
 
@@ -65,11 +103,15 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == "/api/v3/exchangeInfo" {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(catalogFixture)
+		f.mu.Lock()
+		body := f.catalog
+		f.mu.Unlock()
+		_, _ = w.Write(body)
 		return
 	}
 	symbol := ""
 	switch r.URL.Path {
+	case "/ws":
 	case "/ws/btcusdt@trade":
 		symbol = "BTCUSDT"
 	case "/ws/solusdt@trade":
@@ -91,7 +133,10 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 		f.mu.Unlock()
 		return
 	}
-	c := &Connection{Symbol: symbol, ws: ws, done: make(chan struct{}), pongs: make(chan string, 16)}
+	c := &Connection{Symbol: symbol, ws: ws, done: make(chan struct{}), pongs: make(chan string, 16), streams: make(map[string]struct{})}
+	if symbol != "" {
+		c.streams[strings.ToLower(symbol)+"@trade"] = struct{}{}
+	}
 	f.conns[c] = struct{}{}
 	f.wg.Add(1)
 	f.mu.Unlock()
@@ -120,8 +165,14 @@ func (f *Fake) serve(w http.ResponseWriter, r *http.Request) {
 	}()
 	defer func() { close(publishStop); <-announced }()
 	for {
-		if _, _, err := ws.ReadMessage(); err != nil {
+		_, b, err := ws.ReadMessage()
+		if err != nil {
 			return
+		}
+		if symbol == "" {
+			if err := c.command(b); err != nil {
+				return
+			}
 		}
 	}
 }
@@ -149,7 +200,8 @@ type Trade struct {
 	TradeTime, EventTime int64
 }
 
-// Connection identifies one accepted raw stream. Writes are serialized; one
+// Connection identifies one accepted socket. Symbol is empty on bare /ws.
+// Writes and subscription changes are serialized; one
 // Ping at a time is allowed. After a disconnect acquire a new socket with Next.
 type Connection struct {
 	Symbol  string
@@ -158,11 +210,15 @@ type Connection struct {
 	pongs   chan string
 	writeMu sync.Mutex
 	pingMu  sync.Mutex
+	streams map[string]struct{} // guarded by writeMu, including command/trade ordering
 }
 
 func (c *Connection) write(ctx context.Context, kind int, b []byte) error {
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
+	return c.writeLocked(ctx, kind, b)
+}
+func (c *Connection) writeLocked(ctx context.Context, kind int, b []byte) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -181,6 +237,68 @@ func (c *Connection) write(ctx context.Context, kind int, b []byte) error {
 	return c.ws.WriteMessage(kind, b)
 }
 func (c *Connection) Trade(ctx context.Context, t Trade) error {
+	return c.TradePair(ctx, c.Symbol, t)
+}
+
+// Streams returns a sorted independent snapshot of this socket's subscriptions.
+func (c *Connection) Streams() []string {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	names := make([]string, 0, len(c.streams))
+	for name := range c.streams {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	return names
+}
+
+func (c *Connection) command(b []byte) error {
+	var cmd struct {
+		Method string          `json:"method"`
+		Params []string        `json:"params"`
+		ID     json.RawMessage `json:"id"`
+	}
+	if err := json.Unmarshal(b, &cmd); err != nil {
+		return err
+	}
+	if (cmd.Method != "SUBSCRIBE" && cmd.Method != "UNSUBSCRIBE") || len(cmd.ID) == 0 || string(cmd.ID) == "null" || len(cmd.Params) == 0 {
+		return errors.New("binancefake: invalid command")
+	}
+	for _, name := range cmd.Params {
+		if !strings.HasSuffix(name, "@trade") || len(name) <= len("@trade") || name != strings.ToLower(name) {
+			return errors.New("binancefake: unsupported stream")
+		}
+	}
+	ack, err := json.Marshal(struct {
+		Result any             `json:"result"`
+		ID     json.RawMessage `json:"id"`
+	}{nil, cmd.ID})
+	if err != nil {
+		return err
+	}
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	for _, name := range cmd.Params {
+		if cmd.Method == "SUBSCRIBE" {
+			c.streams[name] = struct{}{}
+		} else {
+			delete(c.streams, name)
+		}
+	}
+	return c.writeLocked(context.Background(), websocket.TextMessage, ack)
+}
+
+// TradePair emits a raw trade only if this socket owns the selected pair.
+// An absent subscription returns ErrNotSubscribed and writes no frame.
+func (c *Connection) TradePair(ctx context.Context, symbol string, t Trade) error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if _, ok := c.streams[strings.ToLower(symbol)+"@trade"]; !ok {
+		return ErrNotSubscribed
+	}
 	payload := struct {
 		Kind      string `json:"e"`
 		Symbol    string `json:"s"`
@@ -188,12 +306,12 @@ func (c *Connection) Trade(ctx context.Context, t Trade) error {
 		Price     string `json:"p"`
 		TradeTime int64  `json:"T"`
 		EventTime int64  `json:"E"`
-	}{"trade", c.Symbol, t.ID, t.Price, t.TradeTime, t.EventTime}
+	}{"trade", symbol, t.ID, t.Price, t.TradeTime, t.EventTime}
 	b, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	return c.write(ctx, websocket.TextMessage, b)
+	return c.writeLocked(ctx, websocket.TextMessage, b)
 }
 
 // Ping sends an explicit payload and waits for a matching client pong. The

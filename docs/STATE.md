@@ -4,11 +4,11 @@
 
 ## Активная работа
 
-- Активная реализация: нет. После MKT-020 осталось 8 planned; следующий — E2E-008. 22 тяжёлые задачи cancelled по [DEC-011](decisions/DEC-011.md).
-- Последний завершённый тикет: [MKT-020](backlog/tickets/MKT-020.md). Prepared reconciler готовит immutable callbacks до каждого dial; смена плана снимает старые подписки и присоединяет callbacks до нового владельца. Wait наблюдает terminal failure после возврата Reconcile. Целевые/общие race, vet/build, Protobuf и backlog PASS. При смене каталога пересоздаются все группы; runtime/SQL не менялись.
-- MKT-019 остаётся planned: lifecycle предпосылка MKT-020 готова, требуется
-  динамический процессный fake E2E-008. План и зависимости сохранены вместе
-  с результатом MKT-020. Очередь: E2E-008 → MKT-019.
+- Активная реализация: нет. После E2E-008 осталось 7 planned; следующий — MKT-019. 22 тяжёлые задачи cancelled по [DEC-011](decisions/DEC-011.md).
+- Последний завершённый тикет: [E2E-008](backlog/tickets/E2E-008.md). Динамический binancefake: bare /ws, точные ACK, управляемый каталог, снимок потоков и TradePair. Настоящие catalog/reconciler/decode подтвердили 2 → 3 → 2 → 0 пар, разные цены, reconnect и cleanup. Целевой/общий race, vet/build, Protobuf PASS. Runtime/SQL не менялись.
+- Предыдущий завершённый тикет: [MKT-020](backlog/tickets/MKT-020.md). Prepared reconciler готовит immutable callbacks до каждого dial; смена плана снимает старые подписки и присоединяет callbacks до нового владельца. Wait наблюдает terminal failure после возврата Reconcile. Целевые/общие race, vet/build, Protobuf и backlog PASS. При смене каталога пересоздаются все группы; runtime/SQL не менялись.
+- MKT-019 остаётся planned: lifecycle предпосылка MKT-020 и динамический процессный fake E2E-008 готовы. Перед реализацией
+  требуется повторная сессионная проверка MKT-019.
 - Последний результат планирования: DEC-011. Пять конкретных дефектов сохранены, добавлены семь практических задач выпуска; статусы cancelled проверяются tooling. Реального deployment ещё нет.
 - Записи о прошлых сессиях ниже — история проверок; актуальный объём и следующий шаг определены DEC-011 и ORDER.
 - Предыдущий завершённый тикет: [OPS-067](backlog/tickets/OPS-067.md). Исправлено условие готовности Kafka fixture: bounded discovery нового ID и готовой partition после CreateTopics; production guards сохранены. Управляемый ответ воспроизводит ErrMetadata, точный исторический ответ OPS-065 неизвестен. Целевой и общий race, disposable Kafka/race, vet/build, Protobuf PASS; cleanup подтверждён. [Диагностика](measurements/OPS-067/diagnosis.md).
@@ -185,9 +185,9 @@ p99 и дисковым резервам не являются условиям�
 
 ## Следующий рекомендуемый шаг
 
-`python3 scripts/backlog.py next` → [E2E-008](backlog/tickets/E2E-008.md), planned:
-расширить существующий fake Binance для динамического плана каталога. Затем
-повторная проверка MKT-019: каталог поддерживаемых пар и фактический приём цен.
+`python3 scripts/backlog.py next` → [MKT-019](backlog/tickets/MKT-019.md), planned:
+повторная сессионная проверка, затем каталог поддерживаемых пар и фактический
+приём цен. Предпосылки MKT-020 и E2E-008 завершены.
 
 Практический выпуск: OPS-074 (постоянный запуск), OPS-075 (HTTPS/секреты),
 OPS-076 (backup/restore), OPS-077 (наблюдение/диск/maintenance), E2E-007
