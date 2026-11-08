@@ -18,6 +18,7 @@ import (
 	sub "github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/subscription"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/alerttriggered"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/event"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/domain/price"
 	domain "github.com/irhinandrej399-jpg/binance-price-alerts/internal/domain/subscription"
 	pb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/api/v1"
 	market "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/marketdata/v1"
@@ -25,6 +26,7 @@ import (
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/chatlimit"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/handler"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/jobs"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/message"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/report"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/retry"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/telegram"
@@ -106,8 +108,8 @@ func workerFixture(t *testing.T) *handlerFixture {
 			t.Error(e)
 		}
 		req.Body.Close()
-		if !strings.Contains(payload.Text, fmt.Sprintf("Фактическая цена: %d", f.value.Load())) || strings.Contains(payload.Text, "999") {
-			t.Error(payload.Text)
+		if e := checkActualPrice(payload.Text, fmt.Sprint(f.value.Load())); e != nil {
+			t.Error(e)
 		}
 		var chat int64
 		if e := f.api.QueryRow(req.Context(), `SELECT telegram_chat_id FROM app.users WHERE id=$1`, r.OwnerID).Scan(&chat); e != nil || payload.Chat != chat {
@@ -416,5 +418,44 @@ func TestHandlerSQLLimiterReleasesLease(t *testing.T) {
 				t.Fatal(attempts, f.calls.Load(), e)
 			}
 		})
+	}
+}
+
+// Shared by the HTTP fixture and its deterministic payload regression.
+func checkActualPrice(text, want string) error {
+	const prefix = "Фактическая цена: "
+	var values []string
+	for line := range strings.SplitSeq(text, "\n") {
+		if value, ok := strings.CutPrefix(line, prefix); ok {
+			values = append(values, value)
+		}
+	}
+	if len(values) != 1 || values[0] != want {
+		return fmt.Errorf("actual price field = %q, want %q", values, want)
+	}
+	return nil
+}
+
+func TestHandlerPayloadActualPrice(t *testing.T) {
+	r := record()
+	actual, err := price.Parse("101")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text, err := message.Format(message.Input{Pair: r.Pair, Threshold: r.Threshold, Direction: r.Direction, ActualPrice: actual, TradeTime: now, CheckedAt: now.Add(999 * time.Second)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(text, "Возраст сделки: 999 с") {
+		t.Fatal(text)
+	}
+	if err := checkActualPrice(text, "101"); err != nil {
+		t.Fatal(err)
+	}
+	for _, wrong := range []string{"999", "1010"} {
+		bad := strings.Replace(text, "Фактическая цена: 101\n", "Фактическая цена: "+wrong+"\n", 1)
+		if err := checkActualPrice(bad, "101"); err == nil {
+			t.Fatalf("accepted wrong price %s", wrong)
+		}
 	}
 }

@@ -4,10 +4,11 @@
 
 ## Активная работа
 
-- Активная реализация: нет. По [DEC-011](decisions/DEC-011.md) после SUB-024 осталось 10 planned; следующий — NTF-019. 22 тяжёлые задачи cancelled.
+- Активная реализация: нет. По [DEC-011](decisions/DEC-011.md) после NTF-019 осталось 9 planned; следующий — NTF-020. 22 тяжёлые задачи cancelled.
 - Последний результат планирования: DEC-011. Пять конкретных дефектов сохранены, добавлены семь практических задач выпуска; статусы cancelled проверяются tooling. Реального deployment ещё нет.
 - Записи о прошлых сессиях ниже — история проверок; актуальный объём и следующий шаг определены DEC-011 и ORDER.
-- Последний завершённый тикет: [SUB-024](backlog/tickets/SUB-024.md). Доказано ограничение SQL/Go clock domains: при моделируемом −2 min реальные SQL Build/Page успешны, RPC отклоняет expires_at. Добавлены clock prerequisites и стадии диагностики; [отчёт](measurements/SUB-024/diagnosis.md). Целевой SQL/race, общий race/vet/build и Protobuf PASS; cleanup подтверждён. Историческая причина 29 октября не доказана; TTL и production guards сохранены.
+- Последний завершённый тикет: [NTF-019](backlog/tickets/NTF-019.md). Проверка Telegram payload сравнивает полное поле фактической цены, независимо от возраста. Детерминированный Red/Green: цена 101 и возраст 999 с; неверные 999/1010 отклоняются, проверка адресата сохранена. Пакет admissionrpc PostgreSQL/race, общая race-регрессия/vet/build и Protobuf PASS; disposable cleanup подтверждён. Production-код не менялся.
+- Предыдущий завершённый тикет: [SUB-024](backlog/tickets/SUB-024.md). Доказано ограничение SQL/Go clock domains: при моделируемом −2 min реальные SQL Build/Page успешны, RPC отклоняет expires_at. Добавлены clock prerequisites и стадии диагностики; [отчёт](measurements/SUB-024/diagnosis.md). Целевой SQL/race, общий race/vet/build и Protobuf PASS; cleanup подтверждён. Историческая причина 29 октября не доказана; TTL и production guards сохранены.
 - Предыдущий завершённый тикет: [NTF-018](backlog/tickets/NTF-018.md). Воспроизведено истечение 50 ms lease до регистрации: тест принимал его за потерю ответа commit. Fixture использует 1 s и проверяет durable регистрацию, uncertain/report и wait_condition/active без HTTP; обычный и delayed варианты PASS. Полный admissionrpc PostgreSQL/race при конкурентной Go race-регрессии, vet/build и Protobuf PASS. Production guards сохранены.
 - Предыдущий завершённый тикет: [NTF-017](backlog/tickets/NTF-017.md). Миграция notifications/012 закрывает UPDATE/DELETE/TRUNCATE исторических свидетельств и удаление reports, сохраняя INSERT/SELECT и ack. Полный jobs PostgreSQL/race, обычный Go race/vet/build и Protobuf PASS. Общий SQL runner дважды остановился на независимом TestBinding cancellation; зарегистрирован [NTF-020](backlog/tickets/NTF-020.md). Рабочая БД не мигрировалась.
 - Предыдущий завершённый тикет: [E2E-001](backlog/tickets/E2E-001.md), [полный пользовательский сценарий](../internal/testutil/e2escenario/README.md). Два свежих PostgreSQL/Kafka/race прогона четырёх executable: account/login/link/create → цена → Telegram → durable API receipt и освобождение слота; 101→99 сохраняет слот без отправки, 102 доставляет один раз в том же workflow; отмена до допуска запрещает отправку. Ровно две доставки, точные outcomes, четыре exit 0 и cleanup PASS. Общая race-регрессия/vet/build PASS. Публичные интеграции и нагрузка не проверялись; raw feed unconfirmed/readyz=503 сохраняется.
@@ -178,9 +179,9 @@ p99 и дисковым резервам не являются условиям�
 
 ## Следующий рекомендуемый шаг
 
-`python3 scripts/backlog.py next` → [NTF-019](backlog/tickets/NTF-019.md), planned:
-исследовать конкретный сбой assertion уведомлений.
-Затем NTF-020, OPS-067 — конкретные дефекты; MKT-019 —
+`python3 scripts/backlog.py next` → [NTF-020](backlog/tickets/NTF-020.md), planned:
+исследовать конкретный сбой cancellation в binding fixture.
+Затем OPS-067 — конкретный дефект; MKT-019 —
 согласовать каталог поддерживаемых пар с фактическим приёмом цен runtime.
 
 Практический выпуск: OPS-074 (постоянный запуск), OPS-075 (HTTPS/секреты),
