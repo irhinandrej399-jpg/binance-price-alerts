@@ -4,8 +4,9 @@
 
 ## Активная работа
 
-- Активная реализация: нет. E2E-002 завершён; следующий шаг — сессионная проверка E2E-001 (planned).
-- Последний завершённый тикет: [E2E-002](backlog/tickets/E2E-002.md), [четыре executable и fake](../internal/testutil/e2estack/README.md). Одна команда через runner E2E-005, отдельные mTLS identities, четыре owner-only DSN и явные Kafka bootstraps. Два свежих PostgreSQL/Kafka/race dataset, в каждом два старта/остановки: Catalog/Latest/WS и готовность подтверждены; все child exit 0, cleanup PASS. Raw market-data честно unconfirmed/readyz=503. Общая race/vet/build и Python проверки PASS; полный пользовательский сценарий остаётся E2E-001.
+- Активная реализация: нет. E2E-001 завершён; функциональный этап DEC-010 подтверждён. Нагрузочный этап требует отдельного поручения.
+- Последний завершённый тикет: [E2E-001](backlog/tickets/E2E-001.md), [полный пользовательский сценарий](../internal/testutil/e2escenario/README.md). Два свежих PostgreSQL/Kafka/race прогона четырёх executable: account/login/link/create → цена → Telegram → durable API receipt и освобождение слота; 101→99 сохраняет слот без отправки, 102 доставляет один раз в том же workflow; отмена до допуска запрещает отправку. Ровно две доставки, точные outcomes, четыре exit 0 и cleanup PASS. Общая race-регрессия/vet/build PASS. Публичные интеграции и нагрузка не проверялись; raw feed unconfirmed/readyz=503 сохраняется.
+- Предыдущий завершённый тикет: [E2E-002](backlog/tickets/E2E-002.md), [четыре executable и fake](../internal/testutil/e2estack/README.md). Одна команда через runner E2E-005, отдельные mTLS identities, четыре owner-only DSN и явные Kafka bootstraps. Два свежих PostgreSQL/Kafka/race dataset, в каждом два старта/остановки: Catalog/Latest/WS и готовность подтверждены; все child exit 0, cleanup PASS. Raw market-data честно unconfirmed/readyz=503. Общая race/vet/build и Python проверки PASS; полный пользовательский сценарий остаётся E2E-001.
 - Предыдущий завершённый тикет: [E2E-005](backlog/tickets/E2E-005.md), [общий disposable runner](../internal/testutil/e2eenvironment/README.md). Четыре parent-only DSN и штатные миграции; два реальных PostgreSQL/Kafka/race прогона подтвердили роли/CONNECT isolation, child allowlists и новые пустые topics 16/1/16 с ClusterID/TopicID. Аварийный Go owner exit подтвердил удаление child group, временных credentials и обоих стендов. Общая race/vet/build и Python проверки PASS. Четыре продуктовых executable запущены в E2E-002; полный пользовательский сценарий ещё впереди.
 - Предыдущий завершённый тикет: [OPS-073](backlog/tickets/OPS-073.md), [HTTP подписок API](../cmd/api/README.md#http-подписок-ops-073). POST/GET через session/auth и управляемые mTLS Catalog/Latest рядом с DELETE. Race executable на disposable PostgreSQL/Kafka подтвердил registration/login/link, точный SQL snapshot/quota/journal и read_committed bytes, изоляцию владельцев, RPC failures, restart, SIGTERM и cleanup. Общая race/vet/build PASS; полный E2E впереди.
 - Независимый сбой Kafka-регрессии: [OPS-067](backlog/tickets/OPS-067.md) — changefeed metadata unavailable сразу после recreate в fixture; причина пока гипотеза, production guards не ослаблялись.
@@ -167,84 +168,24 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-[E2E-002](backlog/tickets/E2E-002.md): повторить сессионную проверку сборки четырёх процессов.
-E2E-005 завершил общий disposable runner четырёх владельцев: штатные миграции,
-parent-only DSN, новые пустые Kafka topics и cleanup квалифицированы.
-Использовать scripts/check_e2e_environment.py --package и
-internal/testutil/e2eenvironment/README.md; старые режимы runner сохранены.
-Собрать готовые executable/fake, mTLS, явный source/bootstrap и healthchecks
-без fixture API/Latest RPC. Полный стенд четырёх executable ещё не запускался.
-Raw market-data сохраняет readyz=503/feed=unconfirmed; ожидание профиля
-описано в cmd/market-data/README.md. Полный стенд не запускался.
-E2E-004 завершил fake Telegram; использовать internal/testutil/telegramfake/README.md,
-явные BaseURL/Token и тестовый Secret для webhook, Next/Reply/RateLimit/Forbid/Disconnect.
-Полное runtime wiring проверить до ready; недостающие adapters выделять отдельно.
-E2E-003 завершил fake Binance; использовать
-internal/testutil/binancefake/README.md и явные Next/Trade/Ping/Disconnect. OPS-014 завершил локальную явную cleanup-команду;
-использование — cmd/kafka-cleaner/README.md, инварианты — internal/cleaner/README.md,
-принятое решение — docs/decisions/OPS-014.md. Команда не запускается автоматически.
-Init требует полный обязательный inventory, exact source/partition и один
-private persistent local directory; register/retire/clean используют общий flock.
-До DeleteRecords весь state и floor синхронизируются; unknown response не
-откатывает floor. RPC errors/unknown generations/пустой набор запрещают очистку.
-Клиент получает только Kafka/mTLS credentials. SQL pins/retention не менялись.
-Два real/race прогона проверили CLI, concurrent membership, pre-delete failure,
-lost success/retry/noop и сохранность canonical pending job/необработанных bytes.
-Процессные tests подтвердили crash после reservation и OS lock; cleanup PASS.
-Multi-host/NFS, registry rollback и topic recreate во время cleanup исключены;
-полный E2E и physical reclamation/скорость ещё не измерены, capacity speed=0.
-Для будущих функциональных проверок переиспользовать OPS-058 fixture/runner
-scripts/check_cleaner_process.py --package <Go test package> и OPS-068 gates.
-OPS-011 завершил SIGTERM/SIGINT [notifications](../cmd/notifications/README.md):
-отмена HTTP/RPC/intake, final PendingWrite и bounded Kafka leave/client join,
-20 с на весь signal drain. Process/race проверил before/during/after HTTP,
-SQL final-write fault/exit 1, restart и canonical duplicate intake; cleanup PASS.
-OPS-054 fixture/runner остаётся средством воспроизведения. Неизвестный внешний
-исход сохраняет риск дубля; полный сценарий четырёх процессов ещё впереди.
-OPS-010 завершил SIGTERM/SIGINT минимального matcher: SQL Pending/исходы
-сохраняются, intake/оценки/RPC отменяются, replica/readers/Kafka присоединяются,
-grants отзываются до закрытия БД. Процессные PostgreSQL/Kafka проверки подтвердили
-exit 0 после частичных кандидатов, recovery/canonical IDs и SQL/broker Prefix;
-SQL cleanup fault даёт exit 1. Общий предел 20 с; полный E2E ещё не проверен.
-OPS-009 завершил остановку минимального market-data: SQL-outbox остаётся
-буфером принятой работы, повтор после неопределённого commit сохраняет bytes;
-SIGTERM во время publish/handshake и закрытие WS проверены на disposable стенде.
-Динамический каталог потоков не подключён; Catalog/Latest RPC завершены в OPS-069.
-OPS-008 завершил HTTP-компонент health/readiness notifications и Worker.Running;
-listener, Ping своей БД и инициализация подключены в OPS-055; SIGTERM завершён в OPS-011.
-OPS-007 завершил HTTP-компонент matcher и Status проекции/реплики; listener,
-инициализация и wiring matcherPool.Ping/replica.Status нужны при сборке runtime.
-OPS-006 завершил HTTP-компонент health/readiness market-data; listener и snapshot одного фиксированного raw потока подключены в OPS-048;
-полный план feed для E2E-002 ещё впереди.
-OPS-013 завершил общую квоту входа и регистрации и подключил оба endpoint в cmd/api.
-Предел тела публичного запроса завершён в OPS-012 и подключён к минимальному API.
-Минимальный [cmd/api](../cmd/api/README.md) подключает регистрацию/вход с общей квотой, HTTP-отмену/auth/session,
-health и два relay; SIGTERM/drain завершён в OPS-004. Процессный harness OPS-047
-проверяет остановку и восстановление на disposable PostgreSQL/Kafka. Полный API
-для E2E этим минимальным процессом не подменяется. Метрики OPS-003 пока компонент;
-их runtime wiring/SQL deadline остаются впереди. Нагрузка по DEC-010 отложена.
-Health API готов в OPS-001; далее функциональные OPS и E2E-003/004 → E2E-002 → E2E-001:
-четыре процесса и сценарий подписка → цена → уведомление. Перед E2E проверить
-фактический runtime wiring; отсутствующую сборку сервисов выделить отдельно.
-Исследование ядра, exact temp peak, квалификация квот и миллионный LOAD
-отложены до отдельного поручения. Никаких vendor запросов для запуска не нужно.
-OPS-044/043/034 и прочие незавершённые материалы сохранены; их критерии
-не объявляются выполненными, bounds=null.
+Функциональный этап DEC-010 завершён E2E-001. После него остановиться:
+нагрузочный этап, исследование ядра/квот и миллионный LOAD требуют отдельного
+поручения. Сохранённые planned-карточки не объявляются выполненными.
 
-NTF-013 подготовил `worker.New(Config)` / `Run(ctx)` над готовыми jobs.Store и handler.Handler. Discovery выбирает due jobs/checks, pending reports всех четырёх видов также у stopped/terminal jobs и не назначенные current-fence channel blocks. Настройки concurrency/interval/timeout/write timeout/recovery interval обязательны; handler отдельно требует Policy/ReportLimit/RecoveryInterval. Контракты — worker/README.md и handler/README.md. Worker хранит не записанный PendingWrite между Run и завершает Retry до новой выборки. После потери процесса сохраняется риск внешнего дубля; signals/HTTP shutdown завершены в OPS-011. SQL scan/нагрузка ещё не измерялись. SUB-027 обеспечивает CAS адресата; старый admission без CAS для отправки не использовать.
-
-NTF-016 сохраняет первый retry.Plan и durable бюджет ошибок без сброса при intake/wait/unknown. Исчерпание атомарно использует blocked-протокол, без crash-окна. Success имеет приоритет, новый Claim не разрешает HTTP. Неподходящие default-права UPDATE/DELETE на старые таблицы исходов выделены отдельно в [NTF-017](backlog/tickets/NTF-017.md); новые таблицы 008 явно закрыты. Reporter использует готовый SUB-020 с исправлением SUB-026; API берёт каноническую binding version из собственного permission по attempt ID.
-
-NTF-008 добавляет SaveBlocked/ParkBlocked и блок текущего fence даже после освобождения lease через uncertain. ScheduleRecovery учитывает также durable blocks текущего fence при историческом исходе без изменения job metadata; новая версия канала не снимает permanent_failure/attempts_exhausted.
-
-NTF-006 рассчитывает retry Plan и бюджет доказанных ошибок; NTF-007 использует ConditionInterval для новой проверки после Unknown. Перед возможным HTTP-повтором нужны оба лимитера, новый API-допуск по текущей цене и новый attempt ID; trigger_id сохраняется. Runtime worker/API и экспорт метрик подключаются отдельными задачами.
-
-`python3 scripts/backlog.py next` показывает следующий пункт из ORDER.md, предварительно предлагая завершить активную работу. Следующий тикет автоматически не начинается.
+Команда полного сценария и его границы —
+[internal/testutil/e2escenario/README.md](../internal/testutil/e2escenario/README.md).
+Стенд четырёх executable — [E2E-002](backlog/tickets/E2E-002.md), общий disposable
+runner — [E2E-005](backlog/tickets/E2E-005.md). Каждый запуск сценария требует
+fresh dataset; raw market-data остаётся unconfirmed/readyz=503 с предупреждением,
+SQL live не подставляется. Реальные Binance/Telegram и production webhook
+не проверялись. Для реальной доставки нужны пользовательские credentials
+и доступный webhook; это отдельная работа. Нагрузочные bounds=null,
+скорость cleaner для capacity по-прежнему 0.
 
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show E2E-001` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show E2E-001` — результат функционального этапа и передача.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.
