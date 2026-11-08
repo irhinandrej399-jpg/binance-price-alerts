@@ -12,7 +12,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 BASE = ROOT / 'docs' / 'backlog'
 ID = r'[A-Z][A-Z0-9]*-\d+'
-ALLOWED = {'split', 'decision', 'planned', 'ready', 'in-progress', 'review', 'done'}
+ALLOWED = {'split', 'cancelled', 'decision', 'planned', 'ready', 'in-progress', 'review', 'done'}
 
 
 @dataclass
@@ -73,6 +73,8 @@ def validate(tickets):
                 errors.append(f'{ticket.id}: нет зависимости {dep}')
             elif tickets[dep].status == 'split':
                 errors.append(f'{ticket.id}: зависимость {dep} — контейнер; нужны дочерние задачи')
+            elif tickets[dep].status == 'cancelled' and ticket.status not in {'cancelled', 'split'}:
+                errors.append(f'{ticket.id}: {dep} — отменённый тикет; уточни объём и зависимости')
             elif ticket.status in {'ready', 'in-progress', 'review', 'done'} and tickets[dep].status != 'done':
                 errors.append(f'{ticket.id}: статус {ticket.status}, но {dep} ещё {tickets[dep].status}')
     try:
@@ -116,11 +118,11 @@ def validate(tickets):
         return errors
     if len(order) != len(set(order)):
         errors.append('ORDER.md: повторяющиеся ID')
-    active = set(graph)
+    active = {tid for tid in graph if tickets[tid].status != 'cancelled'}
     for tid in sorted(active - set(order)):
         errors.append(f'ORDER.md: отсутствует активный тикет {tid}')
     for tid in sorted(set(order) - active):
-        errors.append(f'ORDER.md: неизвестный тикет или контейнер split {tid}')
+        errors.append(f'ORDER.md: неизвестный тикет, split или cancelled {tid}')
     positions = {tid: pos for pos, tid in enumerate(order)}
     for tid, deps in graph.items():
         for dep in deps:

@@ -123,6 +123,24 @@ class BacklogOrderTests(unittest.TestCase):
         self.assertIn('ALPHA-001 [in-progress]', self.next('--include-deferred'))
         self.assertEqual(self.errors(), [])
 
+    def test_cancelled_ticket_is_kept_in_index_but_not_queue(self):
+        self.fixture(['ZED-001', 'ALPHA-001'], statuses={'BETA-001': 'cancelled'})
+        self.assertEqual(self.errors(), [])
+        self.assertNotIn('BETA-001', self.next('--include-deferred', '--limit', '5'))
+
+    def test_cancelled_dependency_does_not_make_active_ticket_ready(self):
+        self.fixture(['BETA-001', 'ALPHA-001'], statuses={'ZED-001': 'cancelled'})
+        self.assertTrue(any('отменён' in error for error in self.errors()))
+
+    def test_cancelled_ticket_cannot_remain_in_execution_queue(self):
+        self.fixture(statuses={'BETA-001': 'cancelled'})
+        self.assertTrue(any('ORDER.md' in error for error in self.errors()))
+
+    def test_cancelled_chain_keeps_historical_dependencies(self):
+        self.fixture(['ALPHA-001'], statuses={'ZED-001': 'cancelled', 'BETA-001': 'cancelled'})
+        self.assertEqual(self.errors(), [])
+        self.assertIn('ALPHA-001 [planned]', self.next())
+
 
 if __name__ == '__main__':
     unittest.main()

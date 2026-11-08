@@ -1,5 +1,13 @@
 # Binance Price Alerts
 
+Цель — production ready пет-проект без тяжёлых нагрузочных тестов
+([DEC-011](docs/decisions/DEC-011.md)). Функциональный сценарий четырёх сервисов
+на fake проверен. Реальный deployment ещё требует постоянного запуска,
+HTTPS/секретов, backup/restore и малого smoke; план — в
+[очереди](docs/backlog/ORDER.md). Следующий тикет: NTF-017.
+Исследования kernel/inode, миллионный fixture и p99 сняты с плана.
+
+
 [Публичный репозиторий GitHub](https://github.com/irhinandrej399-jpg/binance-price-alerts)
 
 Учебный backend на Go: пользователь создаёт до 15 активных ценовых подписок на Binance Spot и получает одноразовые уведомления в Telegram. Разработка — через TDD; система проектируется как четыре микросервиса.

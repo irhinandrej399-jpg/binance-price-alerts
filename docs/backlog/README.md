@@ -1,34 +1,35 @@
 # Бэклог Binance Price Alerts
 
-Создан 25 октября 2026. После уточнения ADR и зависимостей: активных карточек — **160**, из них **9 карточек решений** и **151 задача реализации/проверки**; отдельно **17 контейнеров split**, не выдаваемых на одну сессию. Приложение ещё не реализовано.
+Обновлён 8 ноября 2026 по [DEC-011](../decisions/DEC-011.md).
+Цель — рабочий production ready пет-проект без тяжёлой нагрузочной квалификации.
+Функциональный E2E на fake готов; реальный deployment ещё не квалифицирован.
 
-Карточки хранятся здесь как Markdown в локальном Git-репозитории. После завершения тикета агент создаёт commit по [правилам Git](../GIT.md). Это исходный план первой очереди; готовность карточки к исполнению проверяется отдельно.
-
-[Согласованные требования](../requirements.md) · [Smart zone и TDD](workflow.md) · [Ограничения интеграций](../integration-facts.md)
-
-[Модели и уровни размышления](MODELS.md): рекомендация и обоснование записаны в каждой активной карточке; next также показывает их перед выбором сессии. У контейнеров split рекомендации находятся у дочерних задач.
-
-[Проверка размера и разделение крупных карточек](session-review.md). Все активные implementation-карточки остаются `planned`: одно сессионное выполнение подтверждается перед `ready` по реальному коду.
-
-> Текущий приоритет — локальный рабочий сценарий по [DEC-010](../decisions/DEC-010.md). Незавершённая kernel/capacity квалификация отложена и запуск не блокирует.
+[Требования](../requirements.md) · [Очередь](ORDER.md) · [Правила проверки](workflow.md) ·
+[Модели](MODELS.md) · [Интеграции](../integration-facts.md)
 
 ## Порядок работ
 
-**Единая очередь от первого тикета к последнему: [ORDER.md](ORDER.md).** Этот README группирует карточки по темам. При выборе следующей сессии идти по ORDER.md, пропуская done и предварительно завершая уже начатую работу. `python3 scripts/backlog.py next` читает именно эту очередь.
+В очереди 12 незавершённых задач: пять конкретных дефектов и семь практических
+задач выпуска. Следующий — NTF-017. Затем корректность recovery/snapshot и
+обычных тестов, подключение каталога к runtime, постоянный запуск,
+HTTPS/секреты, backup/restore, базовое наблюдение, малый restart smoke и
+реальный сценарий Binance → свой Telegram. Подробные критерии — в карточках.
 
-1. Решения DEC-001–009 приняты. Транспорт закреплён в [DEC-009](../decisions/DEC-009.md): REST/JSON снаружи, gRPC внутри, Kafka для событий. Паспорт стенда закреплён в [DEC-008](../decisions/DEC-008.md); производительность пока не измерена.
-2. Подготовить каркас и локальный стенд; затем домен и контракты с учётом зависимостей.
-3. Реализовать рыночную котировку, аккаунт и Telegram-привязку; затем создание подписки. SUB-003 зависит от MKT-001/006 — не начинать его раньше только из-за порядка разделов.
-4. Подключить durable изменения подписок, проекцию matcher, атомарное срабатывание и notification worker. Не объединять весь сквозной путь в один тикет.
-5. Подготовить E2E-003/004 и E2E-002, выполнить E2E-001; подготовить LOAD-009, затем измерения и отказные сценарии. OPS-002/003 должны появиться до соответствующих нагрузочных прогонов.
+22 бывшие planned задачи сняты с плана как `cancelled`: kernel/inode/temp peak,
+квалификация дисковых ledger, measurement collector race и все оставшиеся LOAD.
+Они остаются в таблицах для истории, отсутствуют в ORDER и не выдаются `next`.
+Отмена не означает успешную проверку. Готовые артефакты и код сохраняются.
 
-Зависимости в карточках задают порядок точнее этого списка. Отдельные доменные задачи можно реализовать до завершения инфраструктуры после закрытия их DEC. Проект не требует независимого микросервиса для каждого раздела бэклога.
+Карточки — источник статуса; индекс повторяет статус и зависимости.
+`python3 scripts/backlog.py next` выбирает одну задачу из ORDER;
+`check` проверяет весь бэклог. Каждая реализация выполняется отдельной сессией.
 
 ## Архитектурные ограничения плана
 
 Четыре процесса и владение данными утверждены в [DEC-003](../decisions/DEC-003.md): API владеет аккаунтами, подписками, лимитом, срабатываниями и outbox; market-data — котировками; matcher — проекцией; notifications — доставкой. Matcher вызывает операцию API, прямой доступ к чужим таблицам запрещён. Последняя цена, условная доставка и гонки определены DEC-004; очередь не освобождает слот, результаты доставки сохраняет API. Хранилище определено DEC-006: PostgreSQL с четырьмя изолированными БД; общий журнал API — SUB-021, атомарный приём рынка — MKT-017. Брокер выбран DEC-007: Kafka/KRaft; SQL-replay — SUB-022, безопасная очистка Kafka — OPS-014. Обсуждение снимка, версии, cursor и проекции нельзя пропустить ради скорости написания кода.
 
-Миллион подписок — набор данных, 100000 пользователей — число аккаунтов, 10000 событий за 1 с — одиночный burst по DEC-008. Ни одно из этих чисел не означает 100000 одновременных HTTP-соединений или 10000 фактических отправок Telegram/с.
+Миллионный fixture, p99 и burst DEC-008 сняты с требований к выпуску по DEC-011.
+Ранее выполненные измерения сохраняются как история, без обещания ёмкости.
 
 ## Исполняемые карточки и открытые решения
 
@@ -46,6 +47,7 @@
 | [DEC-008](tickets/DEC-008.md) | Зафиксировать воспроизводимый профиль нагрузки | — | done |
 | [DEC-009](tickets/DEC-009.md) | Закрепить транспорт межсервисных вызовов | DEC-003, DEC-004, DEC-007 | done |
 | [DEC-010](tickets/DEC-010.md) | Поставить рабочий локальный запуск перед квалификацией нагрузки | DEC-008, DEC-009 | done |
+| [DEC-011](tickets/DEC-011.md) | Упростить выпуск пет-проекта до практической production готовности | DEC-010 | done |
 
 ### Каркас и локальный стенд
 
@@ -226,9 +228,6 @@
 | [OPS-068](tickets/OPS-068.md) | Управлять отказами OffsetCommit и DeleteRecords в Kafka fault proxy | SET-009 | done |
 | [OPS-058](tickets/OPS-058.md) | Подготовить disposable окружение проверки Kafka cleaner | OPS-056, OPS-057, OPS-052, OPS-054, SET-009, OPS-068 | done |
 | [OPS-014](tickets/OPS-014.md) | Удалить безопасный префикс журнала Kafka | SET-005, SUB-022, MAT-011, NTF-001, DEC-007, OPS-056, OPS-057, OPS-058 | done |
-| [OPS-015](tickets/OPS-015.md) | Остановить новый приём API при исчерпании бюджета | SUB-003, SUB-005, SUB-020, SUB-007, SUB-009, DEC-008, OPS-018 | planned |
-| [OPS-016](tickets/OPS-016.md) | Остановить приём рынка при исчерпании бюджета | MKT-017, MKT-014, DEC-008, OPS-018 | planned |
-| [OPS-018](tickets/OPS-018.md) | Квалифицировать таблицу стоимости и квоты durable приёма | OPS-022, DEC-008, OPS-029, OPS-032 | planned |
 | [OPS-019](tickets/OPS-019.md) | Собрать физические метрики PostgreSQL на disposable стенде | SET-006, DEC-008 | done |
 | [OPS-020](tickets/OPS-020.md) | Собрать физические метрики Kafka на disposable стенде | SET-009, DEC-008 | done |
 | [OPS-022](tickets/OPS-022.md) | Измерить manifest источника market-data и свести покрытие затрат | OPS-019, OPS-020, OPS-026, MKT-014 | done |
@@ -236,50 +235,26 @@
 | [OPS-024](tickets/OPS-024.md) | Измерить manifest операций владельца API | OPS-023, SUB-009, SUB-020, SUB-027 | done |
 | [OPS-025](tickets/OPS-025.md) | Измерить продолжение API в matcher | OPS-024, MAT-011 | done |
 | [OPS-026](tickets/OPS-026.md) | Измерить продолжение API в notifications и свести цепочку | OPS-025, NTF-013, NTF-014, NTF-015, OPS-028 | done |
-| [OPS-027](tickets/OPS-027.md) | Устранить гонку описи временных Kafka-файлов | OPS-020, OPS-023 | planned |
 | [OPS-028](tickets/OPS-028.md) | Подготовить API fixture продолжения notifications с исходными ID | OPS-024, OPS-025, NTF-014, NTF-012 | done |
 | [OPS-029](tickets/OPS-029.md) | Измерить количество и время fsync процесса Kafka | OPS-020, OPS-023 | done |
-| [OPS-032](tickets/OPS-032.md) | Подключить и проверить temp peak observer в фазовом runner | OPS-036, OPS-023 | planned |
 | [OPS-033](tickets/OPS-033.md) | Сохранять и проверять передачу FD через ancillary data | OPS-019 | done |
-| [OPS-034](tickets/OPS-034.md) | Замкнуть модель ссылок и идентичности work inode | OPS-033, OPS-040, OPS-041, OPS-042, OPS-043 | planned |
-| [OPS-035](tickets/OPS-035.md) | Восстановить доказанные границы apparent peak из raw | OPS-034 | planned |
-| [OPS-036](tickets/OPS-036.md) | Проверить самостоятельный observer на PostgreSQL | OPS-035 | planned |
 | [OPS-038](tickets/OPS-038.md) | Сохранять независимый census и полные inode inventories | OPS-033 | done |
 | [OPS-039](tickets/OPS-039.md) | Сохранять lifecycle evidence при shared state и nonleader exec | OPS-038 | done |
 | [OPS-040](tickets/OPS-040.md) | Проверить reference witnesses и повторить PostgreSQL capture | OPS-038, OPS-039 | done |
 | [OPS-041](tickets/OPS-041.md) | Сохранить shared-fileset PG spill в новом raw-контракте | OPS-040 | done |
 | [OPS-042](tickets/OPS-042.md) | Определить доказуемый lifetime envelope и capture предпосылки | OPS-041 | done |
-| [OPS-043](tickets/OPS-043.md) | Сохранить incarnation binding и terminal retirement witness | OPS-042, OPS-044 | planned |
-| [OPS-044](tickets/OPS-044.md) | Подготовить проверенный kernel tracing toolchain | OPS-042 | planned |
 | [OPS-045](tickets/OPS-045.md) | Подготовить наблюдения границ задержки цена → durable workflow | MKT-014, SUB-013, SUB-014, DEC-008, DEC-010 | done |
 
-[OPS-031](tickets/OPS-031.md) разделён на OPS-033–036: ancillary raw →
-identity/references → classifier/bounds → самостоятельный PG gate.
-Перед OPS-034 добавлена предпосылка [OPS-037](tickets/OPS-037.md):
-полные raw inventories/reference controls, отсутствующие в ancillary capture.
-OPS-037 split после реального preflight: [OPS-038](tickets/OPS-038.md)
-(inventory/census) → [OPS-039](tickets/OPS-039.md) (lifecycle/exec) →
-[OPS-040](tickets/OPS-040.md) (reference verifier/PG). OPS-041 сохраняет shared-fileset Parallel Hash в новом raw-контракте;
-его [вход](../measurements/OPS-041/README.md) готов для replay. OPS-042 выделена
-перед OPS-034: proof audit отрицательный, первым недостающим capture механизмом
-выделен OPS-043 (incarnation binding/terminal retirement). Его preflight
-не подтвердил toolchain/source-build readiness; перед ним поставлена OPS-044
-(проверенный kernel tracing профиль), capture OPS-043 ещё не выполнен.
-Продолжение OPS-044 проверило полную branch inventory и локальные
-acknowledgements: [source-b](../measurements/OPS-044/source-b/report.json);
-vendor source/build binding остаётся открытым. По DEC-010 тикет отложен в planned и локальный запуск не блокирует.
-[Старые raw](../measurements/OPS-031/README.md) остаются unknown, peak=null;
-OPS-032/018 ждут готового observer.
-
-### Сборка интерфейсов процессов для E2E
-
-| ID | Один результат | Зависимости | Статус |
-| --- | --- | --- | --- |
 | [OPS-069](tickets/OPS-069.md) | Подключить Catalog и Latest RPC к процессу market-data | OPS-009, MKT-006, MKT-018, SET-008 | done |
 | [OPS-070](tickets/OPS-070.md) | Подключить RPC matcher к процессу API | OPS-004, SUB-016, SUB-022, SUB-014, SET-008 | done |
 | [OPS-071](tickets/OPS-071.md) | Подключить RPC notifications к процессу API | OPS-070, SUB-018, SUB-020, SUB-027, MKT-006 | done |
 | [OPS-072](tickets/OPS-072.md) | Подключить Telegram-привязку к процессу API | OPS-004, OPS-012, IAM-006, IAM-007, IAM-008, E2E-004 | done |
 | [OPS-073](tickets/OPS-073.md) | Подключить создание и список подписок к процессу API | OPS-071, OPS-072, SUB-003, SUB-004, SUB-011, MKT-018 | done |
+
+Исследовательские OPS-017/021/030/031/037 и готовые измерения выше — история.
+Незавершённые зависимости kernel/inode/temp peak и физической квалификации
+сняты с плана по DEC-011. Их прежние критерии не объявляются выполненными;
+[raw OPS-031](../measurements/OPS-031/README.md) сохраняет unknown/peak=null.
 
 ### Сквозная проверка
 
@@ -291,22 +266,48 @@ OPS-032/018 ждут готового observer.
 | [E2E-004](tickets/E2E-004.md) | Поднять управляемый fake Telegram для стенда | IAM-007, NTF-003 | done |
 | [E2E-005](tickets/E2E-005.md) | Подготовить общее disposable окружение четырёх сервисов | OPS-047, OPS-049, OPS-052, OPS-054 | done |
 
-### Нагрузка
+## Практический выпуск — DEC-011
 
 | ID | Один результат | Зависимости | Статус |
 | --- | --- | --- | --- |
-| [LOAD-001](tickets/LOAD-001.md) | Сгенерировать воспроизводимые данные нагрузки | DEC-008, SUB-001, IAM-001 | planned |
-| [LOAD-002](tickets/LOAD-002.md) | Создать источник цен для нагрузочного стенда | DEC-008, CON-003, MKT-013, MKT-014 | planned |
-| [LOAD-003](tickets/LOAD-003.md) | Измерить p99 на миллионе подписок | LOAD-001, LOAD-002, OPS-002, E2E-001, LOAD-009 | planned |
-| [LOAD-004](tickets/LOAD-004.md) | Проверить burst 10000 срабатываний/с | LOAD-003, OPS-003, NTF-012, NTF-013 | planned |
-| [LOAD-006](tickets/LOAD-006.md) | Проверить восстановление брокера под нагрузкой | LOAD-004, OPS-004, OPS-009 | planned |
-| [LOAD-007](tickets/LOAD-007.md) | Проверить восстановление matcher под нагрузкой | LOAD-004, MAT-010, MAT-011, OPS-010 | planned |
-| [LOAD-008](tickets/LOAD-008.md) | Проверить восстановление notifications под нагрузкой | LOAD-004, OPS-011 | planned |
-| [LOAD-009](tickets/LOAD-009.md) | Собрать команду воспроизводимого нагрузочного прогона | E2E-002, LOAD-001, LOAD-002, OPS-002, OPS-003 | planned |
-| [LOAD-010](tickets/LOAD-010.md) | Измерить обычный профиль на двух matcher | LOAD-003, LOAD-009, MAT-011 | planned |
-| [LOAD-011](tickets/LOAD-011.md) | Измерить обычный профиль на четырёх matcher | LOAD-003, LOAD-009, MAT-011 | planned |
-| [LOAD-012](tickets/LOAD-012.md) | Измерить горячую пару на четырёх matcher | LOAD-011, DEC-008 | planned |
-| [LOAD-013](tickets/LOAD-013.md) | Сравнить готовые отчёты масштабирования | LOAD-003, LOAD-010, LOAD-011, LOAD-012 | planned |
+| [MKT-019](tickets/MKT-019.md) | Подключить каталог торговых пар к runtime market-data | DEC-011, MKT-016, MKT-017, OPS-069 | planned |
+| [OPS-074](tickets/OPS-074.md) | Собрать постоянный запуск четырёх сервисов | DEC-011, MKT-019, E2E-002 | planned |
+| [OPS-075](tickets/OPS-075.md) | Защитить публичный вход и секреты развёртывания | DEC-011, OPS-074, OPS-013, OPS-072 | planned |
+| [OPS-076](tickets/OPS-076.md) | Подготовить резервную копию и восстановление стенда | DEC-011, OPS-074, OPS-014 | planned |
+| [OPS-077](tickets/OPS-077.md) | Оформить наблюдение и обслуживание постоянного стенда | DEC-011, OPS-074, OPS-014, OPS-002, OPS-003 | planned |
+| [E2E-007](tickets/E2E-007.md) | Проверить восстановление малого рабочего стенда | DEC-011, OPS-074, NTF-018, SUB-024, OPS-067 | planned |
+| [E2E-006](tickets/E2E-006.md) | Подтвердить реальный запуск и доставку перед выпуском | DEC-011, OPS-075, OPS-076, OPS-077, E2E-007, NTF-017, NTF-019 | planned |
+
+## Снято с плана — исторический архив
+
+Эти карточки не входят в маршрут выпуска. Причины — DEC-011; старые
+передачи внутри карточек не разрешают их возобновление. Сохранены для
+истории, а не как список следующих задач.
+
+| ID | Прежний результат | Прежние зависимости | Статус |
+| --- | --- | --- | --- |
+| [OPS-015](tickets/OPS-015.md) | Остановить новый приём API при исчерпании бюджета | SUB-003, SUB-005, SUB-020, SUB-007, SUB-009, DEC-008, OPS-018 | cancelled |
+| [OPS-016](tickets/OPS-016.md) | Остановить приём рынка при исчерпании бюджета | MKT-017, MKT-014, DEC-008, OPS-018 | cancelled |
+| [OPS-018](tickets/OPS-018.md) | Квалифицировать таблицу стоимости и квоты durable приёма | OPS-022, DEC-008, OPS-029, OPS-032 | cancelled |
+| [OPS-027](tickets/OPS-027.md) | Устранить гонку описи временных Kafka-файлов | OPS-020, OPS-023 | cancelled |
+| [OPS-032](tickets/OPS-032.md) | Подключить и проверить temp peak observer в фазовом runner | OPS-036, OPS-023 | cancelled |
+| [OPS-034](tickets/OPS-034.md) | Замкнуть модель ссылок и идентичности work inode | OPS-033, OPS-040, OPS-041, OPS-042, OPS-043 | cancelled |
+| [OPS-035](tickets/OPS-035.md) | Восстановить доказанные границы apparent peak из raw | OPS-034 | cancelled |
+| [OPS-036](tickets/OPS-036.md) | Проверить самостоятельный observer на PostgreSQL | OPS-035 | cancelled |
+| [OPS-043](tickets/OPS-043.md) | Сохранить incarnation binding и terminal retirement witness | OPS-042, OPS-044 | cancelled |
+| [OPS-044](tickets/OPS-044.md) | Подготовить проверенный kernel tracing toolchain | OPS-042 | cancelled |
+| [LOAD-001](tickets/LOAD-001.md) | Сгенерировать воспроизводимые данные нагрузки | DEC-008, SUB-001, IAM-001 | cancelled |
+| [LOAD-002](tickets/LOAD-002.md) | Создать источник цен для нагрузочного стенда | DEC-008, CON-003, MKT-013, MKT-014 | cancelled |
+| [LOAD-003](tickets/LOAD-003.md) | Измерить p99 на миллионе подписок | LOAD-001, LOAD-002, OPS-002, E2E-001, LOAD-009 | cancelled |
+| [LOAD-004](tickets/LOAD-004.md) | Проверить burst 10000 срабатываний/с | LOAD-003, OPS-003, NTF-012, NTF-013 | cancelled |
+| [LOAD-006](tickets/LOAD-006.md) | Проверить восстановление брокера под нагрузкой | LOAD-004, OPS-004, OPS-009 | cancelled |
+| [LOAD-007](tickets/LOAD-007.md) | Проверить восстановление matcher под нагрузкой | LOAD-004, MAT-010, MAT-011, OPS-010 | cancelled |
+| [LOAD-008](tickets/LOAD-008.md) | Проверить восстановление notifications под нагрузкой | LOAD-004, OPS-011 | cancelled |
+| [LOAD-009](tickets/LOAD-009.md) | Собрать команду воспроизводимого нагрузочного прогона | E2E-002, LOAD-001, LOAD-002, OPS-002, OPS-003 | cancelled |
+| [LOAD-010](tickets/LOAD-010.md) | Измерить обычный профиль на двух matcher | LOAD-003, LOAD-009, MAT-011 | cancelled |
+| [LOAD-011](tickets/LOAD-011.md) | Измерить обычный профиль на четырёх matcher | LOAD-003, LOAD-009, MAT-011 | cancelled |
+| [LOAD-012](tickets/LOAD-012.md) | Измерить горячую пару на четырёх matcher | LOAD-011, DEC-008 | cancelled |
+| [LOAD-013](tickets/LOAD-013.md) | Сравнить готовые отчёты масштабирования | LOAD-003, LOAD-010, LOAD-011, LOAD-012 | cancelled |
 
 ## Контейнеры: не выполнять как одну задачу
 
@@ -330,8 +331,3 @@ OPS-032/018 ждут готового observer.
 | [OPS-031](tickets/OPS-031.md) | [OPS-033](tickets/OPS-033.md), [OPS-034](tickets/OPS-034.md), [OPS-035](tickets/OPS-035.md), [OPS-036](tickets/OPS-036.md) | split |
 | [OPS-037](tickets/OPS-037.md) | [OPS-038](tickets/OPS-038.md), [OPS-039](tickets/OPS-039.md), [OPS-040](tickets/OPS-040.md) | split |
 | [OPS-059](tickets/OPS-059.md) | [OPS-060](tickets/OPS-060.md), [OPS-061](tickets/OPS-061.md), [OPS-062](tickets/OPS-062.md) | split |
-
-Отложенный этап ORDER.md исключён из обычного `next`, включая начатые
-в нём задачи. `next --include-deferred` — только просмотр; выполнение требует
-отдельного поручения. После завершения текущего этапа новых обязательных
-тикетов нет. Это правило поддерживает выбранную цель локального пет-проекта.

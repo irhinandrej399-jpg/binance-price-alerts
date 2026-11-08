@@ -4,7 +4,9 @@
 
 ## Активная работа
 
-- Активная реализация: нет. E2E-001 завершён; функциональный этап DEC-010 подтверждён. Нагрузочный этап требует отдельного поручения.
+- Активная реализация: нет. По [DEC-011](decisions/DEC-011.md) бэклог пересмотрен для production ready пет-проекта без тяжёлых тестов. 22 задачи cancelled; осталось 12 planned. Следующий — NTF-017.
+- Последний результат планирования: DEC-011. Пять конкретных дефектов сохранены, добавлены семь практических задач выпуска; статусы cancelled проверяются tooling. Реального deployment ещё нет.
+- Записи о прошлых сессиях ниже — история проверок; актуальный объём и следующий шаг определены DEC-011 и ORDER.
 - Последний завершённый тикет: [E2E-001](backlog/tickets/E2E-001.md), [полный пользовательский сценарий](../internal/testutil/e2escenario/README.md). Два свежих PostgreSQL/Kafka/race прогона четырёх executable: account/login/link/create → цена → Telegram → durable API receipt и освобождение слота; 101→99 сохраняет слот без отправки, 102 доставляет один раз в том же workflow; отмена до допуска запрещает отправку. Ровно две доставки, точные outcomes, четыре exit 0 и cleanup PASS. Общая race-регрессия/vet/build PASS. Публичные интеграции и нагрузка не проверялись; raw feed unconfirmed/readyz=503 сохраняется.
 - Предыдущий завершённый тикет: [E2E-002](backlog/tickets/E2E-002.md), [четыре executable и fake](../internal/testutil/e2estack/README.md). Одна команда через runner E2E-005, отдельные mTLS identities, четыре owner-only DSN и явные Kafka bootstraps. Два свежих PostgreSQL/Kafka/race dataset, в каждом два старта/остановки: Catalog/Latest/WS и готовность подтверждены; все child exit 0, cleanup PASS. Raw market-data честно unconfirmed/readyz=503. Общая race/vet/build и Python проверки PASS; полный пользовательский сценарий остаётся E2E-001.
 - Предыдущий завершённый тикет: [E2E-005](backlog/tickets/E2E-005.md), [общий disposable runner](../internal/testutil/e2eenvironment/README.md). Четыре parent-only DSN и штатные миграции; два реальных PostgreSQL/Kafka/race прогона подтвердили роли/CONNECT isolation, child allowlists и новые пустые topics 16/1/16 с ClusterID/TopicID. Аварийный Go owner exit подтвердил удаление child group, временных credentials и обоих стендов. Общая race/vet/build и Python проверки PASS. Четыре продуктовых executable запущены в E2E-002; полный пользовательский сценарий ещё впереди.
@@ -60,7 +62,7 @@
 - [OPS-038](backlog/tickets/OPS-038.md). [Inventory/census](../infra/postgres/measure/inventory/README.md): все видимые FD/maps/path witnesses, независимый process/thread census, rename/growth/unlink/mapping-only/external controls; run-c 448 checkpoints и 17 rehashed tamper controls прошли, cleanup пуст. [Отчёт](measurements/OPS-038/README.md). Consistency unknown/complete=false, ошибки procfs сохранены; PG/aliases/shared-state полнота не доказана, qualification blocked.
 - [OPS-033](backlog/tickets/OPS-033.md). [Ancillary raw capture/replay](../infra/postgres/measure/ancillary/README.md), реальные SCM_RIGHTS/partial mmsg/truncation/restart/межпроцессный unlink-open FD; три чистых ordinary/parallel PG capture, 10 rehashed tamper controls, cleanup проверены. [Отчёт](measurements/OPS-033/README.md). Полнота observer не утверждается; socket queues — OPS-034.
 - [OPS-029](backlog/tickets/OPS-029.md). [Observer Kafka](../infra/kafka/measure/FSYNC.md): fsync/fdatasync по потокам JVM, raw/границы/суммы времени; два чистых empty/Publish/repeat, чужой процесс, недоступность/обрыв, совместный runner и cleanup проверены. [Отчёт](measurements/OPS-029/README.md). Это syscall elapsed с tracing overhead, не device flush; остальные предпосылки OPS-018 не закрыты.
-- [OPS-022](backlog/tickets/OPS-022.md). [Market-data manifest](../infra/measure/MARKETDATA.md): по 24 окна в двух чистых PostgreSQL/Kafka опытах, Accept 531/4095/4096 B и отказ 4097 B, generation/gap/repeat, lost EndTxn/reclaim/дубль и настоящий relay с max batch=1 проверены. [Отчёт, 25 классов/11 компонентов и 10 исходных отчётов](measurements/OPS-022/README.md). Qualified=false: unsupported, finite bounds, непокрытое продолжение цены/ledger/full fixture блокируют OPS-018; OPS-015/016 planned.
+- [OPS-022](backlog/tickets/OPS-022.md). [Market-data manifest](../infra/measure/MARKETDATA.md): по 24 окна в двух чистых PostgreSQL/Kafka опытах, Accept 531/4095/4096 B и отказ 4097 B, generation/gap/repeat, lost EndTxn/reclaim/дубль и настоящий relay с max batch=1 проверены. [Отчёт, 25 классов/11 компонентов и 10 исходных отчётов](measurements/OPS-022/README.md). Qualified=false: unsupported, finite bounds, непокрытое продолжение цены/ledger/full fixture блокируют OPS-018; OPS-015/016 теперь cancelled по DEC-011.
 - [OPS-026](backlog/tickets/OPS-026.md). [Manifest notifications](../infra/measure/NOTIFICATIONS.md): 38 reports и 17 handler окон, по два чистых PostgreSQL/Kafka опыта каждой границы. Исходные ID/bytes, четыре outcome, потеря ответа/replay/ack, новые permits, PendingWrite без второго HTTP, recovery/worker sweep и cleanup проверены. [Отчёт и сводка покрытия цепочки](measurements/OPS-026/README.md). Qualified=false: bounds/непокрытые варианты/unsupported блокируют OPS-018; источник market-data измерен отдельно OPS-022.
 - [OPS-028](backlog/tickets/OPS-028.md). [API-owned fixture](../infra/measure/NOTIFICATIONS_FIXTURE.md): source OPS-024/run-a2 → OPS-025/run-a3, четыре исходных события/пять records, reports и handler в отдельных чистых datasets. По два PostgreSQL/mTLS/race прогона каждой границы, исходные attempts/reply loss, новые permits, rollback/identity/cleanup проверены. [Отчёт](measurements/OPS-028/README.md). Его setup подключён к измерениям OPS-026.
 - [OPS-025](backlog/tickets/OPS-025.md). [Matcher manifest](../infra/measure/MATCHER.md): 26 окон, два чистых итоговых прогона, исходные ID/bytes OPS-024/run-a2, durable C/offset/images/pricework/fencing и cleanup проверены. [Отчёт](measurements/OPS-025/README.md). Qualified=false; непокрытые классы/bounds/unsupported блокируют OPS-018. Гонка описи Kafka отдельно OPS-027.
@@ -164,30 +166,33 @@
 
 DEC-001–009 приняты. DEC-004 пересматривает прежнюю гарантию уведомления по снимку создания и terminal-срабатывание до доставки. SUB-019/020 и relay SUB-009 завершены; MAT-012 завершена, durable reporter NTF-014 завершён.
 
-Выбраны PostgreSQL и Kafka/KRaft, полный профиль стенда закреплён DEC-008. SQL-replay готов в SUB-022, cleaner Kafka — OPS-014, ограничители — OPS-015/016. Измерительный harness — collectors OPS-019/020, фазовый runner OPS-023, API manifest OPS-024, matcher manifest OPS-025, notifications/сводка продолжений OPS-026; market-data/единая coverage — OPS-022 (контейнеры OPS-017/021), квалификация таблицы стоимости/квот — OPS-018. По DEC-010 эта цепочка отложена и локальный запуск не блокирует. До её готовности OPS-015/016 остаются planned; скорость cleaner пока считается нулевой. Политики Telegram/freshness реализованы в adapters; полный runtime и нагрузочный профиль ещё не проверены.
+Используются PostgreSQL и Kafka/KRaft, SQL-replay SUB-022 и safe cleaner OPS-014.
+По DEC-011 строгий capacity ledger OPS-015/016, квалификация OPS-018 и
+kernel/inode/temp peak цепочка сняты с плана, статус cancelled. Незавершённые
+LOAD и measurement collector defect OPS-027 также отменены; готовые raw
+и код сохраняются без повторных исследований. Требования DEC-008 к миллиону,
+p99 и дисковым резервам не являются условиями выпуска.
 
 ## Следующий рекомендуемый шаг
 
-8 ноября исправлен выбор очереди: `backlog.py next` учитывает раздел
-«Отложенный этап» в ORDER.md. Текущий функциональный этап завершён,
-следующего обязательного тикета нет. Просмотр отложенного списка —
-`next --include-deferred`; запуск только по отдельному поручению.
-OPS-044 и исследования ядра не нужны для текущей цели пет-проекта.
-Проверка: regression Red → Green, Python suite и backlog check.
+`python3 scripts/backlog.py next` → [NTF-017](backlog/tickets/NTF-017.md), planned:
+проверить и исправить права notifications runtime на append-only таблицы.
+Затем NTF-018, SUB-024, NTF-019, OPS-067 — конкретные дефекты; MKT-019 —
+согласовать каталог поддерживаемых пар с фактическим приёмом цен runtime.
 
-Функциональный этап DEC-010 завершён E2E-001. После него остановиться:
-нагрузочный этап, исследование ядра/квот и миллионный LOAD требуют отдельного
-поручения. Сохранённые planned-карточки не объявляются выполненными.
+Практический выпуск: OPS-074 (постоянный запуск), OPS-075 (HTTPS/секреты),
+OPS-076 (backup/restore), OPS-077 (наблюдение/диск/maintenance), E2E-007
+(малый restart smoke), E2E-006 (реальный Binance → свой Telegram).
+Каждая задача отдельно, без нового универсального test harness и нагрузки.
+Хост/домен/credentials понадобятся при соответствующих задачах; эту ревизию
+не считать разрешением внешнего deployment или отправки сообщений.
 
-Команда полного сценария и его границы —
-[internal/testutil/e2escenario/README.md](../internal/testutil/e2escenario/README.md).
-Стенд четырёх executable — [E2E-002](backlog/tickets/E2E-002.md), общий disposable
-runner — [E2E-005](backlog/tickets/E2E-005.md). Каждый запуск сценария требует
-fresh dataset; raw market-data остаётся unconfirmed/readyz=503 с предупреждением,
-SQL live не подставляется. Реальные Binance/Telegram и production webhook
-не проверялись. Для реальной доставки нужны пользовательские credentials
-и доступный webhook; это отдельная работа. Нагрузочные bounds=null,
-скорость cleaner для capacity по-прежнему 0.
+E2E-001 подтвердил только функциональный сценарий на fake. Реальные интеграции,
+публичный HTTPS и проверенный restore ещё не выполнены. Текущий market-data
+принимает одну фиксированную пару, raw feed unconfirmed/readyz=503 сохраняется
+с предупреждением. SQL live не подставляется ради успешной проверки.
+Production ready не заявлять до фактического E2E-006. Ограничения Telegram
+после неоднозначного timeout и отсутствие backfill внешних сделок сохраняются.
 
 ## Проверка состояния
 
