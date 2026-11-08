@@ -124,3 +124,10 @@ Claim не возобновляет автоматическую отправк�
 старого writer (OPS-064). Версия 010 зарезервирована тестовым pre-migration seed;
 в production после 009 сразу применяется 011. Legacy jobs/checkpoints не получают
 provenance и не переписываются. [Операторский контракт и права](../internal/notifications/intake/README.md#source-bound-sql-intake--ops-064).
+
+`notifications/012_evidence_privileges.sql` — исправление унаследованных default
+прав notifications runtime (NTF-017): append-only attempts/outcomes/block parks
+без UPDATE/DELETE/TRUNCATE, reports без DELETE/TRUNCATE с сохранением UPDATE
+для ack. SELECT/INSERT сохраняются; jobs/claims/лимитеры не меняются.
+Применять и на существующих БД; миграции 005–008 остаются неизменными.
+[Проверка прав и контракт](../internal/notifications/jobs/README.md).

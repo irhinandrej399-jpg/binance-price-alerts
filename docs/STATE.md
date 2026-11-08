@@ -4,10 +4,11 @@
 
 ## Активная работа
 
-- Активная реализация: нет. По [DEC-011](decisions/DEC-011.md) бэклог пересмотрен для production ready пет-проекта без тяжёлых тестов. 22 задачи cancelled; осталось 12 planned. Следующий — NTF-017.
+- Активная реализация: нет. По [DEC-011](decisions/DEC-011.md) и регистрации NTF-020 осталось 12 planned; следующий — NTF-018. 22 тяжёлые задачи cancelled.
 - Последний результат планирования: DEC-011. Пять конкретных дефектов сохранены, добавлены семь практических задач выпуска; статусы cancelled проверяются tooling. Реального deployment ещё нет.
 - Записи о прошлых сессиях ниже — история проверок; актуальный объём и следующий шаг определены DEC-011 и ORDER.
-- Последний завершённый тикет: [E2E-001](backlog/tickets/E2E-001.md), [полный пользовательский сценарий](../internal/testutil/e2escenario/README.md). Два свежих PostgreSQL/Kafka/race прогона четырёх executable: account/login/link/create → цена → Telegram → durable API receipt и освобождение слота; 101→99 сохраняет слот без отправки, 102 доставляет один раз в том же workflow; отмена до допуска запрещает отправку. Ровно две доставки, точные outcomes, четыре exit 0 и cleanup PASS. Общая race-регрессия/vet/build PASS. Публичные интеграции и нагрузка не проверялись; raw feed unconfirmed/readyz=503 сохраняется.
+- Последний завершённый тикет: [NTF-017](backlog/tickets/NTF-017.md). Миграция notifications/012 закрывает UPDATE/DELETE/TRUNCATE исторических свидетельств и удаление reports, сохраняя INSERT/SELECT и ack. Полный jobs PostgreSQL/race, обычный Go race/vet/build и Protobuf PASS. Общий SQL runner дважды остановился на независимом TestBinding cancellation; зарегистрирован [NTF-020](backlog/tickets/NTF-020.md). Рабочая БД не мигрировалась.
+- Предыдущий завершённый тикет: [E2E-001](backlog/tickets/E2E-001.md), [полный пользовательский сценарий](../internal/testutil/e2escenario/README.md). Два свежих PostgreSQL/Kafka/race прогона четырёх executable: account/login/link/create → цена → Telegram → durable API receipt и освобождение слота; 101→99 сохраняет слот без отправки, 102 доставляет один раз в том же workflow; отмена до допуска запрещает отправку. Ровно две доставки, точные outcomes, четыре exit 0 и cleanup PASS. Общая race-регрессия/vet/build PASS. Публичные интеграции и нагрузка не проверялись; raw feed unconfirmed/readyz=503 сохраняется.
 - Предыдущий завершённый тикет: [E2E-002](backlog/tickets/E2E-002.md), [четыре executable и fake](../internal/testutil/e2estack/README.md). Одна команда через runner E2E-005, отдельные mTLS identities, четыре owner-only DSN и явные Kafka bootstraps. Два свежих PostgreSQL/Kafka/race dataset, в каждом два старта/остановки: Catalog/Latest/WS и готовность подтверждены; все child exit 0, cleanup PASS. Raw market-data честно unconfirmed/readyz=503. Общая race/vet/build и Python проверки PASS; полный пользовательский сценарий остаётся E2E-001.
 - Предыдущий завершённый тикет: [E2E-005](backlog/tickets/E2E-005.md), [общий disposable runner](../internal/testutil/e2eenvironment/README.md). Четыре parent-only DSN и штатные миграции; два реальных PostgreSQL/Kafka/race прогона подтвердили роли/CONNECT isolation, child allowlists и новые пустые topics 16/1/16 с ClusterID/TopicID. Аварийный Go owner exit подтвердил удаление child group, временных credentials и обоих стендов. Общая race/vet/build и Python проверки PASS. Четыре продуктовых executable запущены в E2E-002; полный пользовательский сценарий ещё впереди.
 - Предыдущий завершённый тикет: [OPS-073](backlog/tickets/OPS-073.md), [HTTP подписок API](../cmd/api/README.md#http-подписок-ops-073). POST/GET через session/auth и управляемые mTLS Catalog/Latest рядом с DELETE. Race executable на disposable PostgreSQL/Kafka подтвердил registration/login/link, точный SQL snapshot/quota/journal и read_committed bytes, изоляцию владельцев, RPC failures, restart, SIGTERM и cleanup. Общая race/vet/build PASS; полный E2E впереди.
@@ -175,9 +176,9 @@ p99 и дисковым резервам не являются условиям�
 
 ## Следующий рекомендуемый шаг
 
-`python3 scripts/backlog.py next` → [NTF-017](backlog/tickets/NTF-017.md), planned:
-проверить и исправить права notifications runtime на append-only таблицы.
-Затем NTF-018, SUB-024, NTF-019, OPS-067 — конкретные дефекты; MKT-019 —
+`python3 scripts/backlog.py next` → [NTF-018](backlog/tickets/NTF-018.md), planned:
+исследовать восстановление после потери ответа регистрации попытки.
+Затем SUB-024, NTF-019, NTF-020, OPS-067 — конкретные дефекты; MKT-019 —
 согласовать каталог поддерживаемых пар с фактическим приёмом цен runtime.
 
 Практический выпуск: OPS-074 (постоянный запуск), OPS-075 (HTTPS/секреты),

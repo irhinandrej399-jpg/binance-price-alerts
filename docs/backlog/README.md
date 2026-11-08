@@ -10,7 +10,7 @@
 ## Порядок работ
 
 В очереди 12 незавершённых задач: пять конкретных дефектов и семь практических
-задач выпуска. Следующий — NTF-017. Затем корректность recovery/snapshot и
+задач выпуска. Следующий — NTF-018. Затем корректность recovery/snapshot и
 обычных тестов, подключение каталога к runtime, постоянный запуск,
 HTTPS/секреты, backup/restore, базовое наблюдение, малый restart smoke и
 реальный сценарий Binance → свой Telegram. Подробные критерии — в карточках.
@@ -181,9 +181,10 @@ HTTPS/секреты, backup/restore, базовое наблюдение, ма�
 | [NTF-009](tickets/NTF-009.md) | [Выдать worker задание с ограниченной арендой](../../internal/notifications/jobs/README.md) | NTF-001, NTF-006 | done |
 | [NTF-010](tickets/NTF-010.md) | Сохранить успешную доставку | NTF-003, NTF-009 | done |
 | [NTF-016](tickets/NTF-016.md) | Сохранить временный отказ и обязанность отчёта | NTF-006, NTF-009, NTF-010, NTF-007, NTF-008 | done |
-| [NTF-017](tickets/NTF-017.md) | Закрыть изменение исторических свидетельств ролью notifications | NTF-008, NTF-016 | planned |
+| [NTF-017](tickets/NTF-017.md) | Закрыть изменение исторических свидетельств ролью notifications | NTF-008, NTF-016 | done |
 | [NTF-018](tickets/NTF-018.md) | Исследовать сбой восстановления после потери ответа регистрации | NTF-012 | planned |
 | [NTF-019](tickets/NTF-019.md) | Устранить ложный отказ проверки Telegram payload по подстроке возраста | NTF-012 | planned |
+| [NTF-020](tickets/NTF-020.md) | Исследовать состояние bootstrap после отмены SQL | OPS-064 | planned |
 | [NTF-014](tickets/NTF-014.md) | Надёжно передать исход попытки владельцу подписки | NTF-010, SUB-020, NTF-007, NTF-008, NTF-016, SUB-026 | done |
 | [NTF-015](tickets/NTF-015.md) | Возобновить задание после восстановления Telegram | NTF-008, NTF-009, SUB-018, DEC-005 | done |
 | [NTF-012](tickets/NTF-012.md) | Выполнить одну попытку обработки готового задания | NTF-004, NTF-005, NTF-006, NTF-007, NTF-008, NTF-009, NTF-010, SUB-018, NTF-014, NTF-002, NTF-015, NTF-003, NTF-016, SUB-027 | done |

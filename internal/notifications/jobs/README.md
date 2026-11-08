@@ -297,11 +297,25 @@ Lost response моделируется повтором committed операци
 проверяет отсутствие сброса бюджета/плана при дубле. Команда — тот же полный
 `GOCACHE=/tmp/binance-go-build python3 scripts/check_postgres.py`.
 
-Известное ограничение SQL-прав ранее созданных таблиц 005–007: default privileges
-init.sh оставляют runtime UPDATE/DELETE, несмотря на append-only контракт методов.
-Исправление отдельной новой миграцией — [NTF-017](../../../docs/backlog/tickets/NTF-017.md).
-Новые таблицы 008 отзывают default-права явно; реальный SQL-тест подтверждает
-отсутствие UPDATE/DELETE у delivery_retryables.
+SQL-права runtime закреплены миграцией `notifications/012_evidence_privileges.sql`
+([NTF-017](../../../docs/backlog/tickets/NTF-017.md)). У `delivery_attempts`,
+`delivery_successes`, `delivery_uncertainties`, `delivery_blocks`,
+`delivery_block_parks` и `delivery_retryables` сохраняются SELECT/INSERT,
+явно отозваны UPDATE/DELETE/TRUNCATE. У четырёх `delivery_*_reports`
+сохраняются SELECT/INSERT/UPDATE для ack; DELETE/TRUNCATE отозваны.
+Jobs, claims и лимитеры эта миграция не меняет. Применённые миграции 005–008
+не переписаны; default privileges init.sh остаются прежними, поэтому новые
+append-only таблицы должны явно ограничивать унаследованные права.
+
+`TestRuntimeEvidencePrivileges` под реальной `notifications_runtime` проверяет
+SELECT/INSERT/UPDATE/DELETE/TRUNCATE для всех десяти таблиц и отказ 42501 при
+UPDATE свидетельств/DELETE свидетельств и отчётов. Сохранение реальных
+INSERT/SELECT и ack проверяют существующие success/uncertain/blocked/retryable
+SQL-сценарии; полный jobs suite также проверяет leases, recovery и лимитеры.
+Целевая команда на том же disposable fixture:
+`GOCACHE=/tmp/binance-go-build python3 scripts/check_postgres.py --jobs-only`.
+Она применяет все штатные миграции и SQL fixtures, выполняет jobs с race
+под runtime-ролью и удаляет стенд. Без флага остаётся общий SQL-прогон.
 
 ## Проверка восстановления канала (NTF-015)
 
