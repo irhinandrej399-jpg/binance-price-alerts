@@ -4,6 +4,7 @@ import argparse
 import os
 from pathlib import Path
 import signal
+import shutil
 import socket
 import subprocess
 import sys
@@ -75,8 +76,21 @@ def main(owner="api"):
     try:
         run(pg + ['up', '-d', '--wait', '--wait-timeout', '120'], env)
         for db_owner in (("api", owner) if matcher or notifications else (owner,)):
-            run([sys.executable, str(ROOT / 'scripts/migrate.py'), '--owner', db_owner,
-                 '--project', pg_project], env)
+            if notifications and db_owner == 'notifications':
+                # Trusted test-only SQL, installed only on this disposable DB.
+                with tempfile.TemporaryDirectory(prefix='binance-notifications-migrations-') as tmp:
+                    directory = Path(tmp)
+                    for source in (ROOT / 'migrations/notifications',
+                                   ROOT / 'infra/postgres/fixtures/notifications_process'):
+                        for sql in source.glob('*.sql'):
+                            if (directory / sql.name).exists():
+                                raise RuntimeError('fixture migration name conflicts with application')
+                            shutil.copyfile(sql, directory / sql.name)
+                    run([sys.executable, str(ROOT / 'scripts/migrate.py'), '--owner', db_owner,
+                         '--project', pg_project, '--directory', str(directory)], env)
+            else:
+                run([sys.executable, str(ROOT / 'scripts/migrate.py'), '--owner', db_owner,
+                     '--project', pg_project], env)
             credential_key = db_owner.upper() + "_RUNTIME_PASSWORD"
             password = run(pg + ['exec', '-T', 'postgres', 'sh', '-c',
                                  'printf %s "$' + credential_key + '"'], env,
@@ -101,8 +115,8 @@ def main(owner="api"):
         # Keep room for crash/startup and graceful/recovery/fault scenarios,
         # including Kafka membership expiry after SIGKILL.
         run(['go', 'test', '-race', '-count=1', '-v', '-timeout',
-             '210s' if notifications else ('150s' if matcher else '90s'), args.package], env,
-            timeout=240 if notifications else (180 if matcher else 120))
+             '300s' if notifications else ('150s' if matcher else '90s'), args.package], env,
+            timeout=330 if notifications else (180 if matcher else 120))
     finally:
         # Go's test timeout/panic does not execute defers. Kill any registered
         # child process groups before removing their disposable infrastructure.

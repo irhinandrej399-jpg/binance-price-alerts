@@ -26,10 +26,16 @@ Admission/PrepareRecipient/Result. Delivery, Snapshot, Replay и Latest ему
 родителя. Только временные client certificate/key/CA пишутся с mode 0600
 в `t.TempDir()`. Не логировать Fixture, Env, DSN, PEM или секреты.
 
+`f.Provision(ctx, notificationsPool)` — явный bootstrap нового пустого intake:
+читает metadata, создаёт новую Generation и сохраняет `f.Binding`. Вызывать один
+раз перед ChildEnv/intake, никогда при restart. `f.Progress(ctx, reader, partition)`
+читает реальный persisted binding/Next через ReadProgress.
+
 `f.ChildEnv(notificationsDSN)` — полный allowlist, без копирования parent env:
 
 - `NOTIFICATIONS_DATABASE_URL` — только своя БД;
-- `KAFKA_BROKERS`, `DELIVERY_REQUESTS_TOPIC`;
+- `KAFKA_BROKERS`, `DELIVERY_REQUESTS_TOPIC`, `KAFKA_CLUSTER_ID`, `DELIVERY_REQUESTS_TOPIC_ID`;
+- `NOTIFICATIONS_CONSUMER_ID`, `NOTIFICATIONS_GENERATION` из явного Provision;
 - `API_RPC_ADDR`, `RPC_SERVER_NAME`, `RPC_CA_FILE`, `RPC_CERT_FILE`, `RPC_KEY_FILE`;
 - `TELEGRAM_BASE_URL`, `TELEGRAM_BOT_TOKEN` — loopback и заведомо fake token с числовым bot ID.
 
@@ -67,7 +73,7 @@ RPC deadline, предел 20 с и cleanup освобождают gates. Пот
 commit моделируется удержанием gate до клиентского deadline, затем Release.
 
 `Observe(ctx, independentNotificationsPool, triggerID)` одним SQL statement
-возвращает job bytes/state/fence/lease/next_attempt_at/next_check_at, counts claims/attempts/всех четырёх
+возвращает job bytes/state/fence/lease/next_attempt_at/next_check_at, устойчивые AttemptIDs, counts claims/attempts/всех четырёх
 outcomes и pending reports. `Checkpoint` только читает SQL Prefix;
 `f.BrokerOffset` отдельным Kafka client только читает group offset;
 `f.Result(ctx, dataset)` читает canonical API запись parent pool.
@@ -96,3 +102,13 @@ child group и оба стенда, проверяет отсутствие cont
 точным Compose labels. Рабочие стенды не адресуются. Ошибка cleanup — FAIL.
 SIGKILL самого Python не исполняет finally; точные disposable projects тогда
 удаляет оператор, как описано в apiprocess.
+
+OPS-066 дополняет существующий lifecycle/runner source-bound конфигурацией и
+SQL наблюдением. Для моделирования потери SQL/legacy только disposable runner
+добавляет `infra/postgres/fixtures/notifications_process/970_source_fixture.sql`
+к временному каталогу миграций. SECURITY DEFINER helpers reset/hide/restore registry
+нельзя устанавливать в рабочую БД. Product migrations и права не изменены.
+Process tests проверяют старое и новое поколение, отказ missing/legacy/mismatch,
+SIGKILL/restart pending job/report и двух Stable members с прежними IDs, SIGTERM/SIGINT и SQL cleanup
+fault, live topic recreate с перекрывающимися offsets, отсутствие новых jobs/HTTP/
+ack и точную сохранность claims/attempts/outcomes/reports/checkpoints.

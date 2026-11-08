@@ -4,7 +4,7 @@
 `Run(ctx)` и `Close()` принимают запросы из префиксного delivery-requests.
 Consumer group распределяет 16 партиций; группа стабильна для среды. Методы
 consumer вызываются последовательно; отмена контекста завершает ожидание.
-Runtime и запуск процесса подключаются отдельно.
+Runtime подключён в [cmd/notifications](../../../cmd/notifications/README.md).
 
 Перед чтением каждого назначения `AdjustFetchOffsetsFn` читает source-bound SQL
 прогресс каждой партиции через `ReadProgress` и восстанавливает абсолютные позиции.
@@ -133,9 +133,8 @@ Bootstrap и legacy SQL writers сериализованы advisory lock `(64064
 не должен скрывать только что принятый binding. Source-bound Accept читает
 immutable registry и блокирует только свою partition. После bootstrap старый
 `Checkpoint` отвергается SQL guard, старый `Accept` также отказывает до duplicate
-с ErrIdentity. Пока registry отсутствует, legacy путь совместим. Transport OPS-065 использует только bound API. Старые вызовы cmd/notifications
-и process fixture не передают Binding и теперь явно отвергаются; их переключение —
-OPS-066. Экспортера нет.
+с ErrIdentity. Пока registry отсутствует, legacy путь совместим. Transport OPS-065 использует только bound API. cmd/notifications и process fixture подключены в OPS-066: обязательные IDs, отдельный
+bootstrap и read-only startup validation. Экспортера нет.
 
 Проверка: `GOCACHE=/tmp/binance-go-build python3 scripts/check_postgres.py`.
 Только этот SQL-контракт: та же команда с `--binding-only`.

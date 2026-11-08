@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"errors"
 	"net"
 	"net/url"
@@ -9,12 +10,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/intake"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/retry"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/telegram"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type config struct {
+	binding                                                                   intake.Binding
 	addr, dsn, topic, group, api, serverName, identity, ca, cert, key, botID  string
 	brokers                                                                   []string
 	telegram                                                                  telegram.Config
@@ -33,6 +36,18 @@ func addressOK(s string) bool {
 }
 func loadConfig(get func(string) string) (config, error) {
 	c := config{addr: get("HTTP_ADDR"), dsn: get("NOTIFICATIONS_DATABASE_URL"), topic: get("DELIVERY_REQUESTS_TOPIC"), group: get("NOTIFICATIONS_GROUP"), api: get("API_RPC_ADDR"), serverName: get("RPC_SERVER_NAME"), identity: get("RPC_IDENTITY"), ca: get("RPC_CA_FILE"), cert: get("RPC_CERT_FILE"), key: get("RPC_KEY_FILE")}
+	c.binding.ConsumerID = get("NOTIFICATIONS_CONSUMER_ID")
+	c.binding.Generation = get("NOTIFICATIONS_GENERATION")
+	c.binding.Source.ClusterID = get("KAFKA_CLUSTER_ID")
+	c.binding.Source.Topic = c.topic
+	tid, err := hex.DecodeString(get("DELIVERY_REQUESTS_TOPIC_ID"))
+	if err != nil || len(tid) != 16 {
+		return config{}, errConfig
+	}
+	copy(c.binding.Source.TopicID[:], tid)
+	if c.binding.Validate() != nil {
+		return config{}, errConfig
+	}
 	for _, s := range []string{c.addr, c.api} {
 		if !addressOK(s) {
 			return config{}, errConfig

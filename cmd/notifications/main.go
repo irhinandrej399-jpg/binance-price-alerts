@@ -28,6 +28,7 @@ import (
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/worker"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/postgres"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/serviceauth"
+	"github.com/twmb/franz-go/pkg/kgo"
 	"google.golang.org/grpc"
 )
 
@@ -75,6 +76,13 @@ func run(parent context.Context, c config) error {
 		return errors.New("notifications: database startup failed")
 	}
 	defer pool.Close()
+	intakeStore := intake.NewStore(pool)
+	startup, stop = context.WithTimeout(parent, 15*time.Second)
+	e = validateIntake(startup, c, intakeStore)
+	stop()
+	if e != nil {
+		return errors.New("notifications: intake identity startup failed")
+	}
 	store, e := jobs.New(pool, c.leaseTTL)
 	if e != nil {
 		return errConfig
@@ -107,7 +115,7 @@ func run(parent context.Context, c config) error {
 	if e != nil {
 		return errConfig
 	}
-	consumer, e := intake.New(intake.Config{Brokers: c.brokers, Topic: c.topic, Group: c.group}, intake.NewStore(pool))
+	consumer, e := intake.New(intake.Config{Brokers: c.brokers, Topic: c.topic, Group: c.group, Binding: c.binding}, intakeStore)
 	if e != nil {
 		return errConfig
 	}
@@ -119,6 +127,35 @@ func run(parent context.Context, c config) error {
 	defer listener.Close()
 	probe := health.New(pool.Ping, w.Running, time.Second)
 	return supervise(parent, listener, probe, consumer.Run, w.Run)
+}
+
+// Validate every persisted partition before exposing HTTP or starting workers.
+// Provisioning is separate: a restart/member never creates SQL provenance.
+func validateIntake(ctx context.Context, c config, store *intake.Store) error {
+	client, err := kgo.NewClient(kgo.SeedBrokers(c.brokers...))
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	parts, err := c.binding.Source.Verify(ctx, client)
+	if err != nil {
+		return err
+	}
+	if len(parts) != 16 {
+		return intake.ErrConfig
+	}
+	seen := map[int32]bool{}
+	for _, part := range parts {
+		p := part.Partition
+		if p < 0 || p >= 16 || seen[p] {
+			return intake.ErrConfig
+		}
+		seen[p] = true
+		if _, err := store.ReadProgress(ctx, c.binding, p); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // supervise owns component cancellation and joins. Resources remain owned by

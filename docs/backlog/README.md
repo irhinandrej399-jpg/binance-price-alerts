@@ -221,7 +221,7 @@
 | [OPS-064](tickets/OPS-064.md) | Сохранить source binding intake notifications в SQL | NTF-001, OPS-060 | done |
 | [OPS-065](tickets/OPS-065.md) | Проверить поколение Kafka-источника на входе notifications | OPS-064, OPS-060, SET-009 | done |
 | [OPS-067](tickets/OPS-067.md) | Исследовать нестабильную metadata после recreate в changefeed fixture | OPS-060, SET-009 | planned |
-| [OPS-066](tickets/OPS-066.md) | Подключить source binding к runtime notifications | OPS-064, OPS-065, OPS-055, OPS-011, OPS-054 | planned |
+| [OPS-066](tickets/OPS-066.md) | Подключить source binding к runtime notifications | OPS-064, OPS-065, OPS-055, OPS-011, OPS-054 | done |
 | [OPS-057](tickets/OPS-057.md) | Экспортировать durable Kafka-прогресс notifications | NTF-001, SET-007, SET-008, OPS-055, OPS-066 | planned |
 | [OPS-058](tickets/OPS-058.md) | Подготовить disposable окружение проверки Kafka cleaner | OPS-056, OPS-057, OPS-052, OPS-054, SET-009 | planned |
 | [OPS-014](tickets/OPS-014.md) | Удалить безопасный префикс журнала Kafka | SET-005, SUB-022, MAT-011, NTF-001, DEC-007, OPS-056, OPS-057, OPS-058 | planned |

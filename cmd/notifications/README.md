@@ -4,7 +4,7 @@
 Telegram → durable reporter/API. Миграции `migrations/notifications` применяются
 отдельно; процесс использует только `notifications_runtime` / `notifications`.
 SQL checkpoint определяет resume, а ack Kafka выполняется после сохранения job.
-Повторный запуск сохраняет group, bot ID и ту же БД.
+Повторный запуск сохраняет group, logical consumer, generation, source, bot ID и ту же БД.
 
 Все настройки обязательны, без неявных бюджетов:
 
@@ -15,6 +15,10 @@ SQL checkpoint определяет resume, а ack Kafka выполняется 
 | `KAFKA_BROKERS` | `localhost:9092`, несколько через запятую |
 | `DELIVERY_REQUESTS_TOPIC` | canonical delivery topic с 16 partitions |
 | `NOTIFICATIONS_GROUP` | стабильная consumer group окружения |
+| `NOTIFICATIONS_CONSUMER_ID` | постоянный logical intake ID из operator inventory |
+| `NOTIFICATIONS_GENERATION` | уникальное поколение явного SQL bootstrap из inventory |
+| `KAFKA_CLUSTER_ID` | ожидаемый Kafka ClusterID |
+| `DELIVERY_REQUESTS_TOPIC_ID` | ожидаемый ненулевой TopicID, 32 hex символа |
 | `API_RPC_ADDR` | `localhost:8085`, общий Admission/Result endpoint |
 | `RPC_SERVER_NAME` | DNS SAN сервера, например `api.local` |
 | `RPC_IDENTITY` | точный SPIFFE URI единственного URI SAN client certificate |
@@ -94,13 +98,47 @@ SIGTERM проверяется до HTTP, во время запроса, пос
 uncertain/success, lease, bytes и canonical API outcome.
 Четыре процесса, общий E2E и нагрузка остаются отдельными задачами.
 
-## Переход source-bound intake (OPS-065 → OPS-066)
+## Source-bound runtime — OPS-066
 
-Транспорт теперь требует `intake.Config.Binding{ConsumerID, Generation, Source}`
-и отдельного явного SQL bootstrap нового пустого intake. Нынешний cmd и его
-process fixture ещё не передают эти значения: compilation сохраняется, но
-`intake.New` возвращает ErrConfig, запуск завершается до HTTP readiness.
-OPS-066 подключит обязательную конфигурацию/provisioning и повторит process
-recovery/shutdown проверки. Нельзя подставить нынешнюю metadata как источник
-legacy SQL cursor или автоматически сбросить SQL. Контракт —
-[intake README](../../internal/notifications/intake/README.md#source-bound-consumer--ops-065).
+До запуска worker и HTTP процесс с пределом 15 с сверяет ожидаемый source
+через metadata без auto-create, требует ровно partitions 0..15 и читает
+`intake.Store.ReadProgress` каждой партиции. Ошибка, missing bootstrap, legacy
+или несовпадение consumer/generation/source дают exit 1 до readiness и отправок.
+Транспорт OPS-065 затем сверяет metadata при assignment/позициях/idle и TopicID
+исходных fetch responses до decode/SQL/ack. Terminal ошибка отменяет siblings;
+прежние bounded shutdown и join до pool.Close сохраняются. Readiness не является
+доказательством назначения всех partitions или полноты обработки входа.
+
+Provisioning выполняется **отдельно**, при остановленных процессах:
+
+1. Применить миграции, включая `011_intake_source.sql`. Для нового пустого intake
+   создать уникальную Generation, сохранить её вне этой БД вместе с ConsumerID
+   и ожиданиями будущего cleaner. Group member/replica ID для этого не подходит.
+2. Сверить Kafka ClusterID, ненулевой TopicID, имя topic и partitions 0..15
+   с operator inventory. Metadata discovery допустима для нового источника;
+   она не доказывает происхождение старых jobs/checkpoints.
+3. В явном provisioning вызвать `intake.NewStore(pool).Bootstrap(ctx, binding,
+   []int32{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15})` из доверенного Go-инструмента
+   внутри модуля. Все позиции начнутся с 0; история должна оставаться доступной.
+   Runtime Bootstrap не вызывает. Задать четыре обязательные переменные выше.
+4. При restart/новом member сохранить те же IDs и БД. При уничтожении SQL создать
+   новую Generation и отдельно обновить внешние ожидания. Новая БД не может
+   проверить, что оператор повторно использовал старую Generation.
+
+Legacy jobs/checkpoints, даже нулевые, не получают provenance автоматически.
+Изменение source/Generation в env не меняет SQL registry. После delete/recreate
+с тем же именем/offsets старый runtime отказывает; подстановка нового TopicID
+тоже отказывает по SQL. Перенос legacy или смена source требуют отдельного
+операторского плана, которого этот runtime не реализует. Клоны с теми же IDs
+неразличимы. Неизвестный внешний результат по-прежнему допускает дубль Telegram.
+
+Для OPS-057: runtime хранит проверяемый `config.binding`, а persisted
+`intake.Store.ReadProgress(ctx, binding, partition)` возвращает Binding/Partition/
+Next одним SELECT. Ошибка не является Next=0 и запрещает очистку. Будущий exporter
+должен ограничить SQL/RPC deadline, проверить ожидания caller и присоединиться
+при shutdown; RPC/exporter и реестр обязательных consumers здесь не добавлены.
+
+Process/race проверка также покрывает SIGKILL pending job/report с сохранением
+attempt IDs/bytes, binding всех partitions и двух одновременных members, чужие IDs до readiness, живой
+процесс при recreate с перекрывающимся offset=0, сохранность SQL evidence и
+отсутствие ack/HTTP, legacy отказ и новый пустой SQL с новой Generation.

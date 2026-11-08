@@ -5,6 +5,7 @@ package notificationsprocess
 import (
 	"context"
 	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,10 +27,13 @@ import (
 	mpb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/marketdata/v1"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/latest"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/storage"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/intake"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafka"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/serviceauth"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/grpctest"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/twmb/franz-go/pkg/kgo"
 	"google.golang.org/grpc"
 )
 
@@ -39,6 +43,7 @@ const ServerName = "market.test"
 
 // Fixture includes ephemeral secret paths: never log it or its environment.
 type Fixture struct {
+	Binding                   intake.Binding
 	Conn                      *grpc.ClientConn
 	Target, Broker, Prefix    string
 	CAFile, CertFile, KeyFile string
@@ -107,9 +112,34 @@ func New(t testing.TB, api *pgxpool.Pool, broker, prefix string) *Fixture {
 	return f
 }
 
+// Provision explicitly creates a new empty SQL intake. Never call on restart.
+func (f *Fixture) Provision(ctx context.Context, pool *pgxpool.Pool) error {
+	client, err := kgo.NewClient(kgo.SeedBrokers(f.Broker))
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	source, parts, err := kafkasource.Metadata(ctx, client, f.Prefix+"-delivery-requests")
+	if err != nil {
+		return err
+	}
+	partitions := make([]int32, len(parts))
+	for i, part := range parts {
+		partitions[i] = part.Partition
+	}
+	b := intake.Binding{ConsumerID: f.Prefix + "-notifications", Generation: uuid(), Source: source}
+	if err := intake.NewStore(pool).Bootstrap(ctx, b, partitions); err != nil {
+		return err
+	}
+	f.Binding = b
+	return nil
+}
+
 func (f *Fixture) ChildEnv(dsn string) map[string]string {
 	return map[string]string{
 		"NOTIFICATIONS_DATABASE_URL": dsn, "KAFKA_BROKERS": f.Broker, "DELIVERY_REQUESTS_TOPIC": f.Prefix + "-delivery-requests",
+		"NOTIFICATIONS_CONSUMER_ID": f.Binding.ConsumerID, "NOTIFICATIONS_GENERATION": f.Binding.Generation,
+		"KAFKA_CLUSTER_ID": f.Binding.Source.ClusterID, "DELIVERY_REQUESTS_TOPIC_ID": hex.EncodeToString(f.Binding.Source.TopicID[:]),
 		"API_RPC_ADDR": f.Target, "RPC_SERVER_NAME": ServerName, "RPC_CA_FILE": f.CAFile, "RPC_CERT_FILE": f.CertFile, "RPC_KEY_FILE": f.KeyFile,
 		"TELEGRAM_BASE_URL": f.Telegram.URL, "TELEGRAM_BOT_TOKEN": TestToken,
 	}

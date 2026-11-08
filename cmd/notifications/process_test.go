@@ -3,11 +3,14 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -15,10 +18,13 @@ import (
 
 	domain "github.com/irhinandrej399-jpg/binance-price-alerts/internal/domain/subscription"
 	pb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/api/v1"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/intake"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/apiprocess"
 	np "github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/notificationsprocess"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/postgrestest"
 	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/pkg/kmsg"
 )
 
 func TestNotificationsProcess(t *testing.T) {
@@ -28,7 +34,7 @@ func TestNotificationsProcess(t *testing.T) {
 	if os.Getenv("POSTGRES_TEST") != "1" || os.Getenv("KAFKA_TEST_BROKER") == "" || os.Getenv("KAFKA_TEST_PREFIX") == "" {
 		t.Fatal("notifications opt-in requires PostgreSQL/Kafka configuration")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 270*time.Second)
 	defer cancel()
 	must := func(e error) {
 		t.Helper()
@@ -84,6 +90,56 @@ func TestNotificationsProcess(t *testing.T) {
 			}
 		}
 	}
+	// No implicit provisioning: startup without SQL provenance cannot become ready.
+	reject := func(c apiprocess.Config) {
+		t.Helper()
+		if err := apiprocess.With(ctx, c, func(*apiprocess.Process) error { return errors.New("unexpected readiness") }); !errors.Is(err, apiprocess.ErrEarlyExit) {
+			t.Fatal("identity startup failure not observed", err)
+		}
+	}
+	// Discover only as an explicit operator action on this disposable empty SQL.
+	client, err := kgo.NewClient(kgo.SeedBrokers(f.Broker))
+	must(err)
+	source, _, err := kafkasource.Metadata(ctx, client, record.Topic)
+	client.Close()
+	must(err)
+	env["KAFKA_CLUSTER_ID"] = source.ClusterID
+	env["DELIVERY_REQUESTS_TOPIC_ID"] = hex.EncodeToString(source.TopicID[:])
+	env["NOTIFICATIONS_CONSUMER_ID"] = f.Prefix + "-notifications"
+	env["NOTIFICATIONS_GENERATION"] = "not-provisioned"
+	reject(cfg)
+	var count int
+	must(reader.QueryRow(ctx, `SELECT count(*) FROM app.delivery_intake_source`).Scan(&count))
+	if count != 0 {
+		t.Fatal("startup created binding")
+	}
+	must(f.Provision(ctx, reader))
+	for k, v := range f.ChildEnv(os.Getenv("NOTIFICATIONS_DATABASE_URL")) {
+		env[k] = v
+	}
+	// Independent snapshots include exact IDs, bytes, outcomes and reports.
+	evidence := func() string {
+		t.Helper()
+		tables := []string{"delivery_jobs", "delivery_checkpoints", "delivery_claims", "delivery_attempts", "delivery_successes", "delivery_uncertainties", "delivery_blocks", "delivery_retryables", "delivery_success_reports", "delivery_uncertain_reports", "delivery_blocked_reports", "delivery_retryable_reports"}
+		var result strings.Builder
+		for _, table := range tables {
+			var value string
+			must(reader.QueryRow(ctx, fmt.Sprintf(`SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),'[]'::jsonb)::text FROM app.%s t`, table)).Scan(&value))
+			result.WriteString(value)
+		}
+		return result.String()
+	}
+	assertBinding := func() {
+		t.Helper()
+		for p := int32(0); p < 16; p++ {
+			progress, err := f.Progress(ctx, reader, p)
+			must(err)
+			if progress.Binding != f.Binding || progress.Partition != p {
+				t.Fatal("binding changed")
+			}
+		}
+	}
+	assertBinding()
 	observe := func() np.Observation { t.Helper(); o, e := np.Observe(ctx, reader, trigger); must(e); return o }
 	status := func(p *apiprocess.Process, path string) int {
 		t.Helper()
@@ -148,20 +204,22 @@ func TestNotificationsProcess(t *testing.T) {
 		duplicate := &kgo.Record{Topic: record.Topic, Key: d.Key, Value: d.Body}
 		must(producer.ProduceSync(ctx, duplicate).FirstErr())
 		wait("restart duplicate SQL prefix", func() bool {
-			n, e := np.Checkpoint(ctx, reader, duplicate.Topic, duplicate.Partition)
-			return e == nil && n >= duplicate.Offset+1
+			p, e := f.Progress(ctx, reader, duplicate.Partition)
+			return e == nil && p.Binding == f.Binding && p.Next >= duplicate.Offset+1
 		})
 		wait("restart duplicate broker prefix", func() bool {
 			n, e := f.BrokerOffset(ctx, env["NOTIFICATIONS_GROUP"], duplicate.Partition)
 			return e == nil && n >= duplicate.Offset+1
 		})
 		after := observe()
-		if after.State != before.State || after.Attempts != before.Attempts || after.Claims != before.Claims || after.Successes != before.Successes || !bytes.Equal(after.Body, before.Body) {
+		if after.State != before.State || after.Attempts != before.Attempts || after.Claims != before.Claims || !slices.Equal(after.AttemptIDs, before.AttemptIDs) || after.Successes != before.Successes || !bytes.Equal(after.Body, before.Body) {
 			t.Fatal("duplicate intake changed completed job")
 		}
 		noHTTP()
+		assertBinding()
 	}
 
+	var crashEvidence np.Observation
 	f.SetPrice("99", 1)
 	// False Latest gates HTTP despite a canonical historical candidate.
 	must(apiprocess.With(ctx, cfg, func(p *apiprocess.Process) error {
@@ -172,12 +230,31 @@ func TestNotificationsProcess(t *testing.T) {
 		}
 		noHTTP()
 		wait("SQL prefix", func() bool {
-			n, e := np.Checkpoint(ctx, reader, record.Topic, record.Partition)
-			return e == nil && n == record.Offset+1
+			p, e := f.Progress(ctx, reader, record.Partition)
+			return e == nil && p.Binding == f.Binding && p.Next == record.Offset+1
 		})
 		wait("broker prefix", func() bool {
 			n, e := f.BrokerOffset(ctx, env["NOTIFICATIONS_GROUP"], record.Partition)
 			return e == nil && n == record.Offset+1
+		})
+		crashEvidence = observe()
+		kill(p)
+		return nil
+	}))
+	// Pending job survives SIGKILL with stable logical binding, bytes and IDs.
+	must(apiprocess.With(ctx, cfg, func(p *apiprocess.Process) error {
+		o := observe()
+		if o.Attempts != 0 || !slices.Equal(o.AttemptIDs, crashEvidence.AttemptIDs) || !bytes.Equal(o.Body, crashEvidence.Body) {
+			t.Fatal("pending recovery changed evidence")
+		}
+		assertBinding()
+		// Let this new member complete assignment before killing it later at the
+		// report boundary; an abandoned JoinGroup otherwise waits for session expiry.
+		resumed := &kgo.Record{Topic: record.Topic, Key: d.Key, Value: d.Body}
+		must(producer.ProduceSync(ctx, resumed).FirstErr())
+		wait("pending job intake resumed", func() bool {
+			progress, err := f.Progress(ctx, reader, resumed.Partition)
+			return err == nil && progress.Next >= resumed.Offset+1
 		})
 		// Both SQL limiters have admitted this chat before a fresh API permit.
 		before := f.PauseRPC(pb.Admission_AdmitDelivery_FullMethodName, true)
@@ -236,6 +313,7 @@ func TestNotificationsProcess(t *testing.T) {
 		if canonical.State != domain.Delivered || canonical.Workflow.TriggerID != trigger {
 			t.Fatal("canonical API success missing")
 		}
+		crashEvidence = o
 		kill(p)
 		return nil
 	}))
@@ -243,7 +321,7 @@ func TestNotificationsProcess(t *testing.T) {
 	must(apiprocess.With(ctx, cfg, func(p *apiprocess.Process) error {
 		wait("report recovery", func() bool { return observe().PendingReports == 0 })
 		o := observe()
-		if o.Attempts != 3 || o.Successes != 1 || o.Retryables != 1 || o.Uncertainties != 1 || !bytes.Equal(o.Body, d.Body) {
+		if !slices.Equal(o.AttemptIDs, crashEvidence.AttemptIDs) || o.Claims != crashEvidence.Claims || o.Attempts != 3 || o.Successes != 1 || o.Retryables != 1 || o.Uncertainties != 1 || !bytes.Equal(o.Body, d.Body) {
 			t.Fatal("recovery changed durable evidence")
 		}
 		noHTTP()
@@ -257,6 +335,18 @@ func TestNotificationsProcess(t *testing.T) {
 			t.Fatal("outbox duplicated")
 		}
 		confirmIntake()
+		must(apiprocess.With(ctx, cfg, func(member *apiprocess.Process) error {
+			wait("two group members", func() bool {
+				req := kmsg.NewPtrDescribeGroupsRequest()
+				req.Groups = []string{env["NOTIFICATIONS_GROUP"]}
+				res, err := req.RequestWith(ctx, producer)
+				return err == nil && len(res.Groups) == 1 && res.Groups[0].ErrorCode == 0 && res.Groups[0].State == "Stable" && len(res.Groups[0].Members) == 2
+			})
+			assertBinding()
+			confirmIntake()
+			stop(member, syscall.SIGINT, 0)
+			return nil
+		}))
 		stop(p, syscall.SIGINT, 0)
 		return nil
 	}))
@@ -373,7 +463,7 @@ func TestNotificationsProcess(t *testing.T) {
 	}
 	// Fail startup before any readiness for missing credentials, foreign SQL owner,
 	// identity mismatch, bad Telegram config and unavailable SQL.
-	for _, tc := range []struct{ k, v string }{{"RPC_CERT_FILE", "/unavailable/secret"}, {"RPC_CA_FILE", f.KeyFile}, {"NOTIFICATIONS_DATABASE_URL", "postgres://notifications_runtime:secret@127.0.0.1:1/notifications?sslmode=disable&connect_timeout=1"}, {"RPC_IDENTITY", "spiffe://process.test/wrong"}, {"NOTIFICATIONS_DATABASE_URL", "postgres://api_runtime:secret@localhost/api"}, {"TELEGRAM_BASE_URL", "https://secret@host"}} {
+	for _, tc := range []struct{ k, v string }{{"NOTIFICATIONS_CONSUMER_ID", "foreign"}, {"NOTIFICATIONS_GENERATION", "foreign"}, {"KAFKA_CLUSTER_ID", "foreign"}, {"DELIVERY_REQUESTS_TOPIC_ID", "0102030405060708090a0b0c0d0e0f10"}, {"RPC_CERT_FILE", "/unavailable/secret"}, {"RPC_CA_FILE", f.KeyFile}, {"NOTIFICATIONS_DATABASE_URL", "postgres://notifications_runtime:secret@127.0.0.1:1/notifications?sslmode=disable&connect_timeout=1"}, {"RPC_IDENTITY", "spiffe://process.test/wrong"}, {"NOTIFICATIONS_DATABASE_URL", "postgres://api_runtime:secret@localhost/api"}, {"TELEGRAM_BASE_URL", "https://secret@host"}} {
 		bad := map[string]string{}
 		for k, v := range env {
 			bad[k] = v
@@ -385,9 +475,129 @@ func TestNotificationsProcess(t *testing.T) {
 			t.Fatal("startup failure not observed", tc.k, e)
 		}
 	}
+	// A running idle member detects delete/recreate. Replacement bytes overlap
+	// offsets but must never become another job, send, SQL cursor or Kafka ack.
+	beforeReplacement := ""
+	must(apiprocess.With(ctx, cfg, func(p *apiprocess.Process) error {
+		// Recreate an assigned member. HTTP readiness alone does not prove it has
+		// joined; killing an in-flight JoinGroup can retain a rebalance obligation.
+		confirmIntake()
+		beforeReplacement = evidence()
+		del := kmsg.NewPtrDeleteTopicsRequest()
+		del.TopicNames = []string{record.Topic}
+		del.Topics = []kmsg.DeleteTopicsRequestTopic{{Topic: &record.Topic}}
+		dr, err := del.RequestWith(ctx, producer)
+		must(err)
+		if len(dr.Topics) != 1 || dr.Topics[0].ErrorCode != 0 {
+			return errors.New("delete failed")
+		}
+		create := kmsg.NewPtrCreateTopicsRequest()
+		spec := kmsg.NewCreateTopicsRequestTopic()
+		spec.Topic, spec.NumPartitions, spec.ReplicationFactor = record.Topic, 16, 1
+		create.Topics = []kmsg.CreateTopicsRequestTopic{spec}
+		cr, err := create.RequestWith(ctx, producer)
+		must(err)
+		if len(cr.Topics) != 1 || cr.Topics[0].ErrorCode != 0 {
+			return errors.New("recreate failed")
+		}
+		fresh, err := kgo.NewClient(kgo.SeedBrokers(f.Broker), kgo.RecordPartitioner(kgo.ManualPartitioner()))
+		must(err)
+		defer fresh.Close()
+		replacement := &kgo.Record{Topic: record.Topic, Partition: record.Partition, Key: d.Key, Value: d.Body}
+		must(fresh.ProduceSync(ctx, replacement).FirstErr())
+		if replacement.Offset != 0 {
+			return errors.New("replacement offsets do not overlap")
+		}
+		select {
+		case <-p.Done():
+			code, ok := p.ExitCode()
+			if !ok || code != 1 {
+				return errors.New("source loss did not exit 1")
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		return nil
+	}))
+	noHTTP()
+	if evidence() != beforeReplacement {
+		t.Fatal("recreate changed durable evidence")
+	}
+	assertBinding()
+	baseline, err := f.BrokerOffset(ctx, env["NOTIFICATIONS_GROUP"], record.Partition)
+	must(err)
+	reject(cfg) // old source
+	replacementClient, err := kgo.NewClient(kgo.SeedBrokers(f.Broker))
+	must(err)
+	replacementSource, _, err := kafkasource.Metadata(ctx, replacementClient, record.Topic)
+	replacementClient.Close()
+	must(err)
+	if replacementSource == f.Binding.Source {
+		t.Fatal("topic incarnation unchanged")
+	}
+	env["DELIVERY_REQUESTS_TOPIC_ID"] = hex.EncodeToString(replacementSource.TopicID[:])
+	reject(cfg) // today's metadata cannot relabel old SQL
+	if evidence() != beforeReplacement {
+		t.Fatal("startup relabeled SQL")
+	}
+	n, err := f.BrokerOffset(ctx, env["NOTIFICATIONS_GROUP"], record.Partition)
+	must(err)
+	if n != baseline {
+		t.Fatal("replacement acknowledged")
+	}
+	noHTTP()
+	// Legacy provenance loss preserves all data and fails before worker/HTTP.
+	legacyBefore := evidence()
+	_, err = reader.Exec(ctx, `SELECT app.test_legacy_delivery_source()`)
+	must(err)
+	reject(cfg)
+	if _, err := intake.NewStore(reader).ReadProgress(ctx, f.Binding, record.Partition); !errors.Is(err, intake.ErrUnbound) {
+		t.Fatal("legacy accepted", err)
+	}
+	if err := intake.NewStore(reader).Bootstrap(ctx, f.Binding, []int32{0}); !errors.Is(err, intake.ErrUnbound) {
+		t.Fatal("legacy bootstrap accepted", err)
+	}
+	if evidence() != legacyBefore {
+		t.Fatal("legacy refusal changed evidence")
+	}
+	noHTTP()
+
+	_, err = reader.Exec(ctx, `SELECT app.test_restore_delivery_source()`)
+	must(err)
+	assertBinding()
+	// Model a destroyed SQL intake only through this trusted disposable fixture.
+	// A fresh bootstrap uses a NEW externally expected generation.
+	oldBinding := f.Binding
+	_, err = reader.Exec(ctx, `SELECT app.test_reset_delivery_source()`)
+	must(err)
+	must(f.Provision(ctx, reader))
+	if f.Binding.Generation == oldBinding.Generation {
+		t.Fatal("generation reused")
+	}
+	if _, err := intake.NewStore(reader).ReadProgress(ctx, oldBinding, record.Partition); !errors.Is(err, kafkasource.ErrMismatch) {
+		t.Fatal("old expectation accepted", err)
+	}
+	reject(cfg) // old generation remains in child env
+	for k, v := range f.ChildEnv(os.Getenv("NOTIFICATIONS_DATABASE_URL")) {
+		env[k] = v
+	}
+	assertBinding()
+	f.SetPrice("99", 5)
+	must(apiprocess.With(ctx, cfg, func(p *apiprocess.Process) error {
+		wait("fresh SQL generation prefix", func() bool {
+			progress, err := f.Progress(ctx, reader, record.Partition)
+			return err == nil && progress.Next > 0
+		})
+		noHTTP()
+		stop(p, syscall.SIGINT, 0)
+		return nil
+	}))
 	// A malformed committed record is terminal: never ack/reset past it.
 	badrecord := &kgo.Record{Topic: record.Topic, Key: d.Key, Value: []byte(`invalid`)}
-	must(producer.ProduceSync(ctx, badrecord).FirstErr())
+	freshProducer, err := kgo.NewClient(kgo.SeedBrokers(f.Broker))
+	must(err)
+	defer freshProducer.Close()
+	must(freshProducer.ProduceSync(ctx, badrecord).FirstErr())
 	terminal := cfg
 	terminal.StartupProbePath = "/healthz"
 	e = apiprocess.With(ctx, terminal, func(p *apiprocess.Process) error {

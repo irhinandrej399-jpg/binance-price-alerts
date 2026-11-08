@@ -140,6 +140,7 @@ func TestDisposableFixture(t *testing.T) {
 		}
 	}
 	f := New(t, api, os.Getenv("KAFKA_TEST_BROKER"), os.Getenv("KAFKA_TEST_PREFIX"))
+	must(f.Provision(ctx, pool))
 	d, e := f.Seed(ctx)
 	must(e)
 	trigger := d.Record.Workflow.TriggerID
@@ -194,9 +195,16 @@ func TestDisposableFixture(t *testing.T) {
 		t.Fatal("startup failure not observed", e)
 	}
 	group := f.Prefix + "-notifications"
-	consumer, e := intake.New(intake.Config{Brokers: []string{f.Broker}, Topic: record.Topic, Group: group}, intake.NewStore(pool))
+	consumer, e := intake.New(intake.Config{Binding: f.Binding, Brokers: []string{f.Broker}, Topic: record.Topic, Group: group}, intake.NewStore(pool))
 	must(e)
-	must(consumer.Step(ctx))
+	for {
+		must(consumer.Step(ctx))
+		progress, err := f.Progress(ctx, reader, record.Partition)
+		must(err)
+		if progress.Next >= record.Offset+1 {
+			break
+		}
+	}
 	consumer.Close()
 	o, e := Observe(ctx, reader, trigger)
 	must(e)

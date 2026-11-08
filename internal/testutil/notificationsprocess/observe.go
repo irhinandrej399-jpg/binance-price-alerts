@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/intake"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -14,6 +15,7 @@ import (
 // Observation is a snapshot from an independent notifications reader pool.
 // Evidence counts include history; pending reports include all four outcomes.
 type Observation struct {
+	AttemptIDs                                                                     []string
 	NextAttemptAt                                                                  pgtype.Timestamptz
 	State                                                                          string
 	Body                                                                           []byte
@@ -39,7 +41,8 @@ func Observe(ctx context.Context, reader *pgxpool.Pool, trigger string) (Observa
  SELECT attempt_id FROM app.delivery_blocked_reports WHERE pending UNION ALL
  SELECT attempt_id FROM app.delivery_retryable_reports WHERE pending
  ) p JOIN app.delivery_attempts a USING(attempt_id) WHERE a.trigger_id=$1)
- FROM app.delivery_jobs WHERE trigger_id=$1`, trigger).Scan(&o.State, &o.Body, &o.Fence, &o.LeaseID, &o.LeaseExpiresAt, &o.NextCheckAt, &o.NextAttemptAt, &o.Claims, &o.Attempts, &o.Successes, &o.Uncertainties, &o.Blocks, &o.Retryables, &o.PendingReports)
+, (SELECT coalesce(array_agg(attempt_id::text ORDER BY attempt_id),'{}'::text[]) FROM app.delivery_attempts WHERE trigger_id=$1)
+ FROM app.delivery_jobs WHERE trigger_id=$1`, trigger).Scan(&o.State, &o.Body, &o.Fence, &o.LeaseID, &o.LeaseExpiresAt, &o.NextCheckAt, &o.NextAttemptAt, &o.Claims, &o.Attempts, &o.Successes, &o.Uncertainties, &o.Blocks, &o.Retryables, &o.PendingReports, &o.AttemptIDs)
 	return o, e
 }
 func Checkpoint(ctx context.Context, reader *pgxpool.Pool, topic string, partition int32) (int64, error) {
@@ -69,4 +72,9 @@ func (f *Fixture) BrokerOffset(ctx context.Context, group string, partition int3
 		return 0, fmt.Errorf("broker offset unavailable")
 	}
 	return res.Topics[0].Partitions[0].Offset, nil
+}
+
+// Progress reads persisted provenance and prefix; errors never mean offset zero.
+func (f *Fixture) Progress(ctx context.Context, reader *pgxpool.Pool, partition int32) (intake.Progress, error) {
+	return intake.NewStore(reader).ReadProgress(ctx, f.Binding, partition)
 }
