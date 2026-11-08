@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/alerttriggered"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -23,7 +24,8 @@ type Store struct{ pool *pgxpool.Pool }
 
 func NewStore(pool *pgxpool.Pool) *Store { return &Store{pool: pool} }
 
-// Checkpoint registers a required partition at zero, never at the broker offset
+// Checkpoint is legacy-only; a bound intake must use ReadProgress.
+// It registers a required partition at zero, never at the broker offset
 // or latest. This table belongs to one logical intake per environment topic.
 func (s *Store) Checkpoint(ctx context.Context, topic string, partition int32) (int64, error) {
 	if s.pool == nil || strings.TrimSpace(topic) == "" || partition < 0 {
@@ -37,7 +39,8 @@ func (s *Store) Checkpoint(ctx context.Context, topic string, partition int32) (
 	return next, err
 }
 
-// Accept is called serially in Kafka fetch order. expected is the cursor from
+// Accept is legacy-only and rejects an existing binding even for duplicates.
+// It is called serially in Kafka fetch order. expected is the cursor from
 // the preceding accepted delivery (or SQL on assignment). Invisible aborted
 // records and control markers may leave gaps before offset. A caller cannot
 // skip a delivered record and still claim a continuous prefix.
@@ -57,6 +60,13 @@ func (s *Store) Accept(ctx context.Context, topic string, partition int32, expec
 	var next int64
 	if err = tx.QueryRow(ctx, `SELECT next_offset FROM app.delivery_checkpoints WHERE topic=$1 AND partition=$2 FOR UPDATE`, topic, partition).Scan(&next); err != nil {
 		return err
+	}
+	var bound bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT FROM app.delivery_intake_source)`).Scan(&bound); err != nil {
+		return err
+	}
+	if bound {
+		return kafkasource.ErrIdentity
 	}
 	if offset < next {
 		return tx.Commit(ctx)

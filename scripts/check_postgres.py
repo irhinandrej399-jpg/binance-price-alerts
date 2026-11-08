@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Run Go storage tests against a disposable, isolated PostgreSQL project."""
+import argparse
 import fcntl
 import os
 from pathlib import Path
@@ -14,6 +15,10 @@ PROJECT = 'binance-go-check'
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--binding-only', action='store_true',
+                        help='run only isolated notifications source-binding SQL checks')
+    args = parser.parse_args()
     # Fixed project prevents accidentally targeting the developer's database.
     # Serialize runs so one invocation cannot remove another's test database.
     with (Path(tempfile.gettempdir()) / 'binance-go-check.lock').open('w') as lock:
@@ -61,17 +66,22 @@ def main():
                 env[variable] = (f'postgres://{owner}_runtime:{quote(password, safe="")}@'
                                  f'127.0.0.1:{port}/{owner}?sslmode=disable&connect_timeout=5')
             env['POSTGRES_TEST'] = '1'
-            # Relay claims the entire fixed shard. Run its recovery scenario on
-            # the fresh outbox before other packages create unpublished work.
-            relay = 'github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/relay'
-            run(['go', 'test', '-race', '-count=1', '-v', relay])
-            # Storage claims the whole outbox too; Latest fixtures must follow it.
-            storage = 'github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/storage'
-            run(['go', 'test', '-race', '-count=1', '-v', storage])
-            packages = run(['go', 'list', './...'], capture_output=True, text=True).stdout.splitlines()
-            # Journal tests assert global C; subscription HTTP now writes that journal.
-            # Keep packages sequential on the shared disposable database.
-            run(['go', 'test', '-p=1', '-race', '-count=1', '-v'] + [p for p in packages if p not in (relay, storage)])
+            # Check pre-migration legacy state, then an empty bound intake. The
+            # fixture resets only this disposable data before shared tests.
+            run(['go', 'test', '-race', '-count=1', '-v',
+                 './internal/notifications/intake/testdata/binding'])
+            if not args.binding_only:
+                # Relay claims the entire fixed shard. Run its recovery scenario on
+                # the fresh outbox before other packages create unpublished work.
+                relay = 'github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/relay'
+                run(['go', 'test', '-race', '-count=1', '-v', relay])
+                # Storage claims the whole outbox too; Latest fixtures must follow it.
+                storage = 'github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/storage'
+                run(['go', 'test', '-race', '-count=1', '-v', storage])
+                packages = run(['go', 'list', './...'], capture_output=True, text=True).stdout.splitlines()
+                # Journal tests assert global C; subscription HTTP now writes that journal.
+                # Keep packages sequential on the shared disposable database.
+                run(['go', 'test', '-p=1', '-race', '-count=1', '-v'] + [p for p in packages if p not in (relay, storage)])
         finally:
             # This project is explicitly disposable. Working binance-storage,
             # migration-check and role-check projects are never addressed.

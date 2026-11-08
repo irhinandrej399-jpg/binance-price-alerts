@@ -118,3 +118,9 @@ Claim не возобновляет автоматическую отправк�
 индекс durable проверок канала того же job (NTF-015). Причина/версия остаются в
 полях миграции 007; цены блокировки нет. Применять до запуска нового jobs.Store.
 [Контракт назначения/claim](../internal/notifications/jobs/README.md).
+
+`notifications/011_intake_source.sql` — immutable consumer/bootstrap/source registry,
+явный bootstrap пустого intake, source-bound atomic job/checkpoint и SQL guards
+старого writer (OPS-064). Версия 010 зарезервирована тестовым pre-migration seed;
+в production после 009 сразу применяется 011. Legacy jobs/checkpoints не получают
+provenance и не переписываются. [Операторский контракт и права](../internal/notifications/intake/README.md#source-bound-sql-intake--ops-064).
