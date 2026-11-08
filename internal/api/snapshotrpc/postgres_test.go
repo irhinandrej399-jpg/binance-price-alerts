@@ -21,6 +21,30 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// timedStore records only clocks and operation outcomes, never connection data.
+// It separates SQL rejection from the RPC's final host-clock expiry check.
+type timedStore struct {
+	rpc.Store
+	t *testing.T
+}
+
+func (s timedStore) clocks(stage string, expiry time.Time, err error) {
+	s.t.Helper()
+	s.t.Logf("%s host=%s expires=%s outcome=%v", stage, time.Now().UTC().Format(time.RFC3339Nano), expiry.UTC().Format(time.RFC3339Nano), err)
+}
+
+func (s timedStore) BuildRequest(ctx context.Context, owner, request string, ttl time.Duration) (sub.Snapshot, error) {
+	s.clocks("before SQL BuildRequest", time.Time{}, nil)
+	out, err := s.Store.BuildRequest(ctx, owner, request, ttl)
+	s.clocks("after SQL BuildRequest", out.ExpiresAt, err)
+	return out, err
+}
+func (s timedStore) Page(ctx context.Context, owner, id, after string, n int) (sub.SnapshotPage, error) {
+	out, err := s.Store.Page(ctx, owner, id, after, n)
+	s.clocks("after SQL Page / before RPC expiry", out.Snapshot.ExpiresAt, err)
+	return out, err
+}
+
 func fixture(t *testing.T, pool *pgxpool.Pool, state domain.State) sub.Record {
 	t.Helper()
 	ctx := context.Background()
@@ -56,6 +80,7 @@ func fixture(t *testing.T, pool *pgxpool.Pool, state domain.State) sub.Record {
 }
 func TestPostgresSnapshotRecoveryOverTLS(t *testing.T) {
 	pool := postgrestest.Open(t)
+	requireSnapshotClocks(t, pool)
 	pool2 := postgrestest.Open(t)
 	ctx := context.Background()
 	storage := sub.NewSnapshots(pool)
@@ -66,7 +91,7 @@ func TestPostgresSnapshotRecoveryOverTLS(t *testing.T) {
 	}
 	var lost atomic.Bool
 	committed := make(chan *pb.SnapshotPageResponse, 1)
-	firstClient := rpc.NewClient(connect(t, rpc.NewServer(storage), matcherURI, grpc.ChainUnaryInterceptor(func(c context.Context, r any, i *grpc.UnaryServerInfo, h grpc.UnaryHandler) (any, error) {
+	firstClient := rpc.NewClient(connect(t, rpc.NewServer(timedStore{storage, t}), matcherURI, grpc.ChainUnaryInterceptor(func(c context.Context, r any, i *grpc.UnaryServerInfo, h grpc.UnaryHandler) (any, error) {
 		out, e := h(c, r)
 		if e == nil && i.FullMethod == pb.SubscriptionSnapshots_BuildSnapshot_FullMethodName && lost.CompareAndSwap(false, true) {
 			committed <- proto.Clone(out.(*pb.SnapshotPageResponse)).(*pb.SnapshotPageResponse)
@@ -80,7 +105,7 @@ func TestPostgresSnapshotRecoveryOverTLS(t *testing.T) {
 		t.Fatal(e)
 	}
 	late := fixture(t, pool, domain.Active) // New commit must not alter recovered frozen pages.
-	client := rpc.NewClient(connect(t, rpc.NewServer(sub.NewSnapshots(pool2)), matcherURI))
+	client := rpc.NewClient(connect(t, rpc.NewServer(timedStore{sub.NewSnapshots(pool2), t}), matcherURI))
 	first, e := client.BuildSnapshot(ctx, req)
 	if e != nil || !proto.Equal(first, <-committed) {
 		t.Fatal(first, e)
@@ -162,7 +187,7 @@ func TestPostgresSnapshotRecoveryOverTLS(t *testing.T) {
 	}
 	short := request()
 	short.RequestId = fmt.Sprintf("expire-%d", time.Now().UnixNano())
-	short.TtlMillis = 100
+	short.TtlMillis = expiryTestTTL.Milliseconds()
 	p, e := client.BuildSnapshot(ctx, short)
 	if e != nil {
 		t.Fatal(e)
@@ -181,6 +206,7 @@ func TestPostgresSnapshotRecoveryOverTLS(t *testing.T) {
 }
 func TestPostgresCanceledBuildOverTLS(t *testing.T) {
 	pool := postgrestest.Open(t)
+	requireSnapshotClocks(t, pool)
 	ctx := context.Background()
 	conn, e := pool.Acquire(ctx)
 	if e != nil {
@@ -191,7 +217,7 @@ func TestPostgresCanceledBuildOverTLS(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer conn.Exec(ctx, `SELECT pg_advisory_unlock($1)`, sub.RetentionLock)
-	client := rpc.NewClient(connect(t, rpc.NewServer(sub.NewSnapshots(pool)), matcherURI))
+	client := rpc.NewClient(connect(t, rpc.NewServer(timedStore{sub.NewSnapshots(pool), t}), matcherURI))
 	req := request()
 	req.RequestId = fmt.Sprintf("cancel-%d", time.Now().UnixNano())
 	limited, cancel := context.WithTimeout(ctx, 150*time.Millisecond)
@@ -208,4 +234,62 @@ func TestPostgresCanceledBuildOverTLS(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer sub.NewSnapshots(pool).Abandon(ctx, matcherURI, p.SnapshotId)
+}
+
+// clockDomainStore models SQL timestamps from a VM behind the API host. It
+// shifts only the timestamp crossing the Store/RPC boundary, never system
+// clocks or durable rows. SQL BuildRequest and Page still run for real.
+type clockDomainStore struct {
+	rpc.Store
+	offset time.Duration
+	t      *testing.T
+}
+
+func (s clockDomainStore) Page(ctx context.Context, owner, id, after string, n int) (sub.SnapshotPage, error) {
+	out, err := s.Store.Page(ctx, owner, id, after, n)
+	s.t.Logf("clock-domain injection: SQL Page outcome=%v actual_expires=%s offset=%s", err, out.Snapshot.ExpiresAt.UTC().Format(time.RFC3339Nano), s.offset)
+	out.Snapshot.ExpiresAt = out.Snapshot.ExpiresAt.Add(s.offset)
+	return out, err
+}
+func TestPostgresSnapshotClockDomains(t *testing.T) {
+	pool := postgrestest.Open(t)
+	requireSnapshotClocks(t, pool)
+	ctx := context.Background()
+	storage := sub.NewSnapshots(pool)
+	for _, offset := range []time.Duration{0, -2 * time.Minute} {
+		t.Run(offset.String(), func(t *testing.T) {
+			client := rpc.NewClient(connect(t, rpc.NewServer(clockDomainStore{storage, offset, t}), matcherURI))
+			req := request()
+			req.RequestId = fmt.Sprintf("clock-%d", time.Now().UnixNano())
+			_, err := client.BuildSnapshot(ctx, req)
+			want := codes.OK
+			if offset != 0 {
+				want = codes.FailedPrecondition
+			}
+			if status.Code(err) != want {
+				t.Fatalf("RPC code=%s want=%s", status.Code(err), want)
+			}
+			// Both SQL operations succeed with the same request after the RPC failure:
+			// this isolates rejection to the RPC host-clock check, not SQL resource loss.
+			snap, err := storage.BuildRequest(ctx, matcherURI, req.RequestId, time.Minute)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer storage.Abandon(ctx, matcherURI, snap.ID)
+			if _, err := storage.Page(ctx, matcherURI, snap.ID, "", 1); err != nil {
+				t.Fatal(err)
+			}
+			before := time.Now().UTC()
+			var database time.Time
+			if err := pool.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&database); err != nil {
+				t.Fatal("clock sample failed")
+			}
+			after := time.Now().UTC()
+			prerequisite := snapshotClockError(before, database.Add(offset), after)
+			t.Logf("modeled clock prerequisite: %v", prerequisite)
+			if (prerequisite != nil) != (offset != 0) {
+				t.Fatal("clock prerequisite did not distinguish the injected skew")
+			}
+		})
+	}
 }

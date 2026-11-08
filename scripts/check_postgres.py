@@ -21,6 +21,8 @@ def main():
                        help='run only isolated notifications source-binding SQL checks')
     scope.add_argument('--jobs-only', action='store_true',
                        help='run only notifications jobs SQL checks with runtime privileges')
+    scope.add_argument('--snapshot-only', action='store_true',
+                       help='run only API snapshot SQL and RPC checks')
     args = parser.parse_args()
     # Fixed project prevents accidentally targeting the developer's database.
     # Serialize runs so one invocation cannot remove another's test database.
@@ -69,6 +71,11 @@ def main():
                 env[variable] = (f'postgres://{owner}_runtime:{quote(password, safe="")}@'
                                  f'127.0.0.1:{port}/{owner}?sslmode=disable&connect_timeout=5')
             env['POSTGRES_TEST'] = '1'
+            if args.snapshot_only:
+                run(['go', 'test', '-race', '-count=1', '-v',
+                     '-run', 'Snapshot|CanceledBuild|RejectPageExpired',
+                     './internal/api/subscription', './internal/api/snapshotrpc'])
+                return
             if args.jobs_only:
                 run(['go', 'test', '-race', '-count=1', '-v',
                      './internal/notifications/jobs'])

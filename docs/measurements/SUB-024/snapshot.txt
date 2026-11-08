@@ -1,0 +1,122 @@
+=== RUN   TestSnapshotRequestValidation
+--- PASS: TestSnapshotRequestValidation (0.00s)
+=== RUN   TestSnapshotRequestReplay
+--- PASS: TestSnapshotRequestReplay (0.09s)
+=== RUN   TestSnapshotRequestConcurrent
+--- PASS: TestSnapshotRequestConcurrent (0.10s)
+=== RUN   TestSnapshotRequestCommitRecovery
+--- PASS: TestSnapshotRequestCommitRecovery (0.07s)
+=== RUN   TestSnapshotRequestLostResources
+=== RUN   TestSnapshotRequestLostResources/expired
+=== RUN   TestSnapshotRequestLostResources/pin-expired
+=== RUN   TestSnapshotRequestLostResources/missing-pin
+=== RUN   TestSnapshotRequestLostResources/missing-snapshot
+--- PASS: TestSnapshotRequestLostResources (0.42s)
+    --- PASS: TestSnapshotRequestLostResources/expired (0.33s)
+    --- PASS: TestSnapshotRequestLostResources/pin-expired (0.03s)
+    --- PASS: TestSnapshotRequestLostResources/missing-pin (0.03s)
+    --- PASS: TestSnapshotRequestLostResources/missing-snapshot (0.02s)
+=== RUN   TestSnapshotRequestCancelledWait
+--- PASS: TestSnapshotRequestCancelledWait (0.13s)
+=== RUN   TestSnapshotPagesAndPins
+--- PASS: TestSnapshotPagesAndPins (0.11s)
+=== RUN   TestSnapshotDelayedCommits
+--- PASS: TestSnapshotDelayedCommits (0.18s)
+=== RUN   TestSnapshotRetentionOrdering
+--- PASS: TestSnapshotRetentionOrdering (0.09s)
+=== RUN   TestSnapshotPinBoundariesAndFailure
+--- PASS: TestSnapshotPinBoundariesAndFailure (0.14s)
+=== RUN   TestSnapshotExpiryAndBuilderRollback
+--- PASS: TestSnapshotExpiryAndBuilderRollback (0.43s)
+=== RUN   TestSnapshotHandoffRetention
+--- PASS: TestSnapshotHandoffRetention (0.06s)
+PASS
+ok  	github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/subscription	3.321s
+=== RUN   TestSnapshotClockPrecondition
+--- PASS: TestSnapshotClockPrecondition (0.00s)
+=== RUN   TestRejectPageExpiredDuringRead
+--- PASS: TestRejectPageExpiredDuringRead (0.02s)
+=== RUN   TestPostgresSnapshotRecoveryOverTLS
+    postgres_test.go:83: snapshot clocks host=[2026-11-08T18:55:10.96248Z,2026-11-08T18:55:10.963856Z] sql=2026-11-08T18:55:10.963091Z
+    postgres_test.go:37: before SQL BuildRequest host=2026-11-08T18:55:11.004777Z expires=0001-01-01T00:00:00Z outcome=<nil>
+    postgres_test.go:39: after SQL BuildRequest host=2026-11-08T18:55:11.02018Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:44: after SQL Page / before RPC expiry host=2026-11-08T18:55:11.024735Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:37: before SQL BuildRequest host=2026-11-08T18:55:11.037003Z expires=0001-01-01T00:00:00Z outcome=<nil>
+    postgres_test.go:39: after SQL BuildRequest host=2026-11-08T18:55:11.046832Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:44: after SQL Page / before RPC expiry host=2026-11-08T18:55:11.050795Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:37: before SQL BuildRequest host=2026-11-08T18:55:11.052117Z expires=0001-01-01T00:00:00Z outcome=<nil>
+    postgres_test.go:37: before SQL BuildRequest host=2026-11-08T18:55:11.052273Z expires=0001-01-01T00:00:00Z outcome=<nil>
+    postgres_test.go:37: before SQL BuildRequest host=2026-11-08T18:55:11.052256Z expires=0001-01-01T00:00:00Z outcome=<nil>
+    postgres_test.go:37: before SQL BuildRequest host=2026-11-08T18:55:11.052559Z expires=0001-01-01T00:00:00Z outcome=<nil>
+    postgres_test.go:37: before SQL BuildRequest host=2026-11-08T18:55:11.052139Z expires=0001-01-01T00:00:00Z outcome=<nil>
+    postgres_test.go:37: before SQL BuildRequest host=2026-11-08T18:55:11.052334Z expires=0001-01-01T00:00:00Z outcome=<nil>
+    postgres_test.go:37: before SQL BuildRequest host=2026-11-08T18:55:11.052351Z expires=0001-01-01T00:00:00Z outcome=<nil>
+    postgres_test.go:37: before SQL BuildRequest host=2026-11-08T18:55:11.052326Z expires=0001-01-01T00:00:00Z outcome=<nil>
+    postgres_test.go:39: after SQL BuildRequest host=2026-11-08T18:55:11.066902Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:44: after SQL Page / before RPC expiry host=2026-11-08T18:55:11.06915Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:39: after SQL BuildRequest host=2026-11-08T18:55:11.072662Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:44: after SQL Page / before RPC expiry host=2026-11-08T18:55:11.075061Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:39: after SQL BuildRequest host=2026-11-08T18:55:11.084529Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:44: after SQL Page / before RPC expiry host=2026-11-08T18:55:11.087647Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:39: after SQL BuildRequest host=2026-11-08T18:55:11.088061Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:44: after SQL Page / before RPC expiry host=2026-11-08T18:55:11.091006Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:39: after SQL BuildRequest host=2026-11-08T18:55:11.092073Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:44: after SQL Page / before RPC expiry host=2026-11-08T18:55:11.095103Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:39: after SQL BuildRequest host=2026-11-08T18:55:11.097229Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:44: after SQL Page / before RPC expiry host=2026-11-08T18:55:11.100856Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:39: after SQL BuildRequest host=2026-11-08T18:55:11.101354Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:44: after SQL Page / before RPC expiry host=2026-11-08T18:55:11.105513Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:39: after SQL BuildRequest host=2026-11-08T18:55:11.106158Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:44: after SQL Page / before RPC expiry host=2026-11-08T18:55:11.108845Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:44: after SQL Page / before RPC expiry host=2026-11-08T18:55:11.111796Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:44: after SQL Page / before RPC expiry host=2026-11-08T18:55:11.114669Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:44: after SQL Page / before RPC expiry host=2026-11-08T18:55:11.117169Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:44: after SQL Page / before RPC expiry host=2026-11-08T18:55:11.119725Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:44: after SQL Page / before RPC expiry host=2026-11-08T18:55:11.122652Z expires=2026-11-08T18:56:11.01215Z outcome=<nil>
+    postgres_test.go:37: before SQL BuildRequest host=2026-11-08T18:55:11.123158Z expires=0001-01-01T00:00:00Z outcome=<nil>
+    postgres_test.go:39: after SQL BuildRequest host=2026-11-08T18:55:11.12532Z expires=0001-01-01T00:00:00Z outcome=snapshot request parameters differ
+    postgres_test.go:44: after SQL Page / before RPC expiry host=2026-11-08T18:55:11.126808Z expires=0001-01-01T00:00:00Z outcome=snapshot or replay pin unavailable; restart snapshot
+    postgres_test.go:44: after SQL Page / before RPC expiry host=2026-11-08T18:55:11.133274Z expires=0001-01-01T00:00:00Z outcome=snapshot or replay pin unavailable; restart snapshot
+    postgres_test.go:37: before SQL BuildRequest host=2026-11-08T18:55:11.134663Z expires=0001-01-01T00:00:00Z outcome=<nil>
+    postgres_test.go:39: after SQL BuildRequest host=2026-11-08T18:55:11.137127Z expires=0001-01-01T00:00:00Z outcome=snapshot or replay pin unavailable; restart snapshot
+    postgres_test.go:44: after SQL Page / before RPC expiry host=2026-11-08T18:55:11.138614Z expires=0001-01-01T00:00:00Z outcome=snapshot or replay pin unavailable; restart snapshot
+    postgres_test.go:37: before SQL BuildRequest host=2026-11-08T18:55:11.139007Z expires=0001-01-01T00:00:00Z outcome=<nil>
+    postgres_test.go:39: after SQL BuildRequest host=2026-11-08T18:55:11.147619Z expires=2026-11-08T18:55:11.241461Z outcome=<nil>
+    postgres_test.go:44: after SQL Page / before RPC expiry host=2026-11-08T18:55:11.149087Z expires=2026-11-08T18:55:11.241461Z outcome=<nil>
+    postgres_test.go:44: after SQL Page / before RPC expiry host=2026-11-08T18:55:11.244594Z expires=0001-01-01T00:00:00Z outcome=snapshot or replay pin unavailable; restart snapshot
+    postgres_test.go:37: before SQL BuildRequest host=2026-11-08T18:55:11.245156Z expires=0001-01-01T00:00:00Z outcome=<nil>
+    postgres_test.go:39: after SQL BuildRequest host=2026-11-08T18:55:11.249209Z expires=0001-01-01T00:00:00Z outcome=snapshot or replay pin unavailable; restart snapshot
+    clock_test.go:45: snapshot clocks host=[2026-11-08T18:55:11.260555Z,2026-11-08T18:55:11.261771Z] sql=2026-11-08T18:55:11.260966Z
+--- PASS: TestPostgresSnapshotRecoveryOverTLS (0.32s)
+=== RUN   TestPostgresCanceledBuildOverTLS
+    postgres_test.go:209: snapshot clocks host=[2026-11-08T18:55:11.277765Z,2026-11-08T18:55:11.279804Z] sql=2026-11-08T18:55:11.279118Z
+    postgres_test.go:37: before SQL BuildRequest host=2026-11-08T18:55:11.29373Z expires=0001-01-01T00:00:00Z outcome=<nil>
+    postgres_test.go:39: after SQL BuildRequest host=2026-11-08T18:55:11.437747Z expires=0001-01-01T00:00:00Z outcome=context canceled
+    postgres_test.go:37: before SQL BuildRequest host=2026-11-08T18:55:11.439331Z expires=0001-01-01T00:00:00Z outcome=<nil>
+    postgres_test.go:39: after SQL BuildRequest host=2026-11-08T18:55:11.471095Z expires=2026-11-08T18:56:11.461662Z outcome=<nil>
+    postgres_test.go:44: after SQL Page / before RPC expiry host=2026-11-08T18:55:11.47551Z expires=2026-11-08T18:56:11.461662Z outcome=<nil>
+    clock_test.go:45: snapshot clocks host=[2026-11-08T18:55:11.477835Z,2026-11-08T18:55:11.478239Z] sql=2026-11-08T18:55:11.477584Z
+--- PASS: TestPostgresCanceledBuildOverTLS (0.22s)
+=== RUN   TestPostgresSnapshotClockDomains
+    postgres_test.go:256: snapshot clocks host=[2026-11-08T18:55:11.493066Z,2026-11-08T18:55:11.49395Z] sql=2026-11-08T18:55:11.493306Z
+=== RUN   TestPostgresSnapshotClockDomains/0s
+    postgres_test.go:250: clock-domain injection: SQL Page outcome=<nil> actual_expires=2026-11-08T18:56:11.511612Z offset=0s
+    postgres_test.go:289: modeled clock prerequisite: <nil>
+=== RUN   TestPostgresSnapshotClockDomains/-2m0s
+    postgres_test.go:250: clock-domain injection: SQL Page outcome=<nil> actual_expires=2026-11-08T18:56:11.547531Z offset=-2m0s
+    postgres_test.go:289: modeled clock prerequisite: snapshot clock prerequisite: host=[2026-11-08T18:55:11.558068Z,2026-11-08T18:55:11.558449Z] sql=2026-11-08T18:53:11.557777Z; clock offset/measurement uncertainty exceeds 50ms; synchronize host and Docker VM clocks before SQL/RPC expiry tests
+=== NAME  TestPostgresSnapshotClockDomains
+    clock_test.go:45: snapshot clocks host=[2026-11-08T18:55:11.560091Z,2026-11-08T18:55:11.56054Z] sql=2026-11-08T18:55:11.559884Z
+--- PASS: TestPostgresSnapshotClockDomains (0.08s)
+    --- PASS: TestPostgresSnapshotClockDomains/0s (0.03s)
+    --- PASS: TestPostgresSnapshotClockDomains/-2m0s (0.03s)
+PASS
+ok  	github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/snapshotrpc	2.519s
+ Container binance-go-check-postgres-1 Stopping
+ Container binance-go-check-postgres-1 Stopped
+ Container binance-go-check-postgres-1 Removing
+ Container binance-go-check-postgres-1 Removed
+ Network binance-go-check_default Removing
+ Volume binance-go-check_data Removing
+ Volume binance-go-check_data Removed
+ Network binance-go-check_default Removed
