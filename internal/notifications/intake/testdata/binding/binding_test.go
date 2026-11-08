@@ -185,15 +185,63 @@ func TestBinding(t *testing.T) {
 		must(e)
 		_, e = tx.Exec(ctx, `INSERT INTO app.delivery_checkpoints VALUES('legacy-race',0,0)`)
 		must(e)
-		short, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
-		e = s.Bootstrap(short, b, []int32{0, 1})
-		cancel()
-		if e == nil {
+		defer tx.Rollback(ctx)
+		// Isolate the canceled call so its backend can be observed independently
+		// of the lock holder and the observer. A client error alone does not
+		// confirm that PostgreSQL has processed its asynchronous CancelRequest.
+		cfg := p.Config()
+		cfg.MaxConns, cfg.MinConns = 1, 0
+		bootstrapPool, e := pgxpool.NewWithConfig(ctx, cfg)
+		must(e)
+		defer bootstrapPool.Close()
+		conn, e := bootstrapPool.Acquire(ctx)
+		must(e)
+		pid := conn.Conn().PgConn().PID()
+		conn.Release()
+		waitFor := func(label, query string, args ...any) {
+			t.Helper()
+			waiting, stop := context.WithTimeout(ctx, 5*time.Second)
+			defer stop()
+			for {
+				var ok bool
+				if e := p.QueryRow(waiting, query, args...).Scan(&ok); e != nil {
+					t.Fatalf("waiting for %s: %v", label, e)
+				}
+				if ok {
+					return
+				}
+				select {
+				case <-waiting.Done():
+					t.Fatalf("waiting for %s: %v", label, waiting.Err())
+				case <-time.After(5 * time.Millisecond):
+				}
+			}
+		}
+		canceled, cancelBootstrap := context.WithCancel(ctx)
+		defer cancelBootstrap()
+		bootstrapResult := make(chan error, 1)
+		go func() {
+			bootstrapResult <- intake.NewStore(bootstrapPool).Bootstrap(canceled, b, []int32{0, 1})
+		}()
+		waitFor("bootstrap blocked by legacy writer", `SELECT EXISTS (
+		 SELECT FROM pg_stat_activity WHERE pid=$1 AND wait_event_type='Lock'
+		 AND $2=ANY(pg_blocking_pids(pid)))`, pid, tx.Conn().PgConn().PID())
+		if count("delivery_intake_source") != 0 || count("delivery_checkpoints") != 0 {
 			t.Fatal("bootstrap passed uncommitted legacy writer")
 		}
+		cancelBootstrap()
+		e = <-bootstrapResult
+		want(e, context.Canceled)
+		t.Logf("bootstrap client result: %v", e)
+		// Keep the advisory lock until the exact backend has exited. Releasing
+		// it immediately after the client error permits an unknown commit.
+		waitFor("canceled bootstrap backend exit", `SELECT NOT EXISTS (
+		 SELECT FROM pg_stat_activity WHERE pid=$1)`, pid)
 		must(tx.Rollback(ctx))
-		if count("delivery_intake_source") != 0 || count("delivery_checkpoints") != 0 {
-			t.Fatal("canceled bootstrap changed state")
+		sources, checkpoints, jobCount := count("delivery_intake_source"), count("delivery_checkpoints"), count("delivery_jobs")
+		t.Logf("confirmed cancellation: source=%d checkpoints=%d jobs=%d", sources, checkpoints, jobCount)
+		if sources != 0 || checkpoints != 0 || jobCount != 0 {
+			t.Fatal("confirmed canceled bootstrap changed state")
 		}
 		tx, e = p.Begin(ctx)
 		must(e)

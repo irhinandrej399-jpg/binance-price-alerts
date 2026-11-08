@@ -138,6 +138,14 @@ bootstrap и read-only startup validation. Экспортера нет.
 
 Проверка: `GOCACHE=/tmp/binance-go-build python3 scripts/check_postgres.py`.
 Только этот SQL-контракт: та же команда с `--binding-only`.
+
+Ошибка клиента при cancellation не доказывает серверный rollback: освобождение
+legacy lock до обработки CancelRequest может разрешить полный bootstrap commit.
+В fixture отказ при удерживаемом legacy lock проверяется по `pg_blocking_pids`;
+после отмены lock удерживается до исчезновения точного backend PID из
+`pg_stat_activity`. Только затем проверяется отсутствие source/checkpoints/jobs.
+Это подтверждение отмены в тесте, а не новая гарантия runtime Bootstrap.
+
 Первой фазой runner запускает `intake/testdata/binding` на disposable notifications
 БД с SQL fixtures: legacy seed **до миграции 011**, snapshot всех четырёх исходов/
 reports, fault/rollback/deferred commit, concurrent bootstrap/old writer/CAS,
