@@ -132,3 +132,13 @@ Metadata повторно проверяется раз в секунду так
 SQL binding/защита старых writers — OPS-061; NewResume и cmd/matcher — OPS-062.
 Нынешний runtime ещё не передаёт identity и получает явный отказ; fallback
 на discovery или автоматическое присвоение старому checkpoint не добавлены.
+
+### Готовность source-generation fixture (OPS-067)
+
+Успех CreateTopics не является готовностью broker metadata. При подготовке
+уникального тестового topic `newGeneration` ждёт в общем бюджете 5 s новый
+ненулевой TopicID, partition 0 без ошибки и leader в ISR; после replacement
+также сохраняется ClusterID. Это discovery только нового fixture. Старые
+reader/resume/Confirm после mismatch не повторяются и не получают новую
+identity. Диагностика, Red/Green и граница исторического вывода —
+[OPS-067](../../../docs/measurements/OPS-067/diagnosis.md).

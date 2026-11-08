@@ -3,6 +3,7 @@ package changefeed
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -37,10 +38,10 @@ func generationTopic(t *testing.T, c *kgo.Client, topic string, create bool) {
 }
 func TestIntegrationSourceGeneration(t *testing.T) {
 	cfg, p := integration(t, 0)
-	cfg.Topic += "-source-generation"
+	cfg.Topic += fmt.Sprintf("-source-generation-%d", time.Now().UnixNano())
 	generationTopic(t, p, cfg.Topic, true)
 	var err error
-	cfg.Source, _, err = kafkasource.Metadata(bounded(t, 5*time.Second), p, cfg.Topic)
+	cfg.Source, err = newGeneration(bounded(t, 5*time.Second), p, cfg.Topic, kafkasource.Identity{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +66,7 @@ func TestIntegrationSourceGeneration(t *testing.T) {
 	// Keep an unconfirmed delivery across replacement. It must become unconfirmable.
 	generationTopic(t, p, cfg.Topic, false)
 	generationTopic(t, p, cfg.Topic, true)
-	replacement, _, err := kafkasource.Metadata(bounded(t, 5*time.Second), p, cfg.Topic)
+	replacement, err := newGeneration(bounded(t, 5*time.Second), p, cfg.Topic, cfg.Source)
 	if err != nil || replacement == cfg.Source {
 		t.Fatal(replacement, err)
 	}
@@ -103,5 +104,27 @@ func TestIntegrationSourceGeneration(t *testing.T) {
 	pos.Source = kafkasource.Identity{}
 	if _, err := current.RegisterAt(bounded(t, 5*time.Second), pos); !errors.Is(err, kafkasource.ErrIdentity) {
 		t.Fatal("unbound checkpoint", err)
+	}
+}
+
+// newGeneration is only for provisioning disposable topics, never resuming an
+// existing position. A successful controller create is not broker readiness.
+func newGeneration(ctx context.Context, c *kgo.Client, topic string, previous kafkasource.Identity) (kafkasource.Identity, error) {
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		id, parts, err := kafkasource.Metadata(ctx, c, topic)
+		if err == nil && id != previous && (previous.ClusterID == "" || id.ClusterID == previous.ClusterID) && len(parts) == 1 && parts[0].Partition == 0 && parts[0].Leader >= 0 {
+			for _, replica := range parts[0].ISR {
+				if replica == parts[0].Leader {
+					return id, nil
+				}
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return kafkasource.Identity{}, ctx.Err()
+		case <-ticker.C:
+		}
 	}
 }

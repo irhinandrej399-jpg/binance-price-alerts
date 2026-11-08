@@ -9,8 +9,7 @@
 
 ## Порядок работ
 
-В очереди 8 незавершённых задач: один конкретный дефект и семь практических
-задач выпуска. Следующий — OPS-067. Затем подключение каталога к runtime, постоянный запуск,
+В очереди 7 незавершённых практических задач выпуска. Следующий — MKT-019 (подключение каталога к runtime). Затем постоянный запуск,
 HTTPS/секреты, backup/restore, базовое наблюдение, малый restart smoke и
 реальный сценарий Binance → свой Telegram. Подробные критерии — в карточках.
 
@@ -222,7 +221,7 @@ HTTPS/секреты, backup/restore, базовое наблюдение, ма�
 | [OPS-056](tickets/OPS-056.md) | Экспортировать durable Kafka-прогресс matcher | MAT-011, MAT-009, SET-007, SET-008, OPS-053, OPS-062 | done |
 | [OPS-064](tickets/OPS-064.md) | Сохранить source binding intake notifications в SQL | NTF-001, OPS-060 | done |
 | [OPS-065](tickets/OPS-065.md) | Проверить поколение Kafka-источника на входе notifications | OPS-064, OPS-060, SET-009 | done |
-| [OPS-067](tickets/OPS-067.md) | Исследовать нестабильную metadata после recreate в changefeed fixture | OPS-060, SET-009 | planned |
+| [OPS-067](tickets/OPS-067.md) | Исследовать нестабильную metadata после recreate в changefeed fixture | OPS-060, SET-009 | done |
 | [OPS-066](tickets/OPS-066.md) | Подключить source binding к runtime notifications | OPS-064, OPS-065, OPS-055, OPS-011, OPS-054 | done |
 | [OPS-057](tickets/OPS-057.md) | Экспортировать durable Kafka-прогресс notifications | NTF-001, SET-007, SET-008, OPS-055, OPS-066 | done |
 | [OPS-068](tickets/OPS-068.md) | Управлять отказами OffsetCommit и DeleteRecords в Kafka fault proxy | SET-009 | done |

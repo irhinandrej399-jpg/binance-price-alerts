@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
+	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 )
 
@@ -20,13 +21,14 @@ import (
 // metadata lookup and first fetch see a different incarnation with offset zero.
 // No group/producer/fault framework is implemented here.
 type generationWire struct {
-	mu           sync.Mutex
-	metadata     int
-	control      bool
-	metadataMode string
-	conns        []net.Conn
-	wg           sync.WaitGroup
-	closed       bool
+	mu               sync.Mutex
+	metadata         int
+	control          bool
+	metadataMode     string
+	metadataResponse func(int, *kmsg.MetadataResponse)
+	conns            []net.Conn
+	wg               sync.WaitGroup
+	closed           bool
 }
 
 var wireIdentity = kafkasource.Identity{ClusterID: "cluster", Topic: "changes", TopicID: [16]byte{1}}
@@ -80,7 +82,11 @@ func (w *generationWire) dial(context.Context, string, string) (net.Conn, error)
 			switch key {
 			case 18:
 				v := kmsg.NewPtrApiVersionsResponse()
-				v.ApiKeys = []kmsg.ApiVersionsResponseApiKey{{ApiKey: 18, MinVersion: 0, MaxVersion: 3}, {ApiKey: 3, MinVersion: 0, MaxVersion: 12}, {ApiKey: 2, MinVersion: 0, MaxVersion: 7}, {ApiKey: 1, MinVersion: 0, MaxVersion: 13}}
+				v.ApiKeys = []kmsg.ApiVersionsResponseApiKey{{ApiKey: 18, MinVersion: 0, MaxVersion: 3}, {ApiKey: 19, MinVersion: 0, MaxVersion: 7}, {ApiKey: 3, MinVersion: 0, MaxVersion: 12}, {ApiKey: 2, MinVersion: 0, MaxVersion: 7}, {ApiKey: 1, MinVersion: 0, MaxVersion: 13}}
+				resp = v
+			case 19:
+				v := kmsg.NewPtrCreateTopicsResponse()
+				v.Topics = []kmsg.CreateTopicsResponseTopic{{Topic: wireIdentity.Topic, TopicID: [16]byte{2}}}
 				resp = v
 			case 3:
 				off := 10 + int(int16(binary.BigEndian.Uint16(req[8:10])))
@@ -124,6 +130,9 @@ func (w *generationWire) dial(context.Context, string, string) (net.Conn, error)
 				case "cancel":
 					<-time.After(100 * time.Millisecond)
 					return
+				}
+				if w.metadataResponse != nil {
+					w.metadataResponse(n, v)
 				}
 				resp = v
 			case 2:
@@ -222,5 +231,102 @@ func TestMetadataIdentityFailuresAndCancellation(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+// Exercise fixture readiness through the existing Kafka wire boundary. These
+// retries provision a new test source; they never retry a rejected reader.
+func TestNewGenerationReadiness(t *testing.T) {
+	for _, mode := range []string{"missing", "old", "zero", "partition-error", "no-leader", "no-isr", "ready"} {
+		t.Run(mode, func(t *testing.T) {
+			w := &generationWire{metadataMode: "stable"}
+			w.metadataResponse = func(n int, v *kmsg.MetadataResponse) {
+				v.Topics[0].TopicID = [16]byte{2}
+				if n > 1 {
+					return
+				}
+				switch mode {
+				case "missing":
+					v.Topics[0].ErrorCode = 3
+					v.Topics[0].Partitions = nil
+				case "old":
+					v.Topics[0].TopicID = wireIdentity.TopicID
+				case "zero":
+					v.Topics[0].TopicID = [16]byte{}
+				case "partition-error":
+					v.Topics[0].Partitions[0].ErrorCode = 5
+				case "no-leader":
+					v.Topics[0].Partitions[0].Leader = -1
+				case "no-isr":
+					v.Topics[0].Partitions[0].ISR = nil
+				}
+			}
+			defer w.close()
+			c, err := kgo.NewClient(kgo.SeedBrokers("localhost:9092"), kgo.Dialer(w.dial))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer c.Close()
+			generationTopic(t, c, wireIdentity.Topic, true)
+			// CreateTopics locates the controller with its own metadata request.
+			w.mu.Lock()
+			w.metadata = 0
+			w.mu.Unlock()
+			id, err := newGeneration(bounded(t, time.Second), c, wireIdentity.Topic, wireIdentity)
+			if err != nil || id.TopicID != ([16]byte{2}) {
+				t.Fatal(id, err)
+			}
+			w.mu.Lock()
+			n := w.metadata
+			w.mu.Unlock()
+			if mode != "ready" && n < 2 {
+				t.Fatal("unready response accepted", mode, n)
+			}
+		})
+	}
+}
+func TestNewGenerationReadinessBounded(t *testing.T) {
+	w := &generationWire{metadataMode: "stable"}
+	defer w.close()
+	c, err := kgo.NewClient(kgo.SeedBrokers("localhost:9092"), kgo.Dialer(w.dial))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	id, err := newGeneration(ctx, c, wireIdentity.Topic, wireIdentity)
+	if !errors.Is(err, context.DeadlineExceeded) || id != (kafkasource.Identity{}) {
+		t.Fatal("old generation accepted or deadline lost", id, err)
+	}
+}
+
+func TestCreatedTopicMetadataMayBeUnavailable(t *testing.T) {
+	w := &generationWire{metadataMode: "stable"}
+	w.metadataResponse = func(n int, v *kmsg.MetadataResponse) {
+		v.Topics[0].TopicID = [16]byte{2}
+		if n == 1 {
+			v.Topics[0].ErrorCode = 3 // UNKNOWN_TOPIC_OR_PARTITION after successful create.
+			v.Topics[0].Partitions = nil
+		}
+	}
+	defer w.close()
+	c, err := kgo.NewClient(kgo.SeedBrokers("localhost:9092"), kgo.Dialer(w.dial))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	generationTopic(t, c, wireIdentity.Topic, true)
+	// CreateTopics locates the controller with its own metadata request.
+	w.mu.Lock()
+	w.metadata = 0
+	w.mu.Unlock()
+	id, _, err := kafkasource.Metadata(bounded(t, time.Second), c, wireIdentity.Topic)
+	if !errors.Is(err, kafkasource.ErrMetadata) || id != (kafkasource.Identity{}) {
+		t.Fatal(id, err)
+	}
+	id, err = newGeneration(bounded(t, time.Second), c, wireIdentity.Topic, wireIdentity)
+	if err != nil || id.TopicID != ([16]byte{2}) {
+		t.Fatal(id, err)
 	}
 }
