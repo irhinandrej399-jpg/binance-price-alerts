@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the API child harness on unique disposable PostgreSQL/Kafka projects."""
+"""Verify process environments on unique disposable PostgreSQL/Kafka projects."""
 import argparse
 import os
 from pathlib import Path
@@ -39,15 +39,16 @@ def run(command, env, timeout=180, **kwargs):
 
 
 def main(owner="api"):
-    if owner not in ("api", "market_data", "matcher", "notifications", "cleaner"):
+    if owner not in ("api", "market_data", "matcher", "notifications", "cleaner", "e2e"):
         raise RuntimeError("unsupported process environment owner")
+    joint = owner == "e2e"
     cleaner = owner == "cleaner"
     market = owner == "market_data"
     matcher = owner == "matcher"
     notifications = owner == "notifications"
-    label = "cleaner" if cleaner else "notifications" if notifications else ("matcher" if matcher else ("market-data" if market else "API"))
+    label = "E2E environment" if joint else "cleaner" if cleaner else "notifications" if notifications else ("matcher" if matcher else ("market-data" if market else "API"))
     parser = argparse.ArgumentParser(description=f"Verify a {label} child on disposable PostgreSQL/Kafka projects.")
-    parser.add_argument('--package', default='./internal/testutil/cleanerprocess' if cleaner else ('./internal/testutil/notificationsprocess' if notifications else ('./internal/testutil/matcherprocess' if matcher else ('./internal/testutil/marketprocess' if market else './internal/testutil/apiprocess'))),
+    parser.add_argument('--package', default='./internal/testutil/e2eenvironment' if joint else './internal/testutil/cleanerprocess' if cleaner else ('./internal/testutil/notificationsprocess' if notifications else ('./internal/testutil/matcherprocess' if matcher else ('./internal/testutil/marketprocess' if market else './internal/testutil/apiprocess'))),
                         help='Go test package for this disposable owner environment')
     args = parser.parse_args()
     if not args.package.startswith('./') or '..' in Path(args.package).parts:
@@ -58,7 +59,8 @@ def main(owner="api"):
     prefix = 'process-' + suffix
     # Remove all inherited owner DSNs and app settings. Only the selected runtime
     # credential (plus parent-only API fixture for matcher/notifications) is supplied to tests.
-    # The joint cleaner fixture receives API+matcher+notifications only in its parent.
+    # Cleaner receives API+matcher+notifications; E2E receives all four only
+    # in the parent. Neither mode installs notifications fault/reset SQL.
     # Child env is explicitly constructed by apiprocess.Config, with no parent inheritance.
     env = {k: v for k, v in os.environ.items()
            if k in ('PATH', 'HOME', 'TMPDIR', 'DOCKER_HOST', 'DOCKER_CONTEXT',
@@ -81,7 +83,10 @@ def main(owner="api"):
     cleanup_errors = []
     try:
         run(pg + ['up', '-d', '--wait', '--wait-timeout', '120'], env)
-        for db_owner in (("api", "matcher", "notifications") if cleaner else (("api", owner) if matcher or notifications else (owner,))):
+        db_owners = (("api", "market_data", "matcher", "notifications") if joint else
+                     ("api", "matcher", "notifications") if cleaner else
+                     ("api", owner) if matcher or notifications else (owner,))
+        for db_owner in db_owners:
             if notifications and db_owner == 'notifications':
                 # Trusted test-only SQL, installed only on this disposable DB.
                 with tempfile.TemporaryDirectory(prefix='binance-notifications-migrations-') as tmp:
@@ -111,18 +116,18 @@ def main(owner="api"):
         with (ROOT / 'infra/kafka/init-topics.sh').open() as script:
             run(kafka + ['exec', '-T', 'kafka', 'timeout', '90', 'bash', '-s', '--', prefix],
                 env, timeout=100, stdin=script)
-        env['CLEANER_PROCESS_INTEGRATION' if cleaner else ('NOTIFICATIONS_PROCESS_INTEGRATION' if notifications else ('MATCHER_PROCESS_INTEGRATION' if matcher else ('MARKET_DATA_PROCESS_INTEGRATION' if market else 'API_PROCESS_INTEGRATION')))] = '1'
+        env['E2E_PROCESS_INTEGRATION' if joint else 'CLEANER_PROCESS_INTEGRATION' if cleaner else ('NOTIFICATIONS_PROCESS_INTEGRATION' if notifications else ('MATCHER_PROCESS_INTEGRATION' if matcher else ('MARKET_DATA_PROCESS_INTEGRATION' if market else 'API_PROCESS_INTEGRATION')))] = '1'
         env.update(POSTGRES_TEST='1',
                    KAFKA_TEST_BROKER='127.0.0.1:' + env['KAFKA_PORT'],
                    KAFKA_TEST_PREFIX=prefix)
-        if market or matcher or notifications or cleaner:
+        if joint or market or matcher or notifications or cleaner:
             run(['go', 'test', '-race', '-count=1', '-v', '-timeout', '30s',
                  './internal/testutil/apiprocess'], env, timeout=60)
         # Keep room for crash/startup and graceful/recovery/fault scenarios,
         # including Kafka membership expiry after SIGKILL.
         run(['go', 'test', '-race', '-count=1', '-v', '-timeout',
-             '180s' if owner == 'api' else ('300s' if notifications or cleaner else ('150s' if matcher else '90s')), args.package], env,
-            timeout=210 if owner == 'api' else (330 if notifications or cleaner else (180 if matcher else 120)))
+             '180s' if owner == 'api' else ('300s' if joint or notifications or cleaner else ('150s' if matcher else '90s')), args.package], env,
+            timeout=210 if owner == 'api' else (330 if joint or notifications or cleaner else (180 if matcher else 120)))
     finally:
         # Go's test timeout/panic does not execute defers. Kill any registered
         # child process groups before removing their disposable infrastructure.
@@ -146,6 +151,9 @@ def main(owner="api"):
         registry.cleanup()
         try:
             test_temp.cleanup()
+            if Path(test_temp.name).exists() or Path(registry.name).exists():
+                raise RuntimeError("temporary files cleanup incomplete")
+            print("Cleanup verified: PID registry and temporary credentials", flush=True)
         except Exception:
             cleanup_errors.append('test temporary files')
         # Try BOTH cleanups even when one fails. Verify resources by exact

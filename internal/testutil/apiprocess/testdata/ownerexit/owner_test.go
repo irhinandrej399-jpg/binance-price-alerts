@@ -46,8 +46,14 @@ func TestAbruptOwner(t *testing.T) {
 		_ = http.ListenAndServe(os.Getenv("HTTP_ADDR"), mux)
 		os.Exit(22)
 	}
-	if os.Getenv("API_PROCESS_INTEGRATION") != "1" && os.Getenv("MARKET_DATA_PROCESS_INTEGRATION") != "1" && os.Getenv("MATCHER_PROCESS_INTEGRATION") != "1" && os.Getenv("NOTIFICATIONS_PROCESS_INTEGRATION") != "1" && os.Getenv("CLEANER_PROCESS_INTEGRATION") != "1" {
+	if os.Getenv("E2E_PROCESS_INTEGRATION") != "1" && os.Getenv("API_PROCESS_INTEGRATION") != "1" && os.Getenv("MARKET_DATA_PROCESS_INTEGRATION") != "1" && os.Getenv("MATCHER_PROCESS_INTEGRATION") != "1" && os.Getenv("NOTIFICATIONS_PROCESS_INTEGRATION") != "1" && os.Getenv("CLEANER_PROCESS_INTEGRATION") != "1" {
 		t.Skip("disposable runner only")
+	}
+	if os.Getenv("E2E_PROCESS_INTEGRATION") == "1" {
+		// A credential-like temporary artifact must disappear even without defers.
+		if err := os.WriteFile(t.TempDir()+"/test-key", []byte("test-only private material"), 0600); err != nil {
+			t.Fatal("cannot create temporary cleanup probe")
+		}
 	}
 	executable, err := os.Executable()
 	if err != nil {

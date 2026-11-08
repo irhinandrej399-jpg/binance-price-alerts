@@ -125,3 +125,8 @@ owners и отдельный caller без DSN. Контракты и коман
 [cleanerprocess](../cleanerprocess/README.md). Python-owned TMPDIR удаляет также
 временные credentials после аварийного выхода Go owner; ownerexit в этом режиме
 оставляет две зарегистрированные exporter groups для проверки cleanup.
+
+E2E-005 добавляет общий режим четырёх владельцев, только штатные миграции
+и parent-only DSN без fixture handlers: [e2eenvironment](../e2eenvironment/README.md),
+`scripts/check_e2e_environment.py`. Он использует тот же lifecycle/PID registry;
+ownerexit поддерживает `E2E_PROCESS_INTEGRATION=1`.

@@ -4,8 +4,9 @@
 
 ## Активная работа
 
-- Активная реализация: нет. OPS-073 завершён; следующий шаг — повторная сессионная проверка E2E-002 (planned).
-- Последний завершённый тикет: [OPS-073](backlog/tickets/OPS-073.md), [HTTP подписок API](../cmd/api/README.md#http-подписок-ops-073). POST/GET через session/auth и управляемые mTLS Catalog/Latest рядом с DELETE. Race executable на disposable PostgreSQL/Kafka подтвердил registration/login/link, точный SQL snapshot/quota/journal и read_committed bytes, изоляцию владельцев, RPC failures, restart, SIGTERM и cleanup. Общая race/vet/build PASS; полный E2E впереди.
+- Активная реализация: нет. E2E-005 завершён; следующий шаг — сессионная проверка E2E-002 (planned).
+- Последний завершённый тикет: [E2E-005](backlog/tickets/E2E-005.md), [общий disposable runner](../internal/testutil/e2eenvironment/README.md). Четыре parent-only DSN и штатные миграции; два реальных PostgreSQL/Kafka/race прогона подтвердили роли/CONNECT isolation, child allowlists и новые пустые topics 16/1/16 с ClusterID/TopicID. Аварийный Go owner exit подтвердил удаление child group, временных credentials и обоих стендов. Общая race/vet/build и Python проверки PASS. Четыре продуктовых executable и полный сценарий ещё впереди.
+- Предыдущий завершённый тикет: [OPS-073](backlog/tickets/OPS-073.md), [HTTP подписок API](../cmd/api/README.md#http-подписок-ops-073). POST/GET через session/auth и управляемые mTLS Catalog/Latest рядом с DELETE. Race executable на disposable PostgreSQL/Kafka подтвердил registration/login/link, точный SQL snapshot/quota/journal и read_committed bytes, изоляцию владельцев, RPC failures, restart, SIGTERM и cleanup. Общая race/vet/build PASS; полный E2E впереди.
 - Независимый сбой Kafka-регрессии: [OPS-067](backlog/tickets/OPS-067.md) — changefeed metadata unavailable сразу после recreate в fixture; причина пока гипотеза, production guards не ослаблялись.
 - Предыдущий завершённый тикет: [OPS-072](backlog/tickets/OPS-072.md), [Telegram HTTP API](../cmd/api/README.md#telegram-http-ops-072). Готовые выдача кода с Bearer и защищённый /start webhook, обязательный secret до startup, общий body limit/drain. Race executable на disposable PostgreSQL/Kafka подтвердил регистрацию/вход, точный chat/version, replay/перепривязку/restart, 401/403/413, invalid secret и SIGTERM; cleanup и общая Go race/vet/build PASS. Реального Telegram и полного E2E не было.
 - Предыдущий завершённый тикет: [OPS-071](backlog/tickets/OPS-071.md), [notifications RPC API](../cmd/api/README.md#notifications-rpc-ops-071). Общий mTLS listener, раздельные exact права matcher/notifications, готовые PrepareRecipient/AdmitDelivery/SaveDeliveryResult и управляемый Latest client. Race executable на disposable API PostgreSQL/Kafka подтвердил CAS, точную цену, SQL commit/replay, pending report после restart, Latest/SQL cancellation, SIGTERM и cleanup. Общая race-регрессия/vet/build PASS; полный E2E впереди.
@@ -166,14 +167,14 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 ## Следующий рекомендуемый шаг
 
 [E2E-002](backlog/tickets/E2E-002.md): повторить сессионную проверку сборки четырёх процессов.
-OPS-073 завершил создание/список подписок API через управляемые Catalog/Latest.
-OPS-072 завершил Telegram HTTP; API требует явный TELEGRAM_WEBHOOK_SECRET.
-OPS-071 завершил RPC notifications; общая policy и конфигурация — cmd/api/README.md.
-OPS-069 завершил Catalog/Latest RPC market-data; конфигурация и проверки — cmd/market-data/README.md.
-Предыдущая сессионная проверка E2E-002 выделила OPS-069–073 для market-data RPC,
-API RPC matcher/notifications, Telegram HTTP и subscriptions HTTP; все они завершены.
-E2E-002 остаётся planned до повторной проверки, общий стенд не запускался. Недостающие интерфейсы
-нельзя заменять fixture серверами внутри E2E.
+E2E-005 завершил общий disposable runner четырёх владельцев: штатные миграции,
+parent-only DSN, новые пустые Kafka topics и cleanup квалифицированы.
+Использовать scripts/check_e2e_environment.py --package и
+internal/testutil/e2eenvironment/README.md; старые режимы runner сохранены.
+Собрать готовые executable/fake, mTLS, явный source/bootstrap и healthchecks
+без fixture API/Latest RPC. Полный стенд четырёх executable ещё не запускался.
+Raw market-data сохраняет readyz=503/feed=unconfirmed; ожидание профиля
+описано в cmd/market-data/README.md. Полный стенд не запускался.
 E2E-004 завершил fake Telegram; использовать internal/testutil/telegramfake/README.md,
 явные BaseURL/Token и тестовый Secret для webhook, Next/Reply/RateLimit/Forbid/Disconnect.
 Полное runtime wiring проверить до ready; недостающие adapters выделять отдельно.
