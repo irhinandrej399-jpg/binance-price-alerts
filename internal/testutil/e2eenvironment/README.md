@@ -47,10 +47,10 @@ ListOffsets earliest/latest равны 0 у всех partitions. Это discover
 Для E2E-002 используется та же команда с другим пакетом:
 
 ```sh
-GOCACHE=/tmp/binance-go-build python3 scripts/check_e2e_environment.py --package ./path/to/e2e/package
+GOCACHE=/tmp/binance-go-build python3 scripts/check_e2e_environment.py --package ./internal/testutil/e2estack
 ```
 
-Путь здесь — место будущего пакета E2E-002. Он сам собирает четыре executable,
+[Пакет E2E-002](../e2estack/README.md) собирает четыре executable,
 PKI, fake endpoints и явный source/bootstrap через готовые интерфейсы. Здесь
 runtime и полный пользовательский сценарий не запускаются. Restart процесса
 в одном dataset сохраняет его source identity; новый runner создаёт другой dataset.

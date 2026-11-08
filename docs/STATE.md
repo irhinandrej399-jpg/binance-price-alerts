@@ -4,8 +4,9 @@
 
 ## Активная работа
 
-- Активная реализация: нет. E2E-005 завершён; следующий шаг — сессионная проверка E2E-002 (planned).
-- Последний завершённый тикет: [E2E-005](backlog/tickets/E2E-005.md), [общий disposable runner](../internal/testutil/e2eenvironment/README.md). Четыре parent-only DSN и штатные миграции; два реальных PostgreSQL/Kafka/race прогона подтвердили роли/CONNECT isolation, child allowlists и новые пустые topics 16/1/16 с ClusterID/TopicID. Аварийный Go owner exit подтвердил удаление child group, временных credentials и обоих стендов. Общая race/vet/build и Python проверки PASS. Четыре продуктовых executable и полный сценарий ещё впереди.
+- Активная реализация: нет. E2E-002 завершён; следующий шаг — сессионная проверка E2E-001 (planned).
+- Последний завершённый тикет: [E2E-002](backlog/tickets/E2E-002.md), [четыре executable и fake](../internal/testutil/e2estack/README.md). Одна команда через runner E2E-005, отдельные mTLS identities, четыре owner-only DSN и явные Kafka bootstraps. Два свежих PostgreSQL/Kafka/race dataset, в каждом два старта/остановки: Catalog/Latest/WS и готовность подтверждены; все child exit 0, cleanup PASS. Raw market-data честно unconfirmed/readyz=503. Общая race/vet/build и Python проверки PASS; полный пользовательский сценарий остаётся E2E-001.
+- Предыдущий завершённый тикет: [E2E-005](backlog/tickets/E2E-005.md), [общий disposable runner](../internal/testutil/e2eenvironment/README.md). Четыре parent-only DSN и штатные миграции; два реальных PostgreSQL/Kafka/race прогона подтвердили роли/CONNECT isolation, child allowlists и новые пустые topics 16/1/16 с ClusterID/TopicID. Аварийный Go owner exit подтвердил удаление child group, временных credentials и обоих стендов. Общая race/vet/build и Python проверки PASS. Четыре продуктовых executable запущены в E2E-002; полный пользовательский сценарий ещё впереди.
 - Предыдущий завершённый тикет: [OPS-073](backlog/tickets/OPS-073.md), [HTTP подписок API](../cmd/api/README.md#http-подписок-ops-073). POST/GET через session/auth и управляемые mTLS Catalog/Latest рядом с DELETE. Race executable на disposable PostgreSQL/Kafka подтвердил registration/login/link, точный SQL snapshot/quota/journal и read_committed bytes, изоляцию владельцев, RPC failures, restart, SIGTERM и cleanup. Общая race/vet/build PASS; полный E2E впереди.
 - Независимый сбой Kafka-регрессии: [OPS-067](backlog/tickets/OPS-067.md) — changefeed metadata unavailable сразу после recreate в fixture; причина пока гипотеза, production guards не ослаблялись.
 - Предыдущий завершённый тикет: [OPS-072](backlog/tickets/OPS-072.md), [Telegram HTTP API](../cmd/api/README.md#telegram-http-ops-072). Готовые выдача кода с Bearer и защищённый /start webhook, обязательный secret до startup, общий body limit/drain. Race executable на disposable PostgreSQL/Kafka подтвердил регистрацию/вход, точный chat/version, replay/перепривязку/restart, 401/403/413, invalid secret и SIGTERM; cleanup и общая Go race/vet/build PASS. Реального Telegram и полного E2E не было.
@@ -243,7 +244,7 @@ NTF-006 рассчитывает retry Plan и бюджет доказанных
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show E2E-002` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show E2E-001` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.
