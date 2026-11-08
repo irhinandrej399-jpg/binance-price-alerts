@@ -10,6 +10,8 @@ import (
 
 func validEnv() map[string]string {
 	return map[string]string{
+		"RPC_ADDR": "127.0.0.1:8081", "RPC_CERT_FILE": "cert.pem", "RPC_KEY_FILE": "key.pem", "RPC_CA_FILE": "ca.pem", "MATCHER_SERVICE_URI": "spiffe://local/matcher",
+		"MARKET_RPC_ADDR": "127.0.0.1:8082", "MARKET_RPC_SERVER_NAME": "market.test", "MARKET_RPC_CERT_FILE": "client.pem", "MARKET_RPC_KEY_FILE": "client-key.pem", "MARKET_RPC_CA_FILE": "market-ca.pem",
 		"HTTP_ADDR": "127.0.0.1:8080", "DATABASE_URL": "postgres://api_runtime:secret@127.0.0.1:5432/api",
 		"KAFKA_BROKERS": "127.0.0.1:9092", "SUBSCRIPTION_CHANGES_TOPIC": "local-subscription-changes", "DELIVERY_REQUESTS_TOPIC": "local-delivery-requests",
 		"SUBSCRIPTION_RELAY_TRANSACTIONAL_ID": "local-api-subscriptions-0", "DELIVERY_RELAY_TRANSACTIONAL_ID": "local-api-delivery-0",
@@ -29,7 +31,7 @@ func TestConfiguration(t *testing.T) {
 			}
 		})
 	}
-	for _, pair := range [][2]string{{"HTTP_ADDR", "bad"}, {"DATABASE_URL", "postgres://secret%"}, {"DATABASE_URL", "postgres://notifications_runtime@localhost/api"}, {"DATABASE_URL", "postgres://api_runtime@localhost/notifications"}, {"KAFKA_BROKERS", "localhost:bad"}, {"DELIVERY_RELAY_TRANSACTIONAL_ID", env["SUBSCRIPTION_RELAY_TRANSACTIONAL_ID"]}, {"DELIVERY_REQUESTS_TOPIC", env["SUBSCRIPTION_CHANGES_TOPIC"]}, {"SUBSCRIPTION_CHANGES_TOPIC", "bad topic"}} {
+	for _, pair := range [][2]string{{"MATCHER_SERVICE_URI", "bad"}, {"MATCHER_SERVICE_URI", "spiffe://local/matcher?forged=1"}, {"RPC_ADDR", "bad"}, {"MARKET_RPC_ADDR", "dns:///market"}, {"MARKET_RPC_SERVER_NAME", "bad/name"}, {"HTTP_ADDR", "bad"}, {"DATABASE_URL", "postgres://secret%"}, {"DATABASE_URL", "postgres://notifications_runtime@localhost/api"}, {"DATABASE_URL", "postgres://api_runtime@localhost/notifications"}, {"KAFKA_BROKERS", "localhost:bad"}, {"DELIVERY_RELAY_TRANSACTIONAL_ID", env["SUBSCRIPTION_RELAY_TRANSACTIONAL_ID"]}, {"DELIVERY_REQUESTS_TOPIC", env["SUBSCRIPTION_CHANGES_TOPIC"]}, {"SUBSCRIPTION_CHANGES_TOPIC", "bad topic"}} {
 		e := validEnv()
 		e[pair[0]] = pair[1]
 		if _, err := loadConfig(func(k string) string { return e[k] }); err == nil {

@@ -1,4 +1,4 @@
-# Минимальный локальный API (OPS-046, OPS-004, OPS-013)
+# Локальный API (OPS-046, OPS-004, OPS-013, OPS-070)
 
 Сборка и запуск из корня репозитория:
 
@@ -12,10 +12,20 @@ SUBSCRIPTION_CHANGES_TOPIC=local-subscription-changes \
 DELIVERY_REQUESTS_TOPIC=local-delivery-requests \
 SUBSCRIPTION_RELAY_TRANSACTIONAL_ID=local-api-subscription-relay-0 \
 DELIVERY_RELAY_TRANSACTIONAL_ID=local-api-delivery-relay-0 \
+RPC_ADDR=127.0.0.1:9080 \
+RPC_CERT_FILE=/path/to/api-server.pem \
+RPC_KEY_FILE=/path/to/api-server-key.pem \
+RPC_CA_FILE=/path/to/service-ca.pem \
+MATCHER_SERVICE_URI=spiffe://local/matcher \
+MARKET_RPC_ADDR=127.0.0.1:9081 \
+MARKET_RPC_SERVER_NAME=market.internal \
+MARKET_RPC_CERT_FILE=/path/to/api-client.pem \
+MARKET_RPC_KEY_FILE=/path/to/api-client-key.pem \
+MARKET_RPC_CA_FILE=/path/to/market-ca.pem \
 /tmp/binance-api
 ```
 
-Все семь переменных обязательны. HTTP_ADDR и каждый адрес в KAFKA_BROKERS
+Все показанные переменные и DATABASE_URL обязательны. HTTP_ADDR и каждый адрес в KAFKA_BROKERS
 (через запятую без пробелов) должны иметь host:port. DATABASE_URL — только
 собственная API-БД под `api_runtime`; pool открывается один раз. Ошибки процесса
 содержат только фиксированные сообщения, без DSN, токенов и broker responses.
@@ -31,7 +41,7 @@ delivery topic — 16, как в [init Kafka](../../infra/kafka/README.md).
 [инструкции](../../migrations/README.md). Runtime миграций не выполняет,
 DSN других сервисов не читает.
 
-Доступны только:
+HTTP маршруты:
 
 | Метод и путь | Поведение |
 | --- | --- |
@@ -51,11 +61,11 @@ DSN других сервисов не читает.
 максимум 64 КиБ тела, включая chunked; превышение даёт 413
 `request_body_too_large` до auth/SQL. Health поддерживает HEAD. Подробности HTTP-отмены —
 [контракт компонента](../../internal/api/subscription/README.md#http-отмена-sub-005).
-Регистрация, вход, создание подписки, Telegram webhook, внутренние RPC и метрики
+Создание подписки, Telegram webhook, RPC notifications и метрики
 не смонтированы. Аккаунт/сессия/подписка для проверки создаются fixture harness.
 Это минимальный процесс для OPS-004; полный API для E2E ещё предстоит собрать.
 
-До HTTP Serve проверяются bind, подключение/схема собственной БД и по одному
+До HTTP/RPC Serve проверяются оба bind, TLS, подключение/схема собственной БД и по одному
 Step обеих очередей. Общий startup budget — 15 с, каждый Step — до 5 с.
 Любая ошибка startup (включая busy lease) завершает процесс с кодом 1;
 ресурсы освобождаются, durable работа остаётся. При pending outbox startup
@@ -64,7 +74,7 @@ Step обеих очередей. Общий startup budget — 15 с, кажд�
 SQL/Kafka ошибки повторяются по их политике; readiness проверяет только API-БД.
 Fencing, потеря lease, повреждённый journal/outbox и другие terminal результаты
 Run снимают готовность и завершают весь процесс; HTTP server закрывается,
-соседний relay отменяется и дожидается завершения перед закрытием pool.
+соседний relay и RPC отменяются и дожидаются завершения перед закрытием pool.
 Автоматического захвата producer после fencing в runtime нет.
 
 SIGTERM и SIGINT снимают readiness и закрывают HTTP listener/idle connections.
@@ -81,7 +91,7 @@ SIGTERM и SIGINT снимают readiness и закрывают HTTP listener/i
 30 с. Startup с busy lease завершится ошибкой; повторять запуск после её expiry,
 не сбрасывая lease вручную.
 Успешная остановка возвращает код 0; истечение HTTP drain/ошибка компонента — 1.
-От первого сигнала действует окончательный предел 10 с на весь выход, включая
+От первого сигнала или terminal failure действует окончательный предел 10 с на весь выход, включая
 cleanup и pool.Close: при его превышении процесс выходит с кодом 1 без ожидания
 defers. Durable восстановление и lease expiry остаются обязательными.
 Эти фиксированные бюджеты относятся только к минимальному API.
@@ -104,3 +114,41 @@ SIGTERM дополнительно проверяется с реальным Po
 Kafka commit проверяет прерывание delivery relay и повтор исходных key/value
 в read_committed после рестарта. Unit-тесты проверяют HTTP drain/deadline,
 конфигурацию, bind и отмену/ожидание соседних компонентов. Без opt-in процессная интеграция явно SKIP.
+
+## Matcher RPC (OPS-070)
+
+Один listener RPC_ADDR регистрирует готовые SubscriptionSnapshots
+(BuildSnapshot, ReadSnapshotPage), SubscriptionReplay (BeginReplay,
+ReadReplayPage, AcknowledgeReplay, AbandonReplay) и Delivery/RequestDelivery.
+Одна общая policy serviceauth разрешает только эти полные имена методов
+точному MATCHER_SERVICE_URI из проверенного клиентского сертификата.
+Чужие сервисы, неизвестные/streaming методы и публичный Bearer прав не дают.
+Owner snapshot/pin берётся адаптерами из сертификата, metadata его не меняет.
+
+RPC_CERT_FILE/RPC_KEY_FILE — server certificate/key; RPC_CA_FILE — доверенный
+CA клиентов. MARKET_RPC_* задают отдельную клиентскую mTLS связь API → Latest;
+SERVER_NAME проверяется по DNS SAN сервера даже при подключении к IP.
+Адреса — явные host:port без resolver URL. Ключи хранятся во внешних файлах с
+доступом владельцу; PEM, credentials и DSN не логируются. Ротация требует
+перезапуска. Runtime не выпускает сертификаты и не читает market-data SQL.
+
+Все adapters используют один собственный API pool, исходные SQL/outbox
+протоколы и бюджеты: до 3 с на matcher RPC, внутри RequestDelivery Latest
+ограничен 1 с. Автоматических прикладных retries нет. Соединение Latest
+ленивое: его недоступность возвращает ошибку RequestDelivery, readiness
+по-прежнему проверяет API-БД. Восстановление workflow не зависит от Latest.
+
+До relay Step/Serve проверяется наличие таблиц snapshot/request/pin/replay/outbox.
+Startup bind/TLS/schema failure закрывает listeners/connection/pool без запуска
+HTTP/RPC handlers. При сигнале или terminal failure RPC Stop немедленно отменяет
+активные calls; WaitForHandlers присоединяет SQL handlers до pool.Close.
+HTTP сохраняет прежний drain 5 с. Соединение Latest закрывается после handlers.
+Общий watchdog охватывает также terminal failure и cleanup.
+
+Тот же process runner проверяет все семь методов на настоящем race executable,
+API PostgreSQL/Kafka и ephemeral mTLS: certificate pin owner, deny/unknown/Bearer,
+точный Latest → canonical workflow/outbox → read_committed bytes, replay/ack,
+устойчивые snapshot/workflow/bytes после restart, SIGTERM с удерживаемым SQL RPC,
+отсутствие SQL waiters после exit, bind/TLS/schema failure и terminal relay exit.
+Latest endpoint в этом тесте — локальная управляемая fixture; настоящий
+market-data executable проверен отдельно в OPS-069. Полный E2E ещё впереди.

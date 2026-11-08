@@ -121,8 +121,8 @@ def main(owner="api"):
         # Keep room for crash/startup and graceful/recovery/fault scenarios,
         # including Kafka membership expiry after SIGKILL.
         run(['go', 'test', '-race', '-count=1', '-v', '-timeout',
-             '300s' if notifications or cleaner else ('150s' if matcher else '90s'), args.package], env,
-            timeout=330 if notifications or cleaner else (180 if matcher else 120))
+             '180s' if owner == 'api' else ('300s' if notifications or cleaner else ('150s' if matcher else '90s')), args.package], env,
+            timeout=210 if owner == 'api' else (330 if notifications or cleaner else (180 if matcher else 120)))
     finally:
         # Go's test timeout/panic does not execute defers. Kill any registered
         # child process groups before removing their disposable infrastructure.

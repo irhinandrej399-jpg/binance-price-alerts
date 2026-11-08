@@ -35,6 +35,7 @@ import (
 type config struct {
 	addr, dsn, changes, deliveries string
 	subscriptions, delivery        kafka.Config
+	rpc                            rpcConfig
 }
 
 var kafkaName = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
@@ -42,11 +43,7 @@ var kafkaName = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 func loadConfig(get func(string) string) (config, error) {
 	c := config{addr: get("HTTP_ADDR"), dsn: get("DATABASE_URL"), changes: get("SUBSCRIPTION_CHANGES_TOPIC"), deliveries: get("DELIVERY_REQUESTS_TOPIC")}
 	bad := errors.New("api: invalid configuration")
-	addressOK := func(s string) bool {
-		host, port, err := net.SplitHostPort(s)
-		n, e := strconv.Atoi(port)
-		return err == nil && e == nil && host != "" && n > 0 && n <= 65535
-	}
+
 	if !addressOK(c.addr) || c.dsn == "" {
 		return config{}, bad
 	}
@@ -70,7 +67,17 @@ func loadConfig(get func(string) string) (config, error) {
 	if c.changes == c.deliveries || c.subscriptions.TransactionalID == c.delivery.TransactionalID {
 		return config{}, bad
 	}
+	c.rpc, err = loadRPCConfig(get)
+	if err != nil {
+		return config{}, err
+	}
 	return c, nil
+}
+
+func addressOK(s string) bool {
+	host, port, err := net.SplitHostPort(s)
+	n, e := strconv.Atoi(port)
+	return err == nil && e == nil && host != "" && n > 0 && n <= 65535
 }
 
 func expectedStop(err error) bool {
@@ -80,6 +87,10 @@ func expectedStop(err error) bool {
 // supervise cancels and joins every sibling when any required component exits.
 // Relay Run already classifies retryable versus terminal errors.
 func supervise(parent context.Context, runs ...func(context.Context) error) error {
+	return superviseWithStop(parent, func() {}, runs...)
+}
+
+func superviseWithStop(parent context.Context, stopping func(), runs ...func(context.Context) error) error {
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	results := make(chan error, len(runs))
@@ -95,6 +106,7 @@ func supervise(parent context.Context, runs ...func(context.Context) error) erro
 		if first == nil || (expectedStop(first) && !expectedStop(err)) {
 			first = err
 		}
+		stopping()
 		cancel()
 	}
 	if parent.Err() != nil && expectedStop(first) {
@@ -105,11 +117,38 @@ func supervise(parent context.Context, runs ...func(context.Context) error) erro
 }
 
 func run(ctx context.Context, c config) error {
+	// The same final bound covers a signal and any terminal sibling failure,
+	// including handler joining and pool cleanup. Completion disarms the timer.
+	finished := make(chan struct{})
+	defer close(finished)
+	var once sync.Once
+	stopping := func() {
+		once.Do(func() {
+			go func() {
+				timer := time.NewTimer(10 * time.Second)
+				defer timer.Stop()
+				select {
+				case <-finished:
+				case <-timer.C:
+					fmt.Fprintln(os.Stderr, "api: shutdown deadline exceeded")
+					os.Exit(1)
+				}
+			}()
+		})
+	}
+	stopWatch := context.AfterFunc(ctx, stopping)
+	defer stopWatch()
+
 	listener, err := net.Listen("tcp", c.addr)
 	if err != nil {
 		return errors.New("api: HTTP bind failed")
 	}
 	defer listener.Close()
+	rpc, err := newMatcherRPC(c.rpc)
+	if err != nil {
+		return err
+	}
+	defer rpc.close()
 	startup, done := context.WithTimeout(ctx, 15*time.Second)
 	defer done()
 	pool, err := postgres.Open(startup, c.dsn)
@@ -117,6 +156,12 @@ func run(ctx context.Context, c config) error {
 		return errors.New("api: database startup failed")
 	}
 	defer pool.Close()
+	// This defer runs before pool.Close, including startup failures.
+	defer rpc.server.Stop()
+	if err = checkRPCSchema(startup, pool); err != nil {
+		return err
+	}
+	rpc.register(pool)
 	// Check the HTTP storage contract as well as relay tables before readiness.
 	rows, err := pool.Query(startup, `SELECT s.token_hash,u.id,x.id,l.used FROM app.sessions s JOIN app.users u ON u.id=s.user_id JOIN app.subscriptions x ON x.owner_id=u.id CROSS JOIN app.auth_limits l LIMIT 0`)
 	if err != nil {
@@ -152,7 +197,8 @@ func run(ctx context.Context, c config) error {
 	defer server.Close()
 	h.SetInitialized(true)
 	defer h.SetInitialized(false)
-	err = supervise(ctx,
+	err = superviseWithStop(ctx, stopping,
+		rpc.serve,
 		func(c context.Context) error { return changes.Run(c, nil) },
 		func(c context.Context) error { return deliveries.Run(c, nil) },
 		func(c context.Context) error {
@@ -172,14 +218,6 @@ func main() {
 	if err == nil {
 		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
 		defer stop()
-		go func() {
-			<-ctx.Done()
-			// A final process bound also covers stuck cleanup/driver code. Durable SQL
-			// and relay recovery remain authoritative after this forced exit.
-			time.Sleep(10 * time.Second)
-			fmt.Fprintln(os.Stderr, "api: shutdown deadline exceeded")
-			os.Exit(1)
-		}()
 		err = run(ctx, c)
 	}
 	if err != nil {

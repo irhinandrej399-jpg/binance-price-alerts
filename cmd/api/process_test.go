@@ -38,7 +38,7 @@ func TestAPIProcess(t *testing.T) {
 	if os.Getenv("API_PROCESS_INTEGRATION") != "1" {
 		t.Skip("run python3 scripts/check_api_process.py --package ./cmd/api")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
 	defer cancel()
 	binary := filepath.Join(t.TempDir(), "api")
 	build := exec.CommandContext(ctx, "go", "build", "-race", "-o", binary, ".")
@@ -57,8 +57,10 @@ func TestAPIProcess(t *testing.T) {
 	env["DELIVERY_REQUESTS_TOPIC"] = prefix + "-delivery-requests"
 	env["SUBSCRIPTION_RELAY_TRANSACTIONAL_ID"] = prefix + "-api-subscriptions"
 	env["DELIVERY_RELAY_TRANSACTIONAL_ID"] = prefix + "-api-delivery"
-	cfg := apiprocess.Config{Executable: binary, Env: env, StartupTimeout: 12 * time.Second, StopTimeout: time.Second}
+	cfg := apiprocess.Config{Executable: binary, Env: env, StartupTimeout: 20 * time.Second, StopTimeout: time.Second}
 	pool := postgrestest.Open(t)
+	ca, addr := configureRPC(t, env)
+	testMatcherRPCProcess(t, ctx, cfg, pool, ca, addr)
 	testGracefulProcess(t, ctx, cfg, pool)
 	f, err := apiprocess.Seed(ctx, pool)
 	if err != nil {
@@ -186,6 +188,13 @@ func TestAPIProcess(t *testing.T) {
 		}
 		select {
 		case <-p.Done():
+			if code, ok := p.ExitCode(); !ok || code != 1 {
+				return errors.New("terminal relay exit code")
+			}
+			if conn, e := net.DialTimeout("tcp", addr, 200*time.Millisecond); e == nil {
+				conn.Close()
+				return errors.New("terminal relay left RPC listener")
+			}
 			return nil
 		case <-time.After(5 * time.Second):
 			return errors.New("terminal relay left owner running")
