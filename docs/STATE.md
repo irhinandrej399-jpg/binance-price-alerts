@@ -4,9 +4,10 @@
 
 ## Активная работа
 
-- Активная реализация: нет. E2E-003 завершён; следующий шаг — сессионная проверка E2E-004 (управляемый fake Telegram).
+- Активная реализация: нет. E2E-004 завершён; следующий шаг — сессионная проверка E2E-002 (стенд четырёх процессов).
 - Независимый сбой Kafka-регрессии: [OPS-067](backlog/tickets/OPS-067.md) — changefeed metadata unavailable сразу после recreate в fixture; причина пока гипотеза, production guards не ослаблялись.
-- Последний завершённый тикет: [E2E-003](backlog/tickets/E2E-003.md), [управляемый fake Binance](../internal/testutil/binancefake/README.md). Локальный fixture-каталог и два raw trade endpoint; явные цены/uint64 ID/T/E, ping с подтверждением pong, TCP drop/close/reconnect и cleanup сокетов. Настоящие catalog/stream/trade adapters, десять race-повторов, общая race-регрессия/vet/build PASS. Публичный Binance не вызывался; полный E2E/нагрузка ещё впереди.
+- Последний завершённый тикет: [E2E-004](backlog/tickets/E2E-004.md), [управляемый fake Telegram](../internal/testutil/telegramfake/README.md). Явные success/message_id, 429/retry_after, 403, TCP drop и журнал sendMessage; Link посылает private /start update только в loopback webhook с тестовым секретом. Настоящие sender/webhook/link handlers, десять race-повторов, общая race-регрессия/vet/build PASS. Cleanup held/неполного HTTP подтверждён. Реальных сообщений не было; полный E2E и лимиты нагрузки ещё впереди.
+- Предыдущий завершённый тикет: [E2E-003](backlog/tickets/E2E-003.md), [управляемый fake Binance](../internal/testutil/binancefake/README.md). Локальный fixture-каталог и два raw trade endpoint; явные цены/uint64 ID/T/E, ping с подтверждением pong, TCP drop/close/reconnect и cleanup сокетов. Настоящие catalog/stream/trade adapters, десять race-повторов, общая race-регрессия/vet/build PASS. Публичный Binance не вызывался; полный E2E/нагрузка ещё впереди.
 - Предыдущий завершённый тикет: [OPS-014](backlog/tickets/OPS-014.md), [локальный kafka-cleaner](../cmd/kafka-cleaner/README.md). Durable file registry/межпроцессный flock, exact SQL/mTLS proofs всех consumers, monotonic fsync floor перед bounded DeleteRecords, explicit register/retire и tombstones. Два PostgreSQL/Kafka/race прогона подтвердили разные Prefix, unknown/generation/RPC fault, concurrent membership, lost broker responses/retry, canonical pending job и необработанные bytes; настоящий CLI без DSN, crash/lock/write-fault tests и cleanup PASS. Общая race-регрессия/vet/build PASS. Single-host/local filesystem; скорость для capacity остаётся 0.
 - Предыдущий завершённый тикет: [OPS-058](backlog/tickets/OPS-058.md), [совместная cleaner fixture](../internal/testutil/cleanerprocess/README.md). Два изолированных SQL/mTLS exporter owners, caller без DSN, RPC/Kafka gates и независимые SQL/log-start/read_committed observers. Disposable PostgreSQL/Kafka/race подтвердил разные Prefix, unknown/Pending, lost OffsetCommit/DeleteRecords responses, сохранность canonical job/необработанных bytes и повтор удаления. Startup/callback/аварийный owner exit с двумя child groups и cleanup подтверждены; общая race-регрессия/vet/build PASS. Реестр и safe boundary — OPS-014; скорость cleaner остаётся 0.
 - Предыдущий завершённый тикет: [OPS-068](backlog/tickets/OPS-068.md), [Kafka fault gates](../internal/testutil/kafkafault/README.md). OffsetCommit/DeleteRecords с настоящими decoded responses, BeforeRequest/AfterResponse, persistent Fail и идемпотентным Release. Disposable Kafka/race подтвердил committed offset, log-start, потерю успешных ответов, отказ до удаления и retained read_committed bytes при повторе; прежний EndTxn, общая race-регрессия/vet/build PASS. Cleanup успеха/ошибки подтверждён; SQL/RPC fixture и cleaner впереди.
@@ -159,8 +160,11 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-[E2E-004](backlog/tickets/E2E-004.md): сессионная проверка управляемого fake
-Telegram для стенда. E2E-003 завершил fake Binance; использовать
+[E2E-002](backlog/tickets/E2E-002.md): сессионная проверка стенда четырёх процессов.
+E2E-004 завершил fake Telegram; использовать internal/testutil/telegramfake/README.md,
+явные BaseURL/Token и тестовый Secret для webhook, Next/Reply/RateLimit/Forbid/Disconnect.
+Полное runtime wiring проверить до ready; недостающие adapters выделять отдельно.
+E2E-003 завершил fake Binance; использовать
 internal/testutil/binancefake/README.md и явные Next/Trade/Ping/Disconnect. OPS-014 завершил локальную явную cleanup-команду;
 использование — cmd/kafka-cleaner/README.md, инварианты — internal/cleaner/README.md,
 принятое решение — docs/decisions/OPS-014.md. Команда не запускается автоматически.
@@ -225,7 +229,7 @@ NTF-006 рассчитывает retry Plan и бюджет доказанных
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show E2E-004` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show E2E-002` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.
