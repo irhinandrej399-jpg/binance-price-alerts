@@ -299,16 +299,57 @@ func (s *lostRegistration) RegisterAttempt(ctx context.Context, l jobs.Lease, id
 	}
 	return nil
 }
+
+// Slow admission models scheduling/RPC latency after API committed sending.
+type slowAdmission struct{ handler.Admission }
+
+func (a slowAdmission) AdmitDelivery(ctx context.Context, owner, subscription, workflow, request string, recipient ...*pb.Recipient) (*pb.AdmitDeliveryResponse, error) {
+	r, err := a.Admission.AdmitDelivery(ctx, owner, subscription, workflow, request, recipient...)
+	if err == nil && r.Outcome == "admitted" {
+		timer := time.NewTimer(75 * time.Millisecond)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	return r, err
+}
+
 func TestHandlerRegisteredCrashRecovery(t *testing.T) {
+	for _, delayed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("slow_admission=%t", delayed), func(t *testing.T) {
+			testRegisteredCrashRecovery(t, delayed)
+		})
+	}
+}
+
+func testRegisteredCrashRecovery(t *testing.T, delayed bool) {
 	f := workerFixture(t)
-	store, e := jobs.New(f.local, 50*time.Millisecond)
+	// This fixture must reach committed registration before the simulated crash.
+	// 50 ms also covered SQL and mTLS setup, so ordinary scheduling could expire
+	// the lease before registration and exercise attempt_busy instead of recovery.
+	store, e := jobs.New(f.local, time.Second)
 	if e != nil {
 		t.Fatal(e)
 	}
-	f.cfg.Store = &lostRegistration{Store: store}
+	registration := &lostRegistration{Store: store}
+	f.cfg.Store = registration
+	if delayed {
+		f.cfg.Admission = slowAdmission{f.cfg.Admission}
+	}
 	if e = f.run(t); e == nil {
 		t.Fatal("registration error hidden")
 	}
+	if !registration.lost {
+		t.Fatalf("crash fixture never committed registration: %v", e)
+	}
+	var attempts int
+	if e = f.local.QueryRow(context.Background(), `SELECT count(*) FROM app.delivery_attempts WHERE trigger_id=$1`, f.record.Workflow.TriggerID).Scan(&attempts); e != nil || attempts != 1 {
+		t.Fatal("expected one durable registration", attempts, e)
+	}
+	assertState(t, f.api, f.record, domain.Sending)
 	if f.calls.Load() != 0 {
 		t.Fatal("ambiguous registration sent")
 	}
@@ -323,6 +364,11 @@ func TestHandlerRegisteredCrashRecovery(t *testing.T) {
 	if e = f.run(t); e != nil {
 		t.Fatal(e)
 	} // save/report uncertain, no new claim
+	assertState(t, f.api, f.record, domain.PendingDelivery)
+	var uncertainties, pendingReports int
+	if e = f.local.QueryRow(context.Background(), `SELECT (SELECT count(*) FROM app.delivery_uncertainties u JOIN app.delivery_attempts a USING(attempt_id) WHERE a.trigger_id=$1),(SELECT count(*) FROM app.delivery_uncertain_reports r JOIN app.delivery_attempts a USING(attempt_id) WHERE a.trigger_id=$1 AND r.pending)`, f.record.Workflow.TriggerID).Scan(&uncertainties, &pendingReports); e != nil || uncertainties != 1 || pendingReports != 0 {
+		t.Fatal("expected durable acknowledged uncertain outcome", uncertainties, pendingReports, e)
+	}
 	f.due(t)
 	if e = f.run(t); e != nil {
 		t.Fatal(e)
