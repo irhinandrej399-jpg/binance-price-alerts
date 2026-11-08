@@ -166,36 +166,37 @@
 151. [OPS-065](tickets/OPS-065.md) — Проверить поколение Kafka-источника на входе notifications.
 152. [OPS-066](tickets/OPS-066.md) — Подключить source binding к runtime notifications.
 153. [OPS-057](tickets/OPS-057.md) — Экспортировать durable Kafka-прогресс notifications.
-154. [OPS-058](tickets/OPS-058.md) — Подготовить disposable окружение проверки Kafka cleaner.
-155. [OPS-014](tickets/OPS-014.md) — Удалить безопасный префикс журнала Kafka.
-156. [E2E-003](tickets/E2E-003.md) — Поднять управляемый fake Binance для стенда.
-157. [E2E-004](tickets/E2E-004.md) — Поднять управляемый fake Telegram для стенда.
-158. [E2E-002](tickets/E2E-002.md) — Запустить четыре процесса в одном локальном стенде.
-159. [E2E-001](tickets/E2E-001.md) — Проверить один полный пользовательский сценарий.
-160. [OPS-044](tickets/OPS-044.md) — Подготовить проверенный kernel tracing toolchain.
-161. [OPS-043](tickets/OPS-043.md) — Сохранить incarnation binding и terminal retirement witness.
-162. [OPS-034](tickets/OPS-034.md) — Замкнуть модель ссылок и идентичности work inode.
-163. [OPS-035](tickets/OPS-035.md) — Восстановить доказанные границы apparent peak из raw.
-164. [OPS-036](tickets/OPS-036.md) — Проверить самостоятельный observer на PostgreSQL.
-165. [OPS-032](tickets/OPS-032.md) — Подключить и проверить temp peak observer в фазовом runner.
-166. [OPS-018](tickets/OPS-018.md) — Квалифицировать таблицу стоимости и квоты durable приёма.
-167. [OPS-015](tickets/OPS-015.md) — Остановить новый приём API при исчерпании бюджета.
-168. [OPS-016](tickets/OPS-016.md) — Остановить приём рынка при исчерпании бюджета.
-169. [LOAD-001](tickets/LOAD-001.md) — Сгенерировать воспроизводимые данные нагрузки.
-170. [LOAD-002](tickets/LOAD-002.md) — Создать источник цен для нагрузочного стенда.
-171. [LOAD-009](tickets/LOAD-009.md) — Собрать команду воспроизводимого нагрузочного прогона.
-172. [LOAD-003](tickets/LOAD-003.md) — Измерить p99 на миллионе подписок.
-173. [LOAD-004](tickets/LOAD-004.md) — Проверить burst 10000 срабатываний/с.
-174. [LOAD-010](tickets/LOAD-010.md) — Измерить обычный профиль на двух matcher.
-175. [LOAD-011](tickets/LOAD-011.md) — Измерить обычный профиль на четырёх matcher.
-176. [LOAD-012](tickets/LOAD-012.md) — Измерить горячую пару на четырёх matcher.
-177. [LOAD-013](tickets/LOAD-013.md) — Сравнить готовые отчёты масштабирования.
-178. [LOAD-006](tickets/LOAD-006.md) — Проверить восстановление брокера под нагрузкой.
-179. [LOAD-007](tickets/LOAD-007.md) — Проверить восстановление matcher под нагрузкой.
-180. [LOAD-008](tickets/LOAD-008.md) — Проверить восстановление notifications под нагрузкой.
-181. [SUB-024](tickets/SUB-024.md) — Исследовать нестабильный expiry в SQL snapshot RPC тестах.
-182. [NTF-017](tickets/NTF-017.md) — Закрыть изменение исторических свидетельств ролью notifications.
-183. [OPS-027](tickets/OPS-027.md) — Устранить гонку описи временных Kafka-файлов.
-184. [NTF-018](tickets/NTF-018.md) — Исследовать сбой восстановления после потери ответа регистрации.
-185. [NTF-019](tickets/NTF-019.md) — Устранить ложный отказ проверки Telegram payload по подстроке возраста.
-186. [OPS-067](tickets/OPS-067.md) — Исследовать нестабильную metadata после recreate в changefeed fixture.
+154. [OPS-068](tickets/OPS-068.md) — Управлять отказами OffsetCommit и DeleteRecords в Kafka fault proxy.
+155. [OPS-058](tickets/OPS-058.md) — Подготовить disposable окружение проверки Kafka cleaner.
+156. [OPS-014](tickets/OPS-014.md) — Удалить безопасный префикс журнала Kafka.
+157. [E2E-003](tickets/E2E-003.md) — Поднять управляемый fake Binance для стенда.
+158. [E2E-004](tickets/E2E-004.md) — Поднять управляемый fake Telegram для стенда.
+159. [E2E-002](tickets/E2E-002.md) — Запустить четыре процесса в одном локальном стенде.
+160. [E2E-001](tickets/E2E-001.md) — Проверить один полный пользовательский сценарий.
+161. [OPS-044](tickets/OPS-044.md) — Подготовить проверенный kernel tracing toolchain.
+162. [OPS-043](tickets/OPS-043.md) — Сохранить incarnation binding и terminal retirement witness.
+163. [OPS-034](tickets/OPS-034.md) — Замкнуть модель ссылок и идентичности work inode.
+164. [OPS-035](tickets/OPS-035.md) — Восстановить доказанные границы apparent peak из raw.
+165. [OPS-036](tickets/OPS-036.md) — Проверить самостоятельный observer на PostgreSQL.
+166. [OPS-032](tickets/OPS-032.md) — Подключить и проверить temp peak observer в фазовом runner.
+167. [OPS-018](tickets/OPS-018.md) — Квалифицировать таблицу стоимости и квоты durable приёма.
+168. [OPS-015](tickets/OPS-015.md) — Остановить новый приём API при исчерпании бюджета.
+169. [OPS-016](tickets/OPS-016.md) — Остановить приём рынка при исчерпании бюджета.
+170. [LOAD-001](tickets/LOAD-001.md) — Сгенерировать воспроизводимые данные нагрузки.
+171. [LOAD-002](tickets/LOAD-002.md) — Создать источник цен для нагрузочного стенда.
+172. [LOAD-009](tickets/LOAD-009.md) — Собрать команду воспроизводимого нагрузочного прогона.
+173. [LOAD-003](tickets/LOAD-003.md) — Измерить p99 на миллионе подписок.
+174. [LOAD-004](tickets/LOAD-004.md) — Проверить burst 10000 срабатываний/с.
+175. [LOAD-010](tickets/LOAD-010.md) — Измерить обычный профиль на двух matcher.
+176. [LOAD-011](tickets/LOAD-011.md) — Измерить обычный профиль на четырёх matcher.
+177. [LOAD-012](tickets/LOAD-012.md) — Измерить горячую пару на четырёх matcher.
+178. [LOAD-013](tickets/LOAD-013.md) — Сравнить готовые отчёты масштабирования.
+179. [LOAD-006](tickets/LOAD-006.md) — Проверить восстановление брокера под нагрузкой.
+180. [LOAD-007](tickets/LOAD-007.md) — Проверить восстановление matcher под нагрузкой.
+181. [LOAD-008](tickets/LOAD-008.md) — Проверить восстановление notifications под нагрузкой.
+182. [SUB-024](tickets/SUB-024.md) — Исследовать нестабильный expiry в SQL snapshot RPC тестах.
+183. [NTF-017](tickets/NTF-017.md) — Закрыть изменение исторических свидетельств ролью notifications.
+184. [OPS-027](tickets/OPS-027.md) — Устранить гонку описи временных Kafka-файлов.
+185. [NTF-018](tickets/NTF-018.md) — Исследовать сбой восстановления после потери ответа регистрации.
+186. [NTF-019](tickets/NTF-019.md) — Устранить ложный отказ проверки Telegram payload по подстроке возраста.
+187. [OPS-067](tickets/OPS-067.md) — Исследовать нестабильную metadata после recreate в changefeed fixture.

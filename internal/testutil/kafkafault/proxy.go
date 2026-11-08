@@ -1,4 +1,4 @@
-// Package kafkafault injects a lost EndTxn response on real plaintext Kafka
+// Package kafkafault injects controlled faults on real plaintext Kafka
 // connections. Use only on a disposable, single-broker test cluster.
 package kafkafault
 
@@ -23,17 +23,23 @@ type Proxy struct {
 	mu       sync.Mutex
 	armed    bool
 	closed   bool
-	conns    []net.Conn
+	conns    map[net.Conn]struct{}
+	fault    *Fault
 	wg       sync.WaitGroup
 }
 
-func New(target string) *Proxy { return &Proxy{Target: target, Observed: make(chan int16, 16)} }
-func (p *Proxy) Arm()          { p.mu.Lock(); p.armed = true; p.mu.Unlock() }
+func New(target string) *Proxy {
+	return &Proxy{Target: target, Observed: make(chan int16, 16), conns: make(map[net.Conn]struct{})}
+}
+func (p *Proxy) Arm() { p.mu.Lock(); p.armed = true; p.mu.Unlock() }
 
 func (p *Proxy) Close() {
 	p.mu.Lock()
 	p.closed = true
-	for _, c := range p.conns {
+	if p.fault != nil {
+		p.fault.failOnce.Do(func() { close(p.fault.failed) })
+	}
+	for c := range p.conns {
 		c.Close()
 	}
 	p.mu.Unlock()
@@ -56,13 +62,38 @@ func (p *Proxy) DialContext(ctx context.Context, network, _ string) (net.Conn, e
 		client.Close()
 		return nil, net.ErrClosed
 	}
-	p.conns = append(p.conns, upstream, relay)
+	p.conns[upstream] = struct{}{}
+	p.conns[relay] = struct{}{}
 	p.wg.Add(2)
 	p.mu.Unlock()
-	type request struct{ key, version int16 }
+	type request struct {
+		key, version int16
+		decoded      kmsg.Request
+		fault        *Fault
+		stop         func() bool
+	}
 	var mu sync.Mutex
 	pending := map[uint32]request{}
-	closeBoth := func() { upstream.Close(); relay.Close() }
+	done := make(chan struct{})
+	var closeOnce sync.Once
+	closeBoth := func() {
+		closeOnce.Do(func() {
+			close(done)
+			upstream.Close()
+			relay.Close()
+			p.mu.Lock()
+			delete(p.conns, upstream)
+			delete(p.conns, relay)
+			p.mu.Unlock()
+			mu.Lock()
+			for _, r := range pending {
+				if r.stop != nil {
+					r.stop()
+				}
+			}
+			mu.Unlock()
+		})
+	}
 	go func() {
 		defer p.wg.Done()
 		defer closeBoth()
@@ -74,9 +105,41 @@ func (p *Proxy) DialContext(ctx context.Context, network, _ string) (net.Conn, e
 			if len(b) < 8 {
 				return
 			}
+			req := request{key: int16(binary.BigEndian.Uint16(b)), version: int16(binary.BigEndian.Uint16(b[2:]))}
+			p.mu.Lock()
+			f := p.fault
+			if f != nil && f.key == req.key && f.ctx.Err() == nil {
+				req.fault = f
+			}
+			p.mu.Unlock()
+			if req.fault != nil {
+				req.decoded, e = decodeRequest(b, req.key, req.version)
+				if e != nil {
+					return
+				}
+			}
+			id := binary.BigEndian.Uint32(b[4:8])
 			mu.Lock()
-			pending[binary.BigEndian.Uint32(b[4:8])] = request{int16(binary.BigEndian.Uint16(b)), int16(binary.BigEndian.Uint16(b[2:]))}
+			_, duplicate := pending[id]
+			if duplicate || len(pending) >= 128 {
+				mu.Unlock()
+				return
+			}
+			select {
+			case <-done:
+				mu.Unlock()
+				return
+			default:
+			}
+			if req.fault != nil {
+				req.stop = context.AfterFunc(req.fault.ctx, closeBoth)
+			}
+			pending[id] = req
 			mu.Unlock()
+			if req.fault != nil && req.fault.boundary == BeforeRequest && !req.fault.wait(Event{CorrelationID: binary.BigEndian.Uint32(b[4:]), Request: req.decoded}, done) {
+				return
+			}
+
 			if writeFrame(upstream, b) != nil {
 				return
 			}
@@ -100,6 +163,25 @@ func (p *Proxy) DialContext(ctx context.Context, network, _ string) (net.Conn, e
 			mu.Unlock()
 			if !ok {
 				return
+			}
+			if req.stop != nil {
+				req.stop()
+			}
+			if req.fault != nil && req.fault.boundary == AfterResponse {
+				resp := req.decoded.ResponseKind()
+				body := b[4:]
+				if resp.IsFlexible() {
+					body, e = skipTags(body)
+					if e != nil {
+						return
+					}
+				}
+				if resp.ReadFrom(body) != nil {
+					return
+				}
+				if !req.fault.wait(Event{CorrelationID: id, Request: req.decoded, Response: resp}, done) {
+					return
+				}
 			}
 			p.mu.Lock()
 			drop := p.armed && req.key == 26

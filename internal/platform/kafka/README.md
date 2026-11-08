@@ -103,6 +103,8 @@ fencing активного старого epoch, потерянный EndTxn res
 Это средство только для single-broker plaintext disposable-стенда; оно не
 маршрутизирует несколько brokers и не расшифровывает TLS.
 
+Управляемые границы OffsetCommit/DeleteRecords: [kafkafault README](../../testutil/kafkafault/README.md).
+
 Исходные контракты клиента: [версия v1.22.2](https://github.com/twmb/franz-go/tree/v1.22.2),
 [настройки](https://github.com/twmb/franz-go/blob/v1.22.2/pkg/kgo/config.go),
 [транзакции и EndTransaction](https://github.com/twmb/franz-go/blob/v1.22.2/pkg/kgo/txn.go).

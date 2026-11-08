@@ -52,4 +52,8 @@ if KAFKA_TEST_BROKER="127.0.0.1:$closed_port" GOTOOLCHAIN=local go test -count=1
   echo 'FAIL: unavailable opt-in changefeed broker passed' >&2
   exit 1
 fi
-printf 'PASS SET-009 / MAT-013 / MAT-015 / MAT-018: transactions, group assignment/revoke/loss, bounded dispatch, explicit commit, unavailable broker\n'
+if KAFKA_TEST_BROKER="127.0.0.1:$closed_port" GOTOOLCHAIN=local go test -count=1 -timeout 25s -run '^TestIntegrationOffsetCommitDeleteRecords$' ./internal/testutil/kafkafault; then
+  echo 'FAIL: unavailable opt-in fault proxy broker passed' >&2
+  exit 1
+fi
+printf 'PASS SET-009 / OPS-068 / MAT-013 / MAT-015 / MAT-018: transactions, group assignment/revoke/loss, bounded dispatch, explicit commit, unavailable broker\n'
