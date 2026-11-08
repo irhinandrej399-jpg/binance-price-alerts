@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -440,5 +441,383 @@ func TestReconcileRestoresLatestPlanWithoutAnotherCall(t *testing.T) {
 	mu.Unlock()
 	if n != 2 {
 		t.Fatalf("connections %d", n)
+	}
+}
+
+func preparedForTest(t *testing.T, endpoint string, prepare PrepareGroupAttempt) *Reconciler {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
+	r, err := NewPreparedReconciler(ctx, ReconcileConfig{Endpoint: endpoint, Limit: 2, Transport: DefaultConfig(), Retry: RetryConfig{time.Millisecond, 2 * time.Millisecond}, AckTimeout: time.Second}, prepare)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(r.Close)
+	return r
+}
+
+func TestPreparedReconcileLifecycle(t *testing.T) {
+	for _, mode := range []string{"disconnect", "rotation"} {
+		t.Run(mode, func(t *testing.T) {
+			s, endpoint := newPlanServer(t, false, mode == "disconnect", mode == "rotation")
+			var mu sync.Mutex
+			generations := 0
+			observations := make(chan int, 8)
+			prepared := make(chan int, 8)
+			r := preparedForTest(t, endpoint, func(ctx context.Context, group int, streams []string) (AttemptCallbacks, error) {
+				n, _, _ := s.view()
+				mu.Lock()
+				defer mu.Unlock()
+				generations++
+				token := generations
+				prepared <- token
+				if n != token-1 {
+					t.Errorf("prepare after dial: sockets=%d token=%d", n, token)
+				}
+				if group != 0 || !reflect.DeepEqual(streams, []string{"btcusdt@trade"}) {
+					t.Errorf("plan %d %v", group, streams)
+				}
+				streams[0] = "caller mutation"
+				return AttemptCallbacks{Handle: func(context.Context, []byte) error { return nil }, Disconnected: func(ctx context.Context, err error, d time.Duration) error { observations <- token; return nil }}, nil
+			})
+			if err := r.Reconcile(context.Background(), snapshot("BTCUSDT")); err != nil {
+				t.Fatal(err)
+			}
+			if token := receive(t, observations); token != 1 {
+				t.Fatal(token)
+			}
+			// Observe preparation of the reconnect independently of ACK scheduling.
+			if n := receive(t, prepared); n != 1 {
+				t.Fatal(n)
+			}
+			if n := receive(t, prepared); n != 2 {
+				t.Fatal(n)
+			}
+			if err := r.Reconcile(context.Background(), snapshot("BTCUSDT")); err != nil {
+				t.Fatal(err)
+			}
+			r.Close()
+			mu.Lock()
+			defer mu.Unlock()
+			if generations < 2 {
+				t.Fatal("no new generation")
+			}
+		})
+	}
+}
+
+func TestPreparedReconcilePreparationFailure(t *testing.T) {
+	s, endpoint := newPlanServer(t, false, false, false)
+	failure := errors.New("generation write failed")
+	r := preparedForTest(t, endpoint, func(context.Context, int, []string) (AttemptCallbacks, error) { return AttemptCallbacks{}, failure })
+	if err := r.Reconcile(context.Background(), snapshot("BTCUSDT")); !errors.Is(err, failure) {
+		t.Fatal(err)
+	}
+	if err := r.Wait(); !errors.Is(err, failure) {
+		t.Fatal(err)
+	}
+	if n, _, _ := s.view(); n != 0 {
+		t.Fatal("dial without token")
+	}
+}
+
+func TestPreparedReconcilePlanChangeJoinsOldCallbacks(t *testing.T) {
+	s, endpoint := newPlanServer(t, false, false, false)
+	var mu sync.Mutex
+	var plans [][]string
+	stopped := 0
+	r := preparedForTest(t, endpoint, func(ctx context.Context, group int, streams []string) (AttemptCallbacks, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if len(plans) > stopped {
+			t.Error("previous callbacks not joined")
+		}
+		plans = append(plans, append([]string(nil), streams...))
+		return AttemptCallbacks{Handle: func(context.Context, []byte) error { return nil }, Disconnected: func(ctx context.Context, err error, d time.Duration) error {
+			mu.Lock()
+			stopped++
+			mu.Unlock()
+			return nil
+		}}, nil
+	})
+	for _, names := range [][]string{{"BTCUSDT"}, {"BTCUSDT"}, {"BTCUSDT", "ETHUSDT"}, {"ETHUSDT"}, {}} {
+		if err := r.Reconcile(context.Background(), snapshot(names...)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r.Close()
+	mu.Lock()
+	defer mu.Unlock()
+	want := [][]string{{"btcusdt@trade"}, {"btcusdt@trade", "ethusdt@trade"}, {"ethusdt@trade"}}
+	if !reflect.DeepEqual(plans, want) || stopped != 3 {
+		t.Fatalf("plans %v stopped %d", plans, stopped)
+	}
+	_, _, active := s.view()
+	if len(active) != 0 {
+		t.Fatal(active)
+	}
+}
+
+func TestPreparedReconcileObserverFailureAfterReturn(t *testing.T) {
+	socket := make(chan *websocket.Conn, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		c, err := (&websocket.Upgrader{}).Upgrade(w, req, nil)
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		var cmd planCommand
+		if c.ReadJSON(&cmd) != nil {
+			return
+		}
+		c.WriteJSON(map[string]any{"id": cmd.ID, "result": nil})
+		socket <- c
+		c.ReadMessage()
+	}))
+	defer server.Close()
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	failure := errors.New("gap write failed")
+	r := preparedForTest(t, "ws"+strings.TrimPrefix(server.URL, "http")+"/ws", func(context.Context, int, []string) (AttemptCallbacks, error) {
+		return AttemptCallbacks{Handle: func(context.Context, []byte) error { return nil }, Disconnected: func(ctx context.Context, err error, d time.Duration) error {
+			close(entered)
+			select {
+			case <-release:
+				return failure
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}}, nil
+	})
+	if err := r.Reconcile(context.Background(), snapshot("BTCUSDT")); err != nil {
+		t.Fatal(err)
+	}
+	receive(t, socket).Close()
+	receive(t, entered)
+	close(release)
+	if err := r.Wait(); !errors.Is(err, failure) {
+		t.Fatal(err)
+	}
+}
+
+func TestPreparedReconcileCloseCancelsPreparation(t *testing.T) {
+	_, endpoint := newPlanServer(t, false, false, false)
+	entered := make(chan struct{})
+	exited := make(chan struct{})
+	r := preparedForTest(t, endpoint, func(ctx context.Context, _ int, _ []string) (AttemptCallbacks, error) {
+		close(entered)
+		<-ctx.Done()
+		close(exited)
+		return AttemptCallbacks{}, ctx.Err()
+	})
+	done := make(chan error, 1)
+	go func() { done <- r.Reconcile(context.Background(), snapshot("BTCUSDT")) }()
+	receive(t, entered)
+	r.Close()
+	receive(t, exited)
+	if err := receive(t, done); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+}
+
+func TestPreparedReconcileDataBoundToAttempt(t *testing.T) {
+	sockets := make(chan *websocket.Conn, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		c, err := (&websocket.Upgrader{}).Upgrade(w, req, nil)
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		var cmd planCommand
+		if c.ReadJSON(&cmd) != nil {
+			return
+		}
+		c.WriteJSON(map[string]any{"id": cmd.ID, "result": nil})
+		sockets <- c
+		c.WriteMessage(websocket.TextMessage, []byte(`{"e":"trade"}`))
+		c.ReadMessage()
+	}))
+	defer server.Close()
+	endpoint := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+	var token int
+	data := make(chan int, 2)
+	retired := make(chan int, 2)
+	failure := errors.New("accept failed on second generation")
+	r := preparedForTest(t, endpoint, func(context.Context, int, []string) (AttemptCallbacks, error) {
+		token++
+		bound := token
+		return AttemptCallbacks{Handle: func(context.Context, []byte) error {
+			data <- bound
+			if bound == 2 {
+				return failure
+			}
+			return nil
+		}, Disconnected: func(context.Context, error, time.Duration) error { retired <- bound; return nil }}, nil
+	})
+	if err := r.Reconcile(context.Background(), snapshot("BTCUSDT")); err != nil {
+		t.Fatal(err)
+	}
+	if n := receive(t, data); n != 1 {
+		t.Fatal(n)
+	}
+	receive(t, sockets).Close()
+	if n := receive(t, retired); n != 1 {
+		t.Fatal(n)
+	}
+	if n := receive(t, data); n != 2 {
+		t.Fatal(n)
+	}
+	if err := r.Wait(); !errors.Is(err, failure) {
+		t.Fatal(err)
+	}
+}
+
+func TestPreparedReconcileCloseJoinsObserver(t *testing.T) {
+	_, endpoint := newPlanServer(t, false, true, false)
+	entered := make(chan struct{})
+	canceled := make(chan struct{})
+	release := make(chan struct{})
+	r := preparedForTest(t, endpoint, func(context.Context, int, []string) (AttemptCallbacks, error) {
+		return AttemptCallbacks{Handle: func(context.Context, []byte) error { return nil }, Disconnected: func(ctx context.Context, _ error, _ time.Duration) error {
+			close(entered)
+			<-ctx.Done()
+			close(canceled)
+			<-release
+			return ctx.Err()
+		}}, nil
+	})
+	done := make(chan error, 1)
+	go func() { done <- r.Reconcile(context.Background(), snapshot("BTCUSDT")) }()
+	receive(t, entered)
+	closed := make(chan struct{})
+	go func() { r.Close(); close(closed) }()
+	receive(t, canceled)
+	select {
+	case <-closed:
+		t.Fatal("Close returned before observer")
+	default:
+	}
+	close(release)
+	receive(t, closed)
+	if err := receive(t, done); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+}
+
+func TestPreparedReconcileMovesGroups(t *testing.T) {
+	s, endpoint := newPlanServer(t, false, false, false)
+	r := preparedForTest(t, endpoint, func(context.Context, int, []string) (AttemptCallbacks, error) {
+		return AttemptCallbacks{Handle: func(context.Context, []byte) error { return nil }, Disconnected: func(context.Context, error, time.Duration) error { return nil }}, nil
+	})
+	for _, names := range [][]string{{"ETHUSDT", "SOLUSDT"}, {"BTCUSDT", "ETHUSDT", "SOLUSDT"}, {"SOLUSDT"}, {}} {
+		if err := r.Reconcile(context.Background(), snapshot(names...)); err != nil {
+			t.Fatal(err)
+		}
+		_, _, active := s.view()
+		if len(active) != len(names) {
+			t.Fatalf("active %v want %v", active, names)
+		}
+	}
+}
+
+func TestPreparedReconcileRetirementFailurePreventsNewOwner(t *testing.T) {
+	s, endpoint := newPlanServer(t, false, false, false)
+	failure := fmt.Errorf("durable retirement: %w", context.Canceled)
+	r := preparedForTest(t, endpoint, func(context.Context, int, []string) (AttemptCallbacks, error) {
+		return AttemptCallbacks{Handle: func(context.Context, []byte) error { return nil }, Disconnected: func(context.Context, error, time.Duration) error { return failure }}, nil
+	})
+	if err := r.Reconcile(context.Background(), snapshot("BTCUSDT")); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Reconcile(context.Background(), snapshot("ETHUSDT")); !errors.Is(err, failure) {
+		t.Fatal(err)
+	}
+	if err := r.Wait(); !errors.Is(err, failure) {
+		t.Fatal(err)
+	}
+	if n, _, _ := s.view(); n != 1 {
+		t.Fatalf("new owner dialed despite retirement failure: %d", n)
+	}
+}
+
+func TestPreparedReconcileFailedHandshakeThenPreparationFailure(t *testing.T) {
+	handshakes := make(chan struct{}, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handshakes <- struct{}{}
+		http.Error(w, "offline", http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	failure := errors.New("second generation failed")
+	var attempts int
+	r := preparedForTest(t, "ws"+strings.TrimPrefix(server.URL, "http")+"/ws", func(context.Context, int, []string) (AttemptCallbacks, error) {
+		attempts++
+		if attempts == 2 {
+			return AttemptCallbacks{}, failure
+		}
+		return AttemptCallbacks{Handle: func(context.Context, []byte) error { return nil }, Disconnected: func(context.Context, error, time.Duration) error { return nil }}, nil
+	})
+	if err := r.Reconcile(context.Background(), snapshot("BTCUSDT")); !errors.Is(err, failure) {
+		t.Fatal(err)
+	}
+	if err := r.Wait(); !errors.Is(err, failure) {
+		t.Fatal(err)
+	}
+	receive(t, handshakes)
+	select {
+	case <-handshakes:
+		t.Fatal("failed preparation dialed")
+	default:
+	}
+}
+
+func TestPreparedReconcileInvalidCallbacksAndCanceledOwner(t *testing.T) {
+	for _, mode := range []string{"nil-handler", "nil-observer", "canceled", "nil-prepare"} {
+		t.Run(mode, func(t *testing.T) {
+			s, endpoint := newPlanServer(t, false, false, false)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			calls := 0
+			prepare := PrepareGroupAttempt(func(context.Context, int, []string) (AttemptCallbacks, error) {
+				calls++
+				callbacks := AttemptCallbacks{Handle: func(context.Context, []byte) error { return nil }, Disconnected: func(context.Context, error, time.Duration) error { return nil }}
+				if mode == "nil-handler" {
+					callbacks.Handle = nil
+				}
+				if mode == "nil-observer" {
+					callbacks.Disconnected = nil
+				}
+				return callbacks, nil
+			})
+			if mode == "canceled" {
+				cancel()
+			}
+			if mode == "nil-prepare" {
+				prepare = nil
+			}
+			r, err := NewPreparedReconciler(ctx, ReconcileConfig{Endpoint: endpoint, Limit: 2, Transport: DefaultConfig(), Retry: DefaultRetryConfig(), AckTimeout: time.Second}, prepare)
+			if mode == "nil-prepare" {
+				if err == nil {
+					r.Close()
+					t.Fatal("nil prepare accepted")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer r.Close()
+			if err := r.Reconcile(context.Background(), snapshot("BTCUSDT")); err == nil {
+				t.Fatal("invalid lifecycle accepted")
+			}
+			if err := r.Wait(); err == nil {
+				t.Fatal("missing terminal error")
+			}
+			if n, _, _ := s.view(); n != 0 {
+				t.Fatal("invalid lifecycle dialed")
+			}
+			if mode == "canceled" && calls != 0 {
+				t.Fatal("prepared canceled owner")
+			}
+		})
 	}
 }

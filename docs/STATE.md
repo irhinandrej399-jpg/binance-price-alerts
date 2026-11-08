@@ -4,10 +4,14 @@
 
 ## Активная работа
 
-- Активная реализация: нет. По [DEC-011](decisions/DEC-011.md) после OPS-067 осталось 7 planned; следующий — MKT-019. 22 тяжёлые задачи cancelled.
+- Активная реализация: нет. После MKT-020 осталось 8 planned; следующий — E2E-008. 22 тяжёлые задачи cancelled по [DEC-011](decisions/DEC-011.md).
+- Последний завершённый тикет: [MKT-020](backlog/tickets/MKT-020.md). Prepared reconciler готовит immutable callbacks до каждого dial; смена плана снимает старые подписки и присоединяет callbacks до нового владельца. Wait наблюдает terminal failure после возврата Reconcile. Целевые/общие race, vet/build, Protobuf и backlog PASS. При смене каталога пересоздаются все группы; runtime/SQL не менялись.
+- MKT-019 остаётся planned: lifecycle предпосылка MKT-020 готова, требуется
+  динамический процессный fake E2E-008. План и зависимости сохранены вместе
+  с результатом MKT-020. Очередь: E2E-008 → MKT-019.
 - Последний результат планирования: DEC-011. Пять конкретных дефектов сохранены, добавлены семь практических задач выпуска; статусы cancelled проверяются tooling. Реального deployment ещё нет.
 - Записи о прошлых сессиях ниже — история проверок; актуальный объём и следующий шаг определены DEC-011 и ORDER.
-- Последний завершённый тикет: [OPS-067](backlog/tickets/OPS-067.md). Исправлено условие готовности Kafka fixture: bounded discovery нового ID и готовой partition после CreateTopics; production guards сохранены. Управляемый ответ воспроизводит ErrMetadata, точный исторический ответ OPS-065 неизвестен. Целевой и общий race, disposable Kafka/race, vet/build, Protobuf PASS; cleanup подтверждён. [Диагностика](measurements/OPS-067/diagnosis.md).
+- Предыдущий завершённый тикет: [OPS-067](backlog/tickets/OPS-067.md). Исправлено условие готовности Kafka fixture: bounded discovery нового ID и готовой partition после CreateTopics; production guards сохранены. Управляемый ответ воспроизводит ErrMetadata, точный исторический ответ OPS-065 неизвестен. Целевой и общий race, disposable Kafka/race, vet/build, Protobuf PASS; cleanup подтверждён. [Диагностика](measurements/OPS-067/diagnosis.md).
 - Предыдущий завершённый тикет: [NTF-020](backlog/tickets/NTF-020.md). Подтверждена гонка fixture: клиентский timeout предшествовал CancelRequest, освобождение legacy lock разрешало полный bootstrap commit. Тест наблюдает блокировку и завершение точного backend PID до освобождения lock; после подтверждённой отмены source/checkpoints/jobs пусты. Red/Green и финальный PostgreSQL/race, общий race/vet/build и Protobuf PASS, cleanup подтверждён. Production Go/SQL не менялись.
 - Предыдущий завершённый тикет: [NTF-019](backlog/tickets/NTF-019.md). Проверка Telegram payload сравнивает полное поле фактической цены, независимо от возраста. Детерминированный Red/Green: цена 101 и возраст 999 с; неверные 999/1010 отклоняются, проверка адресата сохранена. Пакет admissionrpc PostgreSQL/race, общая race-регрессия/vet/build и Protobuf PASS; disposable cleanup подтверждён. Production-код не менялся.
 - Предыдущий завершённый тикет: [SUB-024](backlog/tickets/SUB-024.md). Доказано ограничение SQL/Go clock domains: при моделируемом −2 min реальные SQL Build/Page успешны, RPC отклоняет expires_at. Добавлены clock prerequisites и стадии диагностики; [отчёт](measurements/SUB-024/diagnosis.md). Целевой SQL/race, общий race/vet/build и Protobuf PASS; cleanup подтверждён. Историческая причина 29 октября не доказана; TTL и production guards сохранены.
@@ -181,8 +185,9 @@ p99 и дисковым резервам не являются условиям�
 
 ## Следующий рекомендуемый шаг
 
-`python3 scripts/backlog.py next` → [MKT-019](backlog/tickets/MKT-019.md), planned:
-согласовать каталог поддерживаемых пар с фактическим приёмом цен runtime.
+`python3 scripts/backlog.py next` → [E2E-008](backlog/tickets/E2E-008.md), planned:
+расширить существующий fake Binance для динамического плана каталога. Затем
+повторная проверка MKT-019: каталог поддерживаемых пар и фактический приём цен.
 
 Практический выпуск: OPS-074 (постоянный запуск), OPS-075 (HTTPS/секреты),
 OPS-076 (backup/restore), OPS-077 (наблюдение/диск/maintenance), E2E-007

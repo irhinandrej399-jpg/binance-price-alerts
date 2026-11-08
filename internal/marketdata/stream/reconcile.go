@@ -27,10 +27,16 @@ type ReconcileConfig struct {
 	AckTimeout time.Duration
 }
 
-// Reconciler owns a single feed's connections. Reconcile calls are serialized.
-// handle and disconnected may run concurrently across groups and must honor ctx.
-// A terminal handle error stops all groups; transport/ACK errors retry indefinitely.
+// PrepareGroupAttempt binds callbacks to an immutable group plan before dial.
+// Streams are sorted Binance stream names; the slice belongs to the caller.
+type PrepareGroupAttempt func(context.Context, int, []string) (AttemptCallbacks, error)
+
+// Reconciler owns a single feed. Reconcile calls are serialized.
+// Callbacks may run concurrently across groups and must honor context.
+// Application errors stop the owner; transport/ACK failures retry.
 type Reconciler struct {
+	prepare      PrepareGroupAttempt
+	workers      sync.WaitGroup
 	ctx          context.Context
 	cancel       context.CancelCauseFunc
 	config       ReconcileConfig
@@ -69,6 +75,33 @@ func NewReconciler(ctx context.Context, c ReconcileConfig, handle func(context.C
 	return r, nil
 }
 
+// NewPreparedReconciler prepares durable fencing for every connection attempt.
+// A changed plan drains all old subscriptions and joins callbacks before preparing
+// replacements. An identical plan is a no-op. Preparation and observer errors stop
+// the owner; callbacks must honor context and must not call Close/Reconcile/Wait.
+func NewPreparedReconciler(ctx context.Context, c ReconcileConfig, prepare PrepareGroupAttempt) (*Reconciler, error) {
+	if prepare == nil {
+		return nil, errors.New("stream: attempt preparation required")
+	}
+	r, err := NewReconciler(ctx, c, func(context.Context, []byte) error { return nil }, func(int, error, time.Duration) {})
+	if err != nil {
+		return nil, err
+	}
+	r.prepare = prepare
+	return r, nil
+}
+
+// Wait observes terminal failure or lifetime cancellation even after Reconcile
+// has returned, and joins all workers and callbacks. Close initiates cancellation.
+func (r *Reconciler) Wait() error {
+	<-r.ctx.Done()
+	// The gate prevents new workers from being added while waiting.
+	<-r.gate
+	defer func() { r.gate <- struct{}{} }()
+	r.workers.Wait()
+	return context.Cause(r.ctx)
+}
+
 // Reconcile applies one successful catalog snapshot. All removals are confirmed
 // before additions, including moves between groups. Return means subscription ACKs,
 // not confirmed live data or gap recovery. On caller cancellation, partial progress
@@ -91,6 +124,41 @@ func (r *Reconciler) Reconcile(ctx context.Context, snapshot catalog.Snapshot) e
 	}
 	if r.ctx.Err() != nil {
 		return context.Cause(r.ctx)
+	}
+	if r.prepare != nil {
+		same := len(plan) == len(r.groups)
+		if same {
+			for i, g := range r.groups {
+				g.mu.Lock()
+				equal := slices.Equal(g.desired, plan[i])
+				g.mu.Unlock()
+				if !equal {
+					same = false
+					break
+				}
+			}
+		}
+		if !same {
+			// Drain all ownership before any new durable generation or subscription.
+			// Old callbacks remain bound to their old immutable set until joined.
+			for _, g := range r.groups {
+				g.mu.Lock()
+				g.setLocked(nil)
+				g.mu.Unlock()
+			}
+			for _, g := range r.groups {
+				if err := g.wait(ctx); err != nil {
+					return err
+				}
+			}
+			for _, g := range r.groups {
+				g.stop()
+			}
+			r.groups = nil
+			if r.ctx.Err() != nil {
+				return context.Cause(r.ctx)
+			}
+		}
 	}
 	// Each existing group first retains only streams that remain at its index.
 	for i, g := range r.groups {
@@ -165,12 +233,60 @@ func (r *Reconciler) startGroup(index int, names []string) *planGroup {
 	ctx, cancel := context.WithCancel(r.ctx)
 	g := &planGroup{owner: r, ctx: ctx, cancel: cancel, done: make(chan struct{}), changed: make(chan struct{}), wake: make(chan struct{}, 1)}
 	g.setLocked(names)
+	r.workers.Add(1)
 	go func() {
+		defer r.workers.Done()
 		defer close(g.done)
-		_ = retryConnections(ctx, r.config.Retry, realClock{}, rand.Int64N, func() (bool, error) {
-			err := g.attempt()
+		var callbacks AttemptCallbacks
+		err := retryConnectionsObserved(ctx, r.config.Retry, realClock{}, rand.Int64N, func() (bool, error) {
+			handle := r.handle
+			if r.prepare != nil {
+				g.mu.Lock()
+				names := slices.Clone(g.desired)
+				version := g.version
+				g.mu.Unlock()
+				if len(names) == 0 {
+					g.mu.Lock()
+					g.confirmed = version
+					g.signalLocked()
+					g.mu.Unlock()
+					<-ctx.Done()
+					return false, ctx.Err()
+				}
+				var err error
+				callbacks, err = r.prepare(ctx, index, names)
+				if err != nil {
+					return false, fmt.Errorf("stream: prepare: %w", err)
+				}
+				if ctx.Err() != nil {
+					return false, ctx.Err()
+				}
+				if callbacks.Handle == nil || callbacks.Disconnected == nil {
+					return false, errors.New("stream: attempt handler and disconnect observer required")
+				}
+				handle = callbacks.Handle
+			}
+			err := g.attempt(handle)
 			return r.ctx.Err() == nil, err
-		}, func(err error, d time.Duration) { r.disconnected(index, err, d) })
+		}, func(err error, d time.Duration) error {
+			if r.prepare == nil {
+				r.disconnected(index, err, d)
+				return nil
+			}
+			observer := callbacks.Disconnected
+			callbacks = AttemptCallbacks{}
+			return observer(ctx, err, d)
+		})
+		// During a plan replacement the group context is canceled, but the owner
+		// remains live so durable retirement can complete. Close cancels this context.
+		if r.prepare != nil && callbacks.Disconnected != nil && g.ctx.Err() != nil {
+			if observerErr := callbacks.Disconnected(r.ctx, context.Cause(g.ctx), 0); observerErr != nil && r.ctx.Err() == nil {
+				r.cancel(observerErr)
+			}
+		}
+		if err != nil && r.ctx.Err() == nil && (g.ctx.Err() == nil || !errors.Is(err, context.Canceled)) {
+			r.cancel(err)
+		}
 	}()
 	return g
 }
@@ -223,7 +339,7 @@ type commandReply struct {
 	err error
 }
 
-func (g *planGroup) attempt() error {
+func (g *planGroup) attempt(handle func(context.Context, []byte) error) error {
 	r := g.owner
 	ctx, cancel := context.WithCancelCause(g.ctx)
 	defer cancel(nil)
@@ -270,7 +386,7 @@ func (g *planGroup) attempt() error {
 				return errors.New("stream: command error without id")
 			}
 		}
-		err := r.handle(ctx, b)
+		err := handle(ctx, b)
 		if err != nil {
 			if ctx.Err() != nil {
 				return context.Cause(ctx)
