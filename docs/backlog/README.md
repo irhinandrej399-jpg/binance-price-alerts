@@ -330,3 +330,8 @@ OPS-032/018 ждут готового observer.
 | [OPS-031](tickets/OPS-031.md) | [OPS-033](tickets/OPS-033.md), [OPS-034](tickets/OPS-034.md), [OPS-035](tickets/OPS-035.md), [OPS-036](tickets/OPS-036.md) | split |
 | [OPS-037](tickets/OPS-037.md) | [OPS-038](tickets/OPS-038.md), [OPS-039](tickets/OPS-039.md), [OPS-040](tickets/OPS-040.md) | split |
 | [OPS-059](tickets/OPS-059.md) | [OPS-060](tickets/OPS-060.md), [OPS-061](tickets/OPS-061.md), [OPS-062](tickets/OPS-062.md) | split |
+
+Отложенный этап ORDER.md исключён из обычного `next`, включая начатые
+в нём задачи. `next --include-deferred` — только просмотр; выполнение требует
+отдельного поручения. После завершения текущего этапа новых обязательных
+тикетов нет. Это правило поддерживает выбранную цель локального пет-проекта.

@@ -141,6 +141,7 @@ def main():
     sub = parser.add_subparsers(dest='command', required=True)
     nxt = sub.add_parser('next', help='Следующая незавершённая карточка по ORDER.md')
     nxt.add_argument('--limit', type=int, default=1, help='Число следующих пунктов для предварительного просмотра')
+    nxt.add_argument('--include-deferred', action='store_true', help='Показать также отложенный этап')
     show = sub.add_parser('show', help='Показать карточку и состояния зависимостей')
     show.add_argument('id')
     sub.add_parser('check', help='Проверить граф, статусы и индекс')
@@ -175,6 +176,10 @@ def main():
     if args.limit <= 0:
         parser.error('--limit должен быть положительным')
     order = read_order()
+    if not args.include_deferred:
+        rows = (BASE / 'ORDER.md').read_text(encoding='utf-8').split('## Отложенный этап', 1)[0]
+        current = set(re.findall(rf'^\d+\. \[({ID})\]', rows, re.M))
+        order = tuple(tid for tid in order if tid in current)
     active = [tickets[tid] for tid in order if tickets[tid].status in {'in-progress', 'review'}]
     if active:
         print('Сначала продолжить или проверить уже начатую работу:')
@@ -183,7 +188,9 @@ def main():
         return 0
     candidates = [tickets[tid] for tid in order if tickets[tid].status != 'done']
     if not candidates:
-        print('Все задачи очереди ORDER.md завершены.')
+        print('Текущий этап завершён. Следующего обязательного тикета нет.')
+        if len(order) < len(read_order()):
+            print('Отложенный этап требует отдельного поручения; просмотр: next --include-deferred.')
         return 0
     if args.limit == 1:
         print('Следующий тикет по ORDER.md; перед реализацией ещё нужна проверка готовности:')

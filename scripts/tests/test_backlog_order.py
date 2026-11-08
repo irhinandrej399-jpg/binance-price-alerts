@@ -111,6 +111,18 @@ class BacklogOrderTests(unittest.TestCase):
         self.assertLess(text.index('ZED-001 [planned]'), text.index('BETA-001 [planned]'))
         self.assertLess(text.index('BETA-001 [planned]'), text.index('ALPHA-001 [planned]'))
 
+    def test_deferred_stage_is_not_selected_even_if_in_progress(self):
+        self.fixture(statuses={'ZED-001': 'done', 'ALPHA-001': 'in-progress'})
+        path = self.base / 'ORDER.md'
+        path.write_text(path.read_text().replace('2. [BETA',
+                        '## Отложенный этап\n\n2. [BETA'))
+        text = self.next()
+        self.assertIn('Текущий этап завершён', text)
+        self.assertNotIn('[planned]', text)
+        self.assertNotIn('[in-progress]', text)
+        self.assertIn('ALPHA-001 [in-progress]', self.next('--include-deferred'))
+        self.assertEqual(self.errors(), [])
+
 
 if __name__ == '__main__':
     unittest.main()
