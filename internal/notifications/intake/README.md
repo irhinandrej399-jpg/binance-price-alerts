@@ -1,14 +1,15 @@
 # Durable приём AlertTriggered — NTF-001
 
-`New(Config{Brokers, Topic, Group}, NewStore(notificationsPool))`, `Step(ctx)` /
+`New(Config{Brokers, Topic, Group, Binding}, NewStore(notificationsPool))`, `Step(ctx)` /
 `Run(ctx)` и `Close()` принимают запросы из префиксного delivery-requests.
 Consumer group распределяет 16 партиций; группа стабильна для среды. Методы
 consumer вызываются последовательно; отмена контекста завершает ожидание.
 Runtime и запуск процесса подключаются отдельно.
 
-Перед чтением каждого назначения `AdjustFetchOffsetsFn` регистрирует SQL
-checkpoint каждой партиции и восстанавливает абсолютные позиции. Первый приём
-начинается с нуля; broker committed offset не заменяет SQL. Потеря необходимой
+Перед чтением каждого назначения `AdjustFetchOffsetsFn` читает source-bound SQL
+прогресс каждой партиции через `ReadProgress` и восстанавливает абсолютные позиции.
+Пустой intake требует отдельного явного `Bootstrap`; consumer его не выполняет.
+Broker committed offset не заменяет SQL, включая позицию впереди SQL. Потеря необходимой
 истории, offset вне retained начала / read_committed LSO и fetch errors явно
 останавливают consumer. Автоматического reset/skip нет. Один логический intake
 на topic: SQL-ключ `(topic, partition)` не зависит от replica/group member.
@@ -26,7 +27,7 @@ BlockRebalanceOnPoll. Step читает одну запись, проверяе�
 
 Только успешный SQL commit разрешает явный CommitOffsetsSync (бюджет 3 с).
 Любая ошибка Step завершает работу экземпляра; следует закрыть его и создать
-новый с теми же topic/group/БД. Невалидная запись останавливает весь экземпляр,
+новый с теми же binding/topic/group/БД. Невалидная запись останавливает весь экземпляр,
 включая её партицию, с ErrContract и координатами; автоматического ack после
 повторов нет. Частичный успех/неизвестный исход SQL commit безопасно перечитывается
 из SQL; потерянный Kafka ack не меняет принятое задание.
@@ -39,7 +40,8 @@ BlockRebalanceOnPoll. Step читает одну запись, проверяе�
 изменяются; роль notifications не имеет CONNECT к остальным БД. Worker leases,
 попытки, проверки цены, результаты и Telegram — последующие задачи; их schema
 расширяется отдельными миграциями. Поведение при rebalance безопасно за счёт
-порядка fetch/SQL CAS/уникальности; отдельный fault/load прогон реплик не заявлен.
+порядка fetch/SQL CAS/уникальности. Rebalance двух members проверен в OPS-065
+(см. ниже); нагрузка не измерялась.
 
 Память ограничена одной доставленной записью, fetch/decompression до 1 MiB,
 ответом до 2 MiB; приём записи — до 8 KiB (бюджет producer SingleRecord), ключ до 256. Сохраняются точные
@@ -131,8 +133,9 @@ Bootstrap и legacy SQL writers сериализованы advisory lock `(64064
 не должен скрывать только что принятый binding. Source-bound Accept читает
 immutable registry и блокирует только свою partition. После bootstrap старый
 `Checkpoint` отвергается SQL guard, старый `Accept` также отказывает до duplicate
-с ErrIdentity. Пока registry отсутствует, legacy путь совместим. Transport и
-cmd/notifications ещё используют его; переключение — OPS-065/066. Экспортера нет.
+с ErrIdentity. Пока registry отсутствует, legacy путь совместим. Transport OPS-065 использует только bound API. Старые вызовы cmd/notifications
+и process fixture не передают Binding и теперь явно отвергаются; их переключение —
+OPS-066. Экспортера нет.
 
 Проверка: `GOCACHE=/tmp/binance-go-build python3 scripts/check_postgres.py`.
 Только этот SQL-контракт: та же команда с `--binding-only`.
@@ -142,3 +145,58 @@ reports, fault/rollback/deferred commit, concurrent bootstrap/old writer/CAS,
 MVCC read и cancellation. Test-only reset очищает только этот disposable intake
 перед общими legacy-тестами; никогда не применять fixtures к рабочей БД.
 Без POSTGRES_TEST — явный skip. Kafka/runtime/process recovery здесь не проверяются.
+
+## Source-bound consumer — OPS-065
+
+```go
+consumer, err := intake.New(intake.Config{
+    Brokers: brokers, Topic: b.Source.Topic, Group: stableEnvironmentGroup,
+    Binding: b, // ConsumerID / Generation / Source из operator inventory
+}, store)
+// provisioning отдельно: store.Bootstrap(ctx, b, partitions)
+err = consumer.Run(ctx)
+consumer.Close() // после возврата Run/Step, до pool.Close
+```
+
+`Binding.Validate` обязателен; пустые consumer/generation, нулевой source и
+несовпадение Config.Topic/Source.Topic отвергаются. В Config также есть `Dialer`
+для доверенного transport и узких wire tests. Новый group member/реплика и
+рестарт используют прежние ConsumerID/Generation/Source, а не создают IDs заново.
+Текущая metadata никогда не становится provenance старого SQL cursor.
+
+Assignment сверяет metadata без auto-create перед чтением SQL и после проверки
+retained start/read_committed LSO. Он не вызывает Checkpoint/Bootstrap и не
+создаёт отсутствующую partition. `ErrMissing`, `ErrUnbound`, mismatch или потеря
+истории завершают экземпляр без reset/skip. Returned позиции происходят только
+из persisted `ReadProgress`; broker offsets игнорируются. Source/generation
+сверяются также атомарно внутри `AcceptBound`, в том числе для duplicate/CAS.
+
+Каждый Step проверяет metadata до poll и после него. Poll ограничен одной
+секундой, так что Run проверяет metadata и на пустом потоке. Затем исходные
+fetch responses проходят `Source.CheckFetches` **до** Records/decode/Accept;
+KeepControlRecords сохраняет commit/abort markers для проверки ID, после чего
+они пропускаются без SQL/ack. Step может вернуть nil после idle poll/marker.
+Read_committed, одна доставленная запись, прежние fetch/decompression/SQL/ack
+лимиты и Close/join сохранены. Любая ошибка Step/assignment остаётся terminal;
+владелец вызывает Close после выхода Run/Step. Проверки требуют доступной metadata,
+даже если buffered data уже есть; нагрузочная цена этого режима не измерена.
+
+Транспорт проверяет Kafka ClusterID/TopicID/имя, SQL доказывает provenance
+сохранённой позиции. Граница доверия и ограничение клонов storage с теми же IDs —
+[kafkasource](../../platform/kafkasource/README.md). Автопереноса source/legacy нет.
+
+Переход вызывающего кода (OPS-066): добавить обязательные операторские
+ConsumerID/Generation/ClusterID/TopicID, передать Config.Binding, выполнить
+явный bootstrap **только нового пустого intake** и обновить process fixture.
+Нынешний cmd компилируется, но intake.New отвергает его конфигурацию без Binding;
+прежние process smoke до OPS-066 не подтверждают запуск нового транспорта.
+
+Проверки: существующий `KAFKA_RUN_POSTGRES=1 bash infra/kafka/verify-go.sh`
+с реальным PostgreSQL/Kafka и race detector: durable commit/потерянный ack/restart,
+broker offset впереди SQL, rebalance двух members с тем же binding, неизвестный/
+legacy intake, потеря retained истории, delete/recreate уникального disposable
+topic с перекрывающимися offsets. `check_postgres.py` запускает transport в отдельной фазе до общих legacy writers
+(внутренний opt-in `INTAKE_TRANSPORT_TEST=1`). Fixtures последовательно используют
+существующий test-only `test_reset_delivery_source` до/после своего intake;
+к рабочей БД этот fixture неприменим. Unit/wire проверки source data/control,
+нулевого ID, metadata failures, idle и отмены работают без внешнего брокера.

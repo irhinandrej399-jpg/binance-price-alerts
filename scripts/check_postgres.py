@@ -71,6 +71,17 @@ def main():
             run(['go', 'test', '-race', '-count=1', '-v',
                  './internal/notifications/intake/testdata/binding'])
             if not args.binding_only:
+                # Source binding is a singleton. Exercise the transport on an
+                # empty intake before shared legacy writers, then reset using
+                # the existing disposable-only SQL fixture. Never erase shared
+                # worker/handler fixtures in the middle of the common suite.
+                if env.get('KAFKA_INTEGRATION') == '1':
+                    env['INTAKE_TRANSPORT_TEST'] = '1'
+                    try:
+                        run(['go', 'test', '-race', '-count=1', '-v',
+                             '-run', '^TestKafka', './internal/notifications/intake'])
+                    finally:
+                        env.pop('INTAKE_TRANSPORT_TEST', None)
                 # Relay claims the entire fixed shard. Run its recovery scenario on
                 # the fresh outbox before other packages create unpublished work.
                 relay = 'github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/relay'

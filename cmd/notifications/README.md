@@ -93,3 +93,14 @@ SIGTERM проверяется до HTTP, во время запроса, пос
 и при SQL lock на final write; SIGINT — после recovery. Проверяются exit code,
 uncertain/success, lease, bytes и canonical API outcome.
 Четыре процесса, общий E2E и нагрузка остаются отдельными задачами.
+
+## Переход source-bound intake (OPS-065 → OPS-066)
+
+Транспорт теперь требует `intake.Config.Binding{ConsumerID, Generation, Source}`
+и отдельного явного SQL bootstrap нового пустого intake. Нынешний cmd и его
+process fixture ещё не передают эти значения: compilation сохраняется, но
+`intake.New` возвращает ErrConfig, запуск завершается до HTTP readiness.
+OPS-066 подключит обязательную конфигурацию/provisioning и повторит process
+recovery/shutdown проверки. Нельзя подставить нынешнюю metadata как источник
+legacy SQL cursor или автоматически сбросить SQL. Контракт —
+[intake README](../../internal/notifications/intake/README.md#source-bound-consumer--ops-065).

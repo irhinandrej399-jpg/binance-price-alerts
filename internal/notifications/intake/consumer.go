@@ -4,15 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 )
 
 type Config struct {
+	Binding      Binding // operator expectation, never derived from current metadata
+	Dialer       func(context.Context, string, string) (net.Conn, error)
 	Brokers      []string
 	Topic, Group string
 }
@@ -40,16 +44,26 @@ func New(cfg Config, store *Store) (*Consumer, error) {
 			return nil, ErrConfig
 		}
 	}
+	if err := cfg.Binding.Validate(); err != nil {
+		return nil, err
+	}
+	if cfg.Binding.Source.Topic != cfg.Topic {
+		return nil, kafkasource.ErrMismatch
+	}
 	clientCtx, cancel := context.WithCancel(context.Background())
 	c := &Consumer{store: store, cfg: cfg, cursors: map[int32]int64{}, cancel: cancel}
-	cl, e := kgo.NewClient(kgo.WithContext(clientCtx), kgo.SeedBrokers(cfg.Brokers...), kgo.ConsumerGroup(cfg.Group), kgo.ConsumeTopics(cfg.Topic),
-		kgo.FetchIsolationLevel(kgo.ReadCommitted()), kgo.DisableAutoCommit(),
+	opts := []kgo.Opt{kgo.WithContext(clientCtx), kgo.SeedBrokers(cfg.Brokers...), kgo.ConsumerGroup(cfg.Group), kgo.ConsumeTopics(cfg.Topic),
+		kgo.FetchIsolationLevel(kgo.ReadCommitted()), kgo.KeepControlRecords(), kgo.DisableAutoCommit(),
 		kgo.ConsumeResetOffset(kgo.NoResetOffset()), kgo.KeepRetryableFetchErrors(),
 		kgo.Balancers(kgo.RangeBalancer()), kgo.BlockRebalanceOnPoll(),
 		kgo.AdjustFetchOffsetsFn(c.assign),
-		kgo.FetchMaxWait(100*time.Millisecond), kgo.FetchMaxBytes(1<<20), kgo.FetchMaxPartitionBytes(1<<20),
-		kgo.MaxDecompressBatchBytes(1<<20), kgo.BrokerMaxReadBytes(2<<20), kgo.MaxConcurrentFetches(1),
-		kgo.DialTimeout(time.Second), kgo.RequestTimeoutOverhead(time.Second), kgo.RequestRetries(2), kgo.RetryTimeout(2*time.Second))
+		kgo.FetchMaxWait(100 * time.Millisecond), kgo.FetchMaxBytes(1 << 20), kgo.FetchMaxPartitionBytes(1 << 20),
+		kgo.MaxDecompressBatchBytes(1 << 20), kgo.BrokerMaxReadBytes(2 << 20), kgo.MaxConcurrentFetches(1),
+		kgo.DialTimeout(time.Second), kgo.RequestTimeoutOverhead(time.Second), kgo.RequestRetries(2), kgo.RetryTimeout(2 * time.Second)}
+	if cfg.Dialer != nil {
+		opts = append(opts, kgo.Dialer(cfg.Dialer))
+	}
+	cl, e := kgo.NewClient(opts...)
 	if e != nil {
 		cancel()
 		return nil, ErrConfig
@@ -69,13 +83,16 @@ func (c *Consumer) fail(err error) error {
 func (c *Consumer) failure() error { c.mu.Lock(); defer c.mu.Unlock(); return c.failed }
 
 // Assignment ignores broker offsets, including offsets ahead of SQL. Missing
-// retained history is an error, never a reset. Register all assigned partitions
-// before fetching; each starts at zero on the first ever assignment.
+// retained history is an error, never a reset. Only an explicitly bootstrapped
+// SQL binding supplies positions; assignment performs no provisioning.
 func (c *Consumer) assign(parent context.Context, offsets map[string]map[int32]kgo.Offset) (map[string]map[int32]kgo.Offset, error) {
 	ctx, cancel := context.WithTimeout(parent, 5*time.Second)
 	defer cancel()
 	if e := c.failure(); e != nil {
 		return nil, e
+	}
+	if e := c.verify(ctx); e != nil {
+		return nil, c.fail(e)
 	}
 	starts := map[int32]int64{}
 	for topic, ps := range offsets {
@@ -86,11 +103,14 @@ func (c *Consumer) assign(parent context.Context, offsets map[string]map[int32]k
 			if part < 0 || part >= 16 {
 				return nil, c.fail(ErrConfig)
 			}
-			n, e := c.store.Checkpoint(ctx, topic, part)
+			progress, e := c.store.ReadProgress(ctx, c.cfg.Binding, part)
 			if e != nil {
 				return nil, c.fail(e)
 			}
-			starts[part] = n
+			if progress.Binding != c.cfg.Binding || progress.Partition != part {
+				return nil, c.fail(kafkasource.ErrMismatch)
+			}
+			starts[part] = progress.Next
 		}
 	}
 	for _, timestamp := range []int64{-2, -1} {
@@ -112,7 +132,7 @@ func (c *Consumer) assign(parent context.Context, offsets map[string]map[int32]k
 		if e != nil {
 			return nil, c.fail(ErrPosition)
 		}
-		if len(resp.Topics) != 1 || len(resp.Topics[0].Partitions) != len(starts) {
+		if len(resp.Topics) != 1 || resp.Topics[0].Topic != c.cfg.Topic || len(resp.Topics[0].Partitions) != len(starts) {
 			return nil, c.fail(ErrPosition)
 		}
 		seen := map[int32]bool{}
@@ -124,6 +144,9 @@ func (c *Consumer) assign(parent context.Context, offsets map[string]map[int32]k
 			seen[p.Partition] = true
 		}
 	}
+	if e := c.verify(ctx); e != nil {
+		return nil, c.fail(e)
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.cursors = starts
@@ -133,14 +156,26 @@ func (c *Consumer) assign(parent context.Context, offsets map[string]map[int32]k
 	return offsets, nil
 }
 
-// Step consumes at most one record. SQL Accept is the sole gate before ack.
-// Kafka's hidden abort/control records may cause numeric offset gaps: PollRecords
-// ordering, rather than offset+1 equality, establishes the delivered prefix.
+func (c *Consumer) verify(ctx context.Context) error {
+	_, err := c.cfg.Binding.Source.Verify(ctx, c.client)
+	return err
+}
+
+// Step consumes at most one record and can return nil after an idle poll or
+// a control marker. SQL AcceptBound is the sole gate before ack. Kafka markers
+// cause numeric gaps; ordered fetching establishes the delivered prefix.
 func (c *Consumer) Step(ctx context.Context) error {
 	if e := c.failure(); e != nil {
 		return e
 	}
-	fs := c.client.PollRecords(ctx, 1)
+	if e := c.verify(ctx); e != nil {
+		return c.fail(e)
+	}
+	// A bounded poll also schedules metadata verification on an idle stream.
+	poll, cancel := context.WithTimeout(ctx, time.Second)
+	fs := c.client.PollRecords(poll, 1)
+	timedOut := poll.Err() != nil
+	cancel()
 	defer c.client.AllowRebalance()
 	if e := c.failure(); e != nil {
 		return e
@@ -148,12 +183,33 @@ func (c *Consumer) Step(ctx context.Context) error {
 	if e := ctx.Err(); e != nil {
 		return c.fail(e)
 	}
-	if len(fs.Errors()) > 0 {
-		return c.fail(ErrPosition)
+	if e := c.verify(ctx); e != nil {
+		return c.fail(e)
+	}
+	if e := c.acceptFetches(ctx, fs, timedOut); e != nil {
+		return c.fail(e)
+	}
+	return nil
+}
+
+// Inspect original responses before flattening/decode, even for control-only
+// fetches. Markers are retained by the client for this check, then skipped.
+func (c *Consumer) acceptFetches(ctx context.Context, fs kgo.Fetches, timedOut bool) error {
+	if err := c.cfg.Binding.Source.CheckFetches(fs); err != nil {
+		return err
+	}
+	for _, e := range fs.Errors() {
+		if timedOut && e.Topic == "" && e.Partition == -1 && errors.Is(e.Err, context.DeadlineExceeded) {
+			continue
+		}
+		return ErrPosition
 	}
 	for _, r := range fs.Records() {
+		if r.Attrs.IsControl() {
+			continue
+		}
 		if e := c.acceptAndAck(ctx, r); e != nil {
-			return c.fail(e)
+			return e
 		}
 	}
 	return nil
@@ -170,7 +226,7 @@ func (c *Consumer) acceptAndAck(ctx context.Context, r *kgo.Record) error {
 	}
 	sqlCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	if e := c.store.Accept(sqlCtx, r.Topic, r.Partition, expected, r.Offset, r.Key, r.Value); e != nil {
+	if e := c.store.AcceptBound(sqlCtx, c.cfg.Binding, r.Partition, expected, r.Offset, r.Key, r.Value); e != nil {
 		// Include only transport coordinates, never payload/recipient/configuration.
 		return fmt.Errorf("intake partition %d offset %d: %w", r.Partition, r.Offset, e)
 	}
