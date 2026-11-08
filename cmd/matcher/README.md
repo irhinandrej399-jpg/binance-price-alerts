@@ -157,3 +157,6 @@ consumer_id — зарегистрированный durable projection_id, дл
 scope, а не текущий member/token. Перед DeleteRecords необходимо проверить все
 обязательные consumers по протоколу OPS-014; успешного ответа одной projection
 недостаточно. Отсутствие cursor, legacy или иной source запрещают очистку.
+
+Операторская команда первоначального provisioning и проверка сохранённого inventory:
+[source-provision (OPS-078)](../source-provision/README.md).

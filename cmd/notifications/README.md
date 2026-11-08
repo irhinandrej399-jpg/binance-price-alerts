@@ -164,3 +164,6 @@ Startup bind/PEM error не даёт readiness; выход сервера ост
 При signal/terminal cancellation gRPC Stop отменяет активные запросы и ждёт
 SQL handlers до pool.Close в существующем общем drain budget 20 с.
 Wire/errors/cleaner obligations — [progressrpc](../../internal/notifications/progressrpc/README.md).
+
+Операторская команда первоначального provisioning и проверка сохранённого inventory:
+[source-provision (OPS-078)](../source-provision/README.md).
