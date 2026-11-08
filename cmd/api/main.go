@@ -144,7 +144,7 @@ func run(ctx context.Context, c config) error {
 		return errors.New("api: HTTP bind failed")
 	}
 	defer listener.Close()
-	rpc, err := newMatcherRPC(c.rpc)
+	rpc, err := newAPIRPC(c.rpc)
 	if err != nil {
 		return err
 	}
@@ -161,7 +161,9 @@ func run(ctx context.Context, c config) error {
 	if err = checkRPCSchema(startup, pool); err != nil {
 		return err
 	}
-	rpc.register(pool)
+	if err = rpc.register(pool); err != nil {
+		return err
+	}
 	// Check the HTTP storage contract as well as relay tables before readiness.
 	rows, err := pool.Query(startup, `SELECT s.token_hash,u.id,x.id,l.used FROM app.sessions s JOIN app.users u ON u.id=s.user_id JOIN app.subscriptions x ON x.owner_id=u.id CROSS JOIN app.auth_limits l LIMIT 0`)
 	if err != nil {

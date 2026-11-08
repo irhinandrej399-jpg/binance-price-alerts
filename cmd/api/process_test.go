@@ -59,7 +59,8 @@ func TestAPIProcess(t *testing.T) {
 	env["DELIVERY_RELAY_TRANSACTIONAL_ID"] = prefix + "-api-delivery"
 	cfg := apiprocess.Config{Executable: binary, Env: env, StartupTimeout: 20 * time.Second, StopTimeout: time.Second}
 	pool := postgrestest.Open(t)
-	ca, addr := configureRPC(t, env)
+	ca, addr, quotes := configureRPC(t, env)
+	testNotificationsRPCProcess(t, ctx, cfg, pool, ca, addr, quotes)
 	testMatcherRPCProcess(t, ctx, cfg, pool, ca, addr)
 	testGracefulProcess(t, ctx, cfg, pool)
 	f, err := apiprocess.Seed(ctx, pool)

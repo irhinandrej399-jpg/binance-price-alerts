@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -35,7 +36,7 @@ func freeRPCAddr(t testing.TB) string {
 	defer l.Close()
 	return l.Addr().String()
 }
-func configureRPC(t testing.TB, env map[string]string) (authority, string) {
+func configureRPC(t testing.TB, env map[string]string) (authority, string, *processQuotes) {
 	t.Helper()
 	ca := newAuthority(t)
 	server := ca.issue(t, nil, true, false)
@@ -61,19 +62,31 @@ func configureRPC(t testing.TB, env map[string]string) (authority, string) {
 		t.Fatal(e)
 	}
 	market := grpc.NewServer(opts...)
-	marketpb.RegisterQuotesServer(market, &processQuotes{})
+	quotes := &processQuotes{entered: make(chan struct{}, 10), canceled: make(chan struct{}, 10)}
+	marketpb.RegisterQuotesServer(market, quotes)
 	go market.Serve(listener)
 	t.Cleanup(func() { market.Stop(); listener.Close() })
 	env["MARKET_RPC_ADDR"] = listener.Addr().String()
 	env["MARKET_RPC_SERVER_NAME"] = "api.test"
-	return ca, addr
+	return ca, addr, quotes
 }
 
 type processQuotes struct {
 	marketpb.UnimplementedQuotesServer
+	mode              atomic.Int32
+	entered, canceled chan struct{}
 }
 
-func (*processQuotes) Latest(_ context.Context, r *marketpb.LatestRequest) (*marketpb.LatestResponse, error) {
+func (q *processQuotes) Latest(ctx context.Context, r *marketpb.LatestRequest) (*marketpb.LatestResponse, error) {
+	switch q.mode.Load() {
+	case 1:
+		return nil, status.Error(codes.Unavailable, "test quote failure")
+	case 2:
+		q.entered <- struct{}{}
+		<-ctx.Done()
+		q.canceled <- struct{}{}
+		return nil, status.FromContextError(ctx.Err()).Err()
+	}
 	now := time.Now().UTC().Add(-time.Second).Format(time.RFC3339Nano)
 	return &marketpb.LatestResponse{Freshness: marketpb.Freshness_FRESHNESS_FRESH, CheckedAt: time.Now().UTC().Format(time.RFC3339Nano), Quote: &marketpb.Quote{Pair: r.Pair, Price: "101.000000000000000001", SourceId: "ops-070", Revision: &marketpb.Revision{StreamId: "test", Generation: 1, Sequence: 1}, TradeTime: now, ReceivedAt: now, StreamState: "unconfirmed"}}, nil
 }

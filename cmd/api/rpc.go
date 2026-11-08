@@ -9,8 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/admissionrpc"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/deliveryrpc"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/replayrpc"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/resultrpc"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/snapshotrpc"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/subscription"
 	pb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/api/v1"
@@ -21,15 +23,22 @@ import (
 )
 
 type rpcConfig struct {
-	addr, cert, key, ca, matcherURI                         string
+	addr, cert, key, ca, matcherURI, notificationsURI       string
 	marketAddr, marketName, marketCert, marketKey, marketCA string
+	permitTTL                                               time.Duration
 }
 
 func loadRPCConfig(get func(string) string) (rpcConfig, error) {
-	c := rpcConfig{addr: get("RPC_ADDR"), cert: get("RPC_CERT_FILE"), key: get("RPC_KEY_FILE"), ca: get("RPC_CA_FILE"), matcherURI: get("MATCHER_SERVICE_URI"), marketAddr: get("MARKET_RPC_ADDR"), marketName: get("MARKET_RPC_SERVER_NAME"), marketCert: get("MARKET_RPC_CERT_FILE"), marketKey: get("MARKET_RPC_KEY_FILE"), marketCA: get("MARKET_RPC_CA_FILE")}
-	u, e := url.Parse(c.matcherURI)
-	validURI := e == nil && u.Scheme != "" && u.Host != "" && u.User == nil && u.RawQuery == "" && u.Fragment == "" && u.String() == c.matcherURI && len(c.matcherURI) <= 200
-	if !addressOK(c.addr) || !addressOK(c.marketAddr) || !validURI || c.marketName == "" || strings.ContainsAny(c.marketName, " /\\:\t\r\n") {
+	c := rpcConfig{notificationsURI: get("NOTIFICATIONS_SERVICE_URI"), addr: get("RPC_ADDR"), cert: get("RPC_CERT_FILE"), key: get("RPC_KEY_FILE"), ca: get("RPC_CA_FILE"), matcherURI: get("MATCHER_SERVICE_URI"), marketAddr: get("MARKET_RPC_ADDR"), marketName: get("MARKET_RPC_SERVER_NAME"), marketCert: get("MARKET_RPC_CERT_FILE"), marketKey: get("MARKET_RPC_KEY_FILE"), marketCA: get("MARKET_RPC_CA_FILE")}
+	validURI := func(value string) bool {
+		u, e := url.Parse(value)
+		return e == nil && u.Scheme != "" && u.Host != "" && u.User == nil && u.RawQuery == "" && u.Fragment == "" && u.String() == value && len(value) <= 200
+	}
+	var err error
+	c.permitTTL, err = time.ParseDuration(get("ADMISSION_PERMIT_TTL"))
+	if err != nil || c.permitTTL < time.Microsecond || c.permitTTL > time.Minute || c.permitTTL%time.Microsecond != 0 ||
+		!addressOK(c.addr) || !addressOK(c.marketAddr) || !validURI(c.matcherURI) || !validURI(c.notificationsURI) || c.matcherURI == c.notificationsURI ||
+		c.marketName == "" || strings.ContainsAny(c.marketName, " /\\:\t\r\n") {
 		return rpcConfig{}, errors.New("api: invalid RPC configuration")
 	}
 	for _, v := range []string{c.cert, c.key, c.ca, c.marketCert, c.marketKey, c.marketCA} {
@@ -40,13 +49,14 @@ func loadRPCConfig(get func(string) string) (rpcConfig, error) {
 	return c, nil
 }
 
-type matcherRPC struct {
-	listener net.Listener
-	server   *grpc.Server
-	market   *grpc.ClientConn
+type apiRPC struct {
+	listener  net.Listener
+	server    *grpc.Server
+	market    *grpc.ClientConn
+	permitTTL time.Duration
 }
 
-func newMatcherRPC(c rpcConfig) (*matcherRPC, error) {
+func newAPIRPC(c rpcConfig) (*apiRPC, error) {
 	read := func(path string) ([]byte, error) {
 		b, e := os.ReadFile(path)
 		if e != nil {
@@ -70,6 +80,9 @@ func newMatcherRPC(c rpcConfig) (*matcherRPC, error) {
 		pb.SubscriptionSnapshots_BuildSnapshot_FullMethodName, pb.SubscriptionSnapshots_ReadSnapshotPage_FullMethodName,
 		pb.SubscriptionReplay_BeginReplay_FullMethodName, pb.SubscriptionReplay_ReadReplayPage_FullMethodName, pb.SubscriptionReplay_AcknowledgeReplay_FullMethodName, pb.SubscriptionReplay_AbandonReplay_FullMethodName,
 		pb.Delivery_RequestDelivery_FullMethodName,
+	}, c.notificationsURI: {
+		pb.Admission_PrepareRecipient_FullMethodName, pb.Admission_AdmitDelivery_FullMethodName,
+		pb.DeliveryResults_SaveDeliveryResult_FullMethodName,
 	}})
 	if e != nil {
 		return nil, errors.New("api: invalid RPC credentials or policy")
@@ -99,16 +112,23 @@ func newMatcherRPC(c rpcConfig) (*matcherRPC, error) {
 		conn.Close()
 		return nil, errors.New("api: RPC bind failed")
 	}
-	return &matcherRPC{listener: listener, server: grpc.NewServer(append(opts, grpc.WaitForHandlers(true))...), market: conn}, nil
+	return &apiRPC{listener: listener, server: grpc.NewServer(append(opts, grpc.WaitForHandlers(true))...), market: conn, permitTTL: c.permitTTL}, nil
 }
-func (r *matcherRPC) close() { r.server.Stop(); r.listener.Close(); r.market.Close() }
-func (r *matcherRPC) register(pool *pgxpool.Pool) {
+func (r *apiRPC) close() { r.server.Stop(); r.listener.Close(); r.market.Close() }
+func (r *apiRPC) register(pool *pgxpool.Pool) error {
+	admission, err := admissionrpc.NewServer(admissionrpc.NewPostgres(pool), latest.NewClient(r.market), r.permitTTL, time.Now)
+	if err != nil {
+		return errors.New("api: invalid admission configuration")
+	}
+	pb.RegisterAdmissionServer(r.server, admission)
+	pb.RegisterDeliveryResultsServer(r.server, resultrpc.NewServer(resultrpc.NewPostgres(pool)))
 	snapshots := subscription.NewSnapshots(pool)
 	pb.RegisterSubscriptionSnapshotsServer(r.server, snapshotrpc.NewServer(snapshots))
 	pb.RegisterSubscriptionReplayServer(r.server, replayrpc.NewServer(snapshots, pool))
 	pb.RegisterDeliveryServer(r.server, deliveryrpc.NewServer(deliveryrpc.NewPostgres(pool), latest.NewClient(r.market), time.Now))
+	return nil
 }
-func (r *matcherRPC) serve(ctx context.Context) error {
+func (r *apiRPC) serve(ctx context.Context) error {
 	joined := make(chan struct{})
 	exited := make(chan struct{})
 	go func() {
@@ -132,7 +152,7 @@ func (r *matcherRPC) serve(ctx context.Context) error {
 
 // Check the RPC storage contract before any listener serves or relay claims work.
 func checkRPCSchema(ctx context.Context, pool *pgxpool.Pool) error {
-	rows, e := pool.Query(ctx, `SELECT s.id,s.owner,s.boundary,s.expires_at,p.id,p.owner,p.progress,p.issued,p.phase,p.expires_at,r.owner,r.request_id,r.ttl_ns,r.snapshot_id,x.snapshot_id,x.id,x.workflow_id,x.workflow_version,x.block_reason,x.blocked_binding_version,j.position,j.transaction_end,j.body,b.transaction_end,o.subscription_id,o.trigger_id,o.event_id,o.body FROM app.subscription_snapshots s CROSS JOIN app.subscription_replay_pins p CROSS JOIN app.subscription_snapshot_requests r CROSS JOIN app.subscription_snapshot_rows x CROSS JOIN app.api_journal j CROSS JOIN app.api_journal_batches b CROSS JOIN app.delivery_outbox o LIMIT 0`)
+	rows, e := pool.Query(ctx, `SELECT s.id,s.owner,s.boundary,s.expires_at,p.id,p.owner,p.progress,p.issued,p.phase,p.expires_at,r.owner,r.request_id,r.ttl_ns,r.snapshot_id,x.snapshot_id,x.id,x.workflow_id,x.workflow_version,x.block_reason,x.blocked_binding_version,j.position,j.transaction_end,j.body,b.transaction_end,o.subscription_id,o.trigger_id,o.event_id,o.body,a.subscription_id,a.request_id,a.workflow_id,a.attempt_id,a.fence,a.expires_at,a.chat_id,a.binding_version,a.response,d.subscription_id,d.workflow_id,d.attempt_id,d.outcome,d.message_id,d.block_reason,d.binding_version,d.recorded_at FROM app.subscription_snapshots s CROSS JOIN app.subscription_replay_pins p CROSS JOIN app.subscription_snapshot_requests r CROSS JOIN app.subscription_snapshot_rows x CROSS JOIN app.api_journal j CROSS JOIN app.api_journal_batches b CROSS JOIN app.delivery_outbox o CROSS JOIN app.delivery_admissions a CROSS JOIN app.delivery_results d LIMIT 0`)
 	if e != nil {
 		return errors.New("api: RPC schema unavailable; run migrations separately")
 	}

@@ -1,4 +1,4 @@
-# Локальный API (OPS-046, OPS-004, OPS-013, OPS-070)
+# Локальный API (OPS-046, OPS-004, OPS-013, OPS-070, OPS-071)
 
 Сборка и запуск из корня репозитория:
 
@@ -17,6 +17,8 @@ RPC_CERT_FILE=/path/to/api-server.pem \
 RPC_KEY_FILE=/path/to/api-server-key.pem \
 RPC_CA_FILE=/path/to/service-ca.pem \
 MATCHER_SERVICE_URI=spiffe://local/matcher \
+NOTIFICATIONS_SERVICE_URI=spiffe://local/notifications \
+ADMISSION_PERMIT_TTL=10s \
 MARKET_RPC_ADDR=127.0.0.1:9081 \
 MARKET_RPC_SERVER_NAME=market.internal \
 MARKET_RPC_CERT_FILE=/path/to/api-client.pem \
@@ -120,7 +122,7 @@ Kafka commit проверяет прерывание delivery relay и повт�
 Один listener RPC_ADDR регистрирует готовые SubscriptionSnapshots
 (BuildSnapshot, ReadSnapshotPage), SubscriptionReplay (BeginReplay,
 ReadReplayPage, AcknowledgeReplay, AbandonReplay) и Delivery/RequestDelivery.
-Одна общая policy serviceauth разрешает только эти полные имена методов
+Общая policy serviceauth разрешает эти полные имена методов
 точному MATCHER_SERVICE_URI из проверенного клиентского сертификата.
 Чужие сервисы, неизвестные/streaming методы и публичный Bearer прав не дают.
 Owner snapshot/pin берётся адаптерами из сертификата, metadata его не меняет.
@@ -152,3 +154,40 @@ API PostgreSQL/Kafka и ephemeral mTLS: certificate pin owner, deny/unknown/Bear
 отсутствие SQL waiters после exit, bind/TLS/schema failure и terminal relay exit.
 Latest endpoint в этом тесте — локальная управляемая fixture; настоящий
 market-data executable проверен отдельно в OPS-069. Полный E2E ещё впереди.
+
+## Notifications RPC (OPS-071)
+
+Тот же RPC_ADDR регистрирует готовые Admission/PrepareRecipient,
+Admission/AdmitDelivery и DeliveryResults/SaveDeliveryResult. Общая policy
+даёт только эти три метода точному NOTIFICATIONS_SERVICE_URI. URI matcher и
+notifications обязательны и должны различаться; matcher сохраняет только свои
+семь методов. Public Bearer и metadata не заменяют сертификат.
+
+ADMISSION_PERMIT_TTL — обязательная Go duration от 1us до 1m с точностью 1us;
+пример 10s — локальная настройка, не измеренный SLA. Слишком короткий permit
+может истечь до внешнего запроса. TTL задаёт API, запрос его не меняет.
+Admission использует тот же управляемый Latest mTLS client с явными
+MARKET_RPC_ADDR/SERVER_NAME/credentials. API подключается только к своей БД.
+Недоступность Latest проявляется в операции; readiness проверяет API-БД.
+
+PrepareRecipient только читает адресат для лимитеров. AdmitDelivery проверяет
+expected_recipient CAS, актуальную цену и атомарно сохраняет permit до ответа.
+При Aborted нужен новый цикл подготовки/лимитеров и новый request ID.
+При неизвестном commit повторяется исходный request ID/CAS; исторический
+permit сохраняет attempt/fence/адрес/цену/срок и не разрешает повтор Telegram.
+SaveDeliveryResult сохраняет исход по известному attempt до подтверждения;
+при ошибке notifications удерживает тот же pending report и повторяет его,
+включая после API restart. Подтверждённый успех не требует новой отправки.
+Готовые adapters ограничивают каждый RPC 3 с, вложенный Latest — 1 с.
+
+Startup проверяет также delivery_admissions/delivery_results; ошибки
+конфигурации/TLS/SQL проходят через общий lifecycle. Stop отменяет SQL и
+вложенный Latest, joins handlers до pool.Close и закрывает outbound connection.
+HTTP drain и общий предел выхода остаются прежними.
+
+Process runner выше проверяет PrepareRecipient → AdmitDelivery → результат
+на настоящем race executable и disposable API PostgreSQL/Kafka: изоляцию прав,
+owner/workflow, CAS, точную цену, отсутствие попытки при Latest failure/cancel,
+SQL commit до ответа, canonical permit после restart, отмену сохранения под
+SQL lock и повтор удержанного report, idempotent success/conflict и SIGTERM
+с активным Latest. Telegram не вызывается; полный E2E остаётся отдельной задачей.
