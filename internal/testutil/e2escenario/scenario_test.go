@@ -82,7 +82,7 @@ func TestUserJourney(t *testing.T) {
 			_, e = io.Copy(io.Discard, res.Body)
 			return e
 		}
-		conn, e := s.Binance.Next(ctx)
+		conn, e := s.NextFeed(ctx)
 		if e != nil {
 			return e
 		}
@@ -90,7 +90,7 @@ func TestUserJourney(t *testing.T) {
 		trade := func(value string) error {
 			seq++
 			now := time.Now().UnixMilli()
-			if e := conn.Trade(ctx, binancefake.Trade{ID: seq, Price: value, TradeTime: now, EventTime: now}); e != nil {
+			if e := conn.TradePair(ctx, "BTCUSDT", binancefake.Trade{ID: seq, Price: value, TradeTime: now, EventTime: now}); e != nil {
 				return e
 			}
 			c, done := context.WithTimeout(ctx, 10*time.Second)

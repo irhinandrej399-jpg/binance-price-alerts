@@ -1,4 +1,4 @@
-// Command market-data runs one fixed raw trade stream in the local profile.
+// Command market-data ingests the supported catalog through raw trade streams.
 package main
 
 import (
@@ -39,19 +39,27 @@ import (
 )
 
 type config struct {
-	addr, dsn, endpoint, pair, topic                                string
+	addr, dsn, endpoint, topic                                      string
 	producer                                                        kafka.Config
+	catalogRefresh                                                  time.Duration
 	rpcAddr, rpcCert, rpcKey, rpcCA, apiURI, matcherURI, catalogURL string
 }
 
 var kafkaName = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
-var pairName = regexp.MustCompile(`^[A-Z0-9]+USDT$`)
 
 func loadConfig(get func(string) string) (config, error) {
-	c := config{addr: get("HTTP_ADDR"), dsn: get("MARKET_DATA_DATABASE_URL"), endpoint: get("RAW_TRADE_URL"), pair: get("RAW_TRADE_PAIR"), topic: get("PRICES_TOPIC")}
+	c := config{addr: get("HTTP_ADDR"), dsn: get("MARKET_DATA_DATABASE_URL"), endpoint: get("RAW_TRADE_URL"), topic: get("PRICES_TOPIC")}
 	c.rpcAddr, c.rpcCert, c.rpcKey, c.rpcCA = get("RPC_ADDR"), get("RPC_CERT_FILE"), get("RPC_KEY_FILE"), get("RPC_CA_FILE")
 	c.apiURI, c.matcherURI, c.catalogURL = get("API_SERVICE_URI"), get("MATCHER_SERVICE_URI"), get("CATALOG_BASE_URL")
 	bad := errors.New("market-data: invalid configuration")
+	c.catalogRefresh = time.Minute
+	if value := get("CATALOG_REFRESH_INTERVAL"); value != "" {
+		var err error
+		c.catalogRefresh, err = time.ParseDuration(value)
+		if err != nil || c.catalogRefresh < 100*time.Millisecond || c.catalogRefresh > time.Hour {
+			return config{}, bad
+		}
+	}
 	addressOK := func(s string) bool {
 		host, port, err := net.SplitHostPort(s)
 		n, e := strconv.Atoi(port)
@@ -71,7 +79,7 @@ func loadConfig(get func(string) string) (config, error) {
 	if _, err := catalog.New(&http.Client{}, c.catalogURL, time.Now); err != nil {
 		return config{}, bad
 	}
-	if !addressOK(c.addr) || c.dsn == "" || !pairName.MatchString(c.pair) {
+	if !addressOK(c.addr) || c.dsn == "" {
 		return config{}, bad
 	}
 	db, err := pgxpool.ParseConfig(c.dsn)
@@ -79,7 +87,7 @@ func loadConfig(get func(string) string) (config, error) {
 		return config{}, bad
 	}
 	u, err := url.Parse(c.endpoint)
-	if err != nil || (u.Scheme != "ws" && u.Scheme != "wss") || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Path != "/ws/"+strings.ToLower(c.pair)+"@trade" || u.RawPath != "" {
+	if err != nil || (u.Scheme != "ws" && u.Scheme != "wss") || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Path != "/ws" || u.RawPath != "" {
 		return config{}, bad
 	}
 	brokers := strings.Split(get("KAFKA_BROKERS"), ",")
@@ -98,7 +106,7 @@ func loadConfig(get func(string) string) (config, error) {
 }
 
 // prepare binds all callbacks to the durable generation before the transport dials.
-// The fixed raw endpoint provides no independent live confirmation.
+// Raw subscriptions provide no independent live confirmation.
 func prepare(repo *storage.Repository, pair string, state *atomic.Value, initialized func(bool), generation *atomic.Uint64) stream.PrepareAttempt {
 	return func(ctx context.Context) (stream.AttemptCallbacks, error) {
 		op, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -211,42 +219,81 @@ func run(parent context.Context, c config) error {
 	producer.Close()
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
-	var generation atomic.Uint64
 	var state atomic.Value
 	state.Store(health.Starting)
 	h := health.New(pool.Ping, func(context.Context) (health.FeedState, error) { return state.Load().(health.FeedState), nil }, time.Second)
 	defer h.SetInitialized(false)
 	server := &http.Server{Handler: h, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
 	defer server.Close()
-	results := make(chan error, 4)
+	type componentResult struct {
+		name string
+		err  error
+	}
+	results := make(chan componentResult, 5)
 	repo := storage.New(pool)
-	prepared := prepare(repo, c.pair, &state, h.SetInitialized, &generation)
-	initial, err := prepared(startup)
+	generations := &generationSet{values: map[string]uint64{}}
+	// Fence every persisted pair before exposing Latest, including pairs removed
+	// while this process was stopped. No accepted quote or outbox is deleted.
+	rows, err = pool.Query(startup, `SELECT pair FROM app.market_streams`)
 	if err != nil {
 		return errors.New("market-data: generation startup failed")
 	}
-	done()
-	pb.RegisterCatalogServer(rpcServer, catalogrpc.NewServer(catalogClient))
-	pb.RegisterQuotesServer(rpcServer, latest.NewServer(repo, time.Now))
-	first := true
-	attempts := func(ctx context.Context) (stream.AttemptCallbacks, error) {
-		if first {
-			first = false
-			return initial, nil
+	var persisted []string
+	for rows.Next() {
+		var pair string
+		if err = rows.Scan(&pair); err != nil {
+			rows.Close()
+			return errors.New("market-data: generation startup failed")
 		}
-		return prepared(ctx)
+		persisted = append(persisted, pair)
 	}
-	go func() { results <- rpcServer.Serve(rpcListener) }()
-	go func() { results <- relay.Run(ctx, repo, c.producer, c.topic, nil) }()
+	rows.Close()
+	if rows.Err() != nil {
+		return errors.New("market-data: generation startup failed")
+	}
+	for _, pair := range persisted {
+		gen, e := repo.BeginGeneration(startup, pair)
+		if e != nil {
+			return errors.New("market-data: generation startup failed")
+		}
+		generations.remember(pair, gen)
+	}
+	initial, err := catalogClient.Fetch(startup)
+	if err == nil {
+		initial, err = supportedSnapshot(initial)
+	}
+	if err != nil {
+		return errors.New("market-data: catalog startup failed")
+	}
+	served := &servedCatalog{}
+	reconciler, err := stream.NewPreparedReconciler(ctx, stream.ReconcileConfig{Endpoint: c.endpoint, Limit: 1024, Transport: stream.DefaultConfig(), Retry: stream.DefaultRetryConfig(), AckTimeout: 10 * time.Second}, prepareGroup(repo, generations))
+	if err != nil {
+		return errors.New("market-data: invalid stream configuration")
+	}
+	defer reconciler.Close()
+	done()
+	state.Store(health.Unconfirmed)
+	h.SetInitialized(true)
+	pb.RegisterCatalogServer(rpcServer, catalogrpc.NewServer(served))
+	pb.RegisterQuotesServer(rpcServer, latest.NewServer(repo, time.Now))
+	go func() { results <- componentResult{"rpc", rpcServer.Serve(rpcListener)} }()
+	go func() { results <- componentResult{"relay", relay.Run(ctx, repo, c.producer, c.topic, nil)} }()
 	go func() {
-		results <- stream.ReconnectPrepared(ctx, c.endpoint, stream.DefaultConfig(), stream.DefaultRetryConfig(), nil, attempts)
+		results <- componentResult{"catalog", runCatalog(ctx, catalogClient, served, reconciler, initial, c.catalogRefresh)}
 	}()
-	go func() { results <- server.Serve(listener) }()
-	remaining := 4
+	go func() { results <- componentResult{"streams", reconciler.Wait()} }()
+	go func() { results <- componentResult{"http", server.Serve(listener)} }()
+	remaining := 5
 	componentFailed := false
-	record := func(err error) {
-		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, grpc.ErrServerStopped) {
+	record := func(result componentResult) {
+		err := result.err
+		// Reconciler preserves context.Cause. NotifyContext can carry a signal
+		// cause distinct from context.Canceled; only that exact owner cause is
+		// graceful, while independent terminal errors still fail shutdown.
+		ownerCanceled := parent.Err() != nil && errors.Is(err, context.Cause(parent))
+		if err != nil && !ownerCanceled && !errors.Is(err, context.Canceled) && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, grpc.ErrServerStopped) {
 			componentFailed = true
+			fmt.Fprintf(os.Stderr, "market-data: component %s failed\n", result.name)
 		}
 	}
 	select {
@@ -275,12 +322,10 @@ func run(parent context.Context, c config) error {
 	// owner fences this write. Cleanup uses an independent, bounded SQL context.
 	cleanup, finish := context.WithTimeout(context.Background(), 5*time.Second)
 	defer finish()
-	if gen := generation.Load(); gen != 0 {
-		err = repo.SetStatus(cleanup, c.pair, gen, priceobserved.Unconfirmed, true)
-		if err != nil && !errors.Is(err, storage.ErrStale) {
-			return errors.New("market-data: stopped; durable gap write failed")
-		}
+	if err = generations.gaps(cleanup, repo); err != nil {
+		return errors.New("market-data: stopped; durable gap write failed")
 	}
+
 	var pending int64
 	if err = pool.QueryRow(cleanup, `SELECT count(*) FROM app.price_outbox WHERE NOT published`).Scan(&pending); err != nil {
 		return errors.New("market-data: stopped; publication status unavailable")

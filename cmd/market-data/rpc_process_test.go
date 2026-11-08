@@ -18,7 +18,6 @@ import (
 	pb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/marketdata/v1"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/serviceauth"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/apiprocess"
-	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/marketprocess"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/postgrestest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -49,7 +48,7 @@ func configureRPC(t testing.TB, env map[string]string) (authority, string) {
 			http.NotFound(w, r)
 			return
 		}
-		fmt.Fprint(w, `{"symbols":[{"symbol":"ADAUSDT","baseAsset":"ADA","quoteAsset":"USDT","status":"TRADING","isSpotTradingAllowed":true}]}`)
+		fmt.Fprint(w, `{"symbols":[{"symbol":"BTCUSDT","baseAsset":"BTC","quoteAsset":"USDT","status":"TRADING","isSpotTradingAllowed":true}]}`)
 	}))
 	t.Cleanup(catalog.Close)
 	env["CATALOG_BASE_URL"] = catalog.URL
@@ -76,7 +75,7 @@ func TestMarketRPCProcess(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 80*time.Second)
 	defer cancel()
 	raw := []byte(fmt.Sprintf(`{"e":"trade","E":%d,"s":"BTCUSDT","t":23456,"p":"1.234","q":"1","T":%d,"m":false,"M":true}`, time.Now().UnixMilli(), time.Now().UnixMilli()))
-	feed := marketprocess.NewRawFeed(raw)
+	feed := newRuntimeFeed(t, raw)
 	defer feed.Close()
 	binary := filepath.Join(t.TempDir(), "market-data")
 	if out, err := exec.CommandContext(ctx, "go", "build", "-race", "-o", binary, ".").CombinedOutput(); err != nil {
@@ -88,7 +87,7 @@ func TestMarketRPCProcess(t *testing.T) {
 	env["KAFKA_BROKERS"] = os.Getenv("KAFKA_TEST_BROKER")
 	env["PRICES_TOPIC"] = os.Getenv("KAFKA_TEST_PREFIX") + "-prices"
 	env["MARKET_DATA_RELAY_TRANSACTIONAL_ID"] = os.Getenv("KAFKA_TEST_PREFIX") + "-rpc"
-	env["RAW_TRADE_PAIR"] = "BTCUSDT"
+	env["CATALOG_REFRESH_INTERVAL"] = "100ms"
 	env["RAW_TRADE_URL"] = feed.URL
 	ca, addr := configureRPC(t, env)
 	var hold atomic.Bool
@@ -101,7 +100,7 @@ func TestMarketRPCProcess(t *testing.T) {
 			canceled <- struct{}{}
 			return
 		}
-		fmt.Fprint(w, `{"symbols":[{"symbol":"ADAUSDT","baseAsset":"ADA","quoteAsset":"USDT","status":"TRADING","isSpotTradingAllowed":true}]}`)
+		fmt.Fprint(w, `{"symbols":[{"symbol":"BTCUSDT","baseAsset":"BTC","quoteAsset":"USDT","status":"TRADING","isSpotTradingAllowed":true}]}`)
 	}))
 	defer origin.Close()
 	env["CATALOG_BASE_URL"] = origin.URL
@@ -124,7 +123,7 @@ func TestMarketRPCProcess(t *testing.T) {
 			if err != nil {
 				return fmt.Errorf("Fetch runtime: %w", err)
 			}
-			if len(got.Pairs) != 1 || got.Pairs[0].Symbol != "ADAUSDT" || got.UpdatedAt == "" {
+			if len(got.Pairs) != 1 || got.Pairs[0].Symbol != "BTCUSDT" || got.UpdatedAt == "" {
 				return errors.New("catalog snapshot changed")
 			}
 			for _, tc := range []struct {
@@ -170,8 +169,10 @@ func TestMarketRPCProcess(t *testing.T) {
 				return err
 			}
 			hold.Store(true)
-			active := make(chan error, 1)
-			go func() { _, e := pb.NewCatalogClient(api).Fetch(call, &pb.CatalogRequest{}); active <- e }()
+			// RPC reads the applied snapshot, independently of a held refresh.
+			if _, e := pb.NewCatalogClient(api).Fetch(call, &pb.CatalogRequest{}); e != nil {
+				return e
+			}
 			select {
 			case <-entered:
 			case <-call.Done():
@@ -189,14 +190,6 @@ func TestMarketRPCProcess(t *testing.T) {
 			case <-canceled:
 			case <-call.Done():
 				return errors.New("catalog HTTP not canceled")
-			}
-			select {
-			case e := <-active:
-				if e == nil {
-					return errors.New("held Fetch succeeded")
-				}
-			case <-call.Done():
-				return errors.New("active RPC not joined")
 			}
 			hold.Store(false)
 			if code, ok := p.ExitCode(); !ok || code != 0 {

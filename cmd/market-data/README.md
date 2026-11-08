@@ -1,140 +1,126 @@
-# Минимальный market-data (OPS-048)
+# Market-data: каталог и raw trade (MKT-019)
 
-Один фиксированный raw trade поток → durable market_data latest/outbox → serial
-Kafka relay. Используются готовые Decode, storage, ReconnectPrepared, relay и
-health. SIGTERM/SIGINT обрабатываются владельцем процесса (OPS-009).
+Каталог поддерживаемых USDT-пар → prepared stream reconciler → durable
+market_data latest/outbox → serial Kafka relay. Один процесс владеет всеми
+группами потоков. SIGTERM/SIGINT обрабатываются владельцем процесса.
 
-Перед запуском отдельно поднимите PostgreSQL/Kafka по `infra/*/README.md`,
-примените `migrations/market_data` через `scripts/migrate.py --owner market_data`
-и создайте prices topic штатным init (16 стабильных партиций). Runtime миграции
-не выполняет. Передайте собственный DSN роли `market_data_runtime` в БД
-`market_data` через окружение, не аргумент командной строки:
+Перед запуском поднимите PostgreSQL/Kafka по `infra/*/README.md`, примените
+`migrations/market_data` через `scripts/migrate.py --owner market_data` и создайте
+prices topic штатным init (16 стабильных партиций). Runtime миграции не выполняет.
+Передайте DSN роли `market_data_runtime` в БД `market_data` через окружение,
+не аргумент командной строки:
 
 ```sh
 export HTTP_ADDR=127.0.0.1:8081
 # MARKET_DATA_DATABASE_URL задаётся отдельно из локального секрета.
-export RAW_TRADE_PAIR=BTCUSDT
-export RAW_TRADE_URL=wss://stream.binance.com:9443/ws/btcusdt@trade
+export RAW_TRADE_URL=wss://stream.binance.com:9443/ws
+export CATALOG_BASE_URL=https://data-api.binance.vision
+# Необязательно: по умолчанию 1m, допустимо 100ms..1h.
+export CATALOG_REFRESH_INTERVAL=1m
 export KAFKA_BROKERS=127.0.0.1:9092
 export PRICES_TOPIC=local-prices
 export MARKET_DATA_RELAY_TRANSACTIONAL_ID=local-market-data-relay-shard-0
-# Также задайте RPC/каталог из раздела OPS-069 ниже.
-GOTOOLCHAIN=local go run ./cmd/market-data
-```
-
-Все настройки обязательны. URL — ровно `/ws/<lowercase-pair>@trade`, ws/wss,
-без userinfo/query/fragment; время raw trade трактуется в миллисекундах.
-Пара — uppercase ASCII с суффиксом USDT. Каталог/актуальная торгуемость пары
-не проверяются. Все владельцы relay используют один stable transactional.id
-фиксированного шарда; случайный ID на каждый запуск недопустим.
-
-Startup ограничен 15 с: credentials, bind HTTP/RPC, подключение своей БД, наличие схемы и
-инициализация Kafka producer epoch без Claim. Затем relay получает свой epoch
-перед Claim. Ошибка startup закрывает ресурсы; ошибки пользователю выводятся
-без DSN, URL, брокерских response bodies и исходных payloads.
-
-Перед **каждым** dial BeginGeneration отсекает старые callbacks. Decode
-передаёт предварительную ревизию; storage под блокировкой назначает durable
-sequence, сохраняет source ID между соединениями/рестартами, latest и outbox
-в одной synchronous транзакции. Случайный 128-bit event_id/correlation_id и
-occurred_at сохраняются с исходными bytes. Ошибка SQL не считается Accept;
-в этом минимальном runtime ошибка ingest завершает владельца, после рестарта
-дедупликация использует committed source ID. Разрыв сохраняется через SetStatus,
-новая попытка создаёт новое поколение; старый status callback не меняет snapshot
-после SQL fencing. Relay публикует сохранённые bytes и подтверждает SQL только
-после Kafka commit; его terminal ошибка останавливает HTTP и ingest, компоненты
-присоединяются до закрытия pool.
-
-`GET /healthz` = 200. `GET /readyz` = 503 с `feed=unconfirmed` после начала
-поколения, либо `starting`/`disconnected`. У фиксированного raw endpoint нет
-независимого явного live-подтверждения; dial, ACK и первая сделка его не заменяют.
-Здоровый процесс может durable принимать/публиковать цены и оставаться unconfirmed.
-Не используйте readiness 200 как условие запуска этого минимального профиля.
-
-Проверка настоящего executable с синтетическим raw feed и независимым
-read_committed consumer, включая restart, fencing, startup и terminal failure:
-
-```sh
-GOCACHE=/tmp/binance-go-build PYTHONDONTWRITEBYTECODE=1 \
-  python3 scripts/check_marketdata_process.py --package ./cmd/market-data
-```
-
-Runner использует только disposable PostgreSQL/Kafka и проверяет cleanup.
-Без opt-in процессные SQL/Kafka тесты явно SKIP. Обычная проверка config/startup:
-`GOCACHE=/tmp/binance-go-build GOTOOLCHAIN=local go test -race ./cmd/market-data`.
-
-При SIGTERM/SIGINT HTTP снимается с обслуживания, отменяются ingest/Accept,
-публикация и reconnect/backoff. HTTP имеет 2 с на завершение; ingest и relay
-присоединяются до закрытия SQL pool. Весь процесс имеет предел 20 с, включая
-существующий handshake ≤10 с и финальную SQL-запись/проверку ≤5 с. Превышение
-предела — явная ошибка и exit 1, а не успешная graceful остановка.
-
-После join сохраняются unconfirmed + gap_detected=true с fencing последнего
-поколения владельца. Если поколение уже сменил другой процесс, stale status
-не меняет его состояние. Ошибка записи gap или чтения pending-публикаций
-выводится явно и завершает процесс с ошибкой. Штатное завершение сообщает
-feed disconnected и число pending publications без payloads/credentials.
-
-Принятый буфер — durable outbox, поэтому остановка не ждёт его полного
-опустошения. Отменённая SQL-транзакция не объявляется принятой; committed
-latest/outbox сохраняются. Неопределённый Kafka commit оставляет исходные
-bytes/event_id без SQL-отметки; после DB-clock lease до 30 с следующий
-владелец с тем же transactional.id повторяет публикацию. Возможны дубли.
-При недоступной БД или аварийном выходе запись разрыва не гарантируется;
-следующий BeginGeneration всё равно отмечает исторический gap.
-
-Процессный тест скрывает успешный EndTxn response готовым kafkafault dialer
-в test child, который вызывает тот же execute/run с production обработчиком
-сигналов. Независимый consumer подтверждает commit до SIGTERM. Настоящий
-executable затем повторяет bytes после lease, принимает новую сделку и
-закрывает активный WebSocket по SIGTERM. Отдельный зависший handshake
-проверяет завершение reconnect без принудительного kill из harness.
-
-Ограничения: нет динамического каталога потоков, backfill, нескольких
-feed-реплик, полного E2E, capacity и нагрузочных гарантий. Kafka/SQL retry и
-возможные дубли после неопределённого commit следуют контракту relay/storage.
-Живое соединение Binance этим тестом не проверяется.
-
-## Catalog/Latest RPC (OPS-069)
-
-Тот же процесс обслуживает один mTLS listener с Catalog/Fetch и Quotes/Latest.
-Дополнительно обязательны:
-
-```sh
 export RPC_ADDR=127.0.0.1:9081
 export RPC_CERT_FILE=/path/to/market-data-cert.pem
 export RPC_KEY_FILE=/path/to/market-data-key.pem
 export RPC_CA_FILE=/path/to/service-ca.pem
 export API_SERVICE_URI=spiffe://local/api
 export MATCHER_SERVICE_URI=spiffe://local/matcher
-export CATALOG_BASE_URL=https://data-api.binance.vision
+GOTOOLCHAIN=local go run ./cmd/market-data
 ```
 
-URI API и matcher должны отличаться. Общая serviceauth policy разрешает API
-Fetch/Latest, matcher только Latest; остальные identities не получают прав.
-Клиент проверяет DNS SAN серверного сертификата через свою явную authority.
-PEM берутся из внешних файлов; ключ доступен только владельцу/secret mount.
-Catalog использует готовый catalog.Client без кэша; URL задаёт origin без пути,
-query, userinfo и fragment. Для тестов обязателен loopback fixture origin.
-HTTP transport каталога принадлежит процессу, не использует proxy/redirect,
-ограничен RPC budget 1 с и закрывается при остановке.
-Latest читает storage.Repository своей БД; исходные цена, source ID, revision,
-времена, unconfirmed и sticky gap сохраняются. До запуска listener выполняется
-BeginGeneration фиксированной пары, чтобы прежний live не пережил рестарт.
+Остальные настройки обязательны. RAW_TRADE_URL — bare `/ws`, ws/wss, без
+userinfo/query/fragment; время raw trade трактуется в миллисекундах.
+Прежний fixed URL `/ws/btcusdt@trade` отклоняется; RAW_TRADE_PAIR больше
+не используется. Для тестов оба Binance URL указывают только на loopback fake.
+Все владельцы relay используют один stable transactional.id фиксированного
+шарда; случайный ID на каждый запуск недопустим.
 
-Startup проверяет credentials/политику, bind HTTP/RPC, схему и Kafka за прежние
-15 с. SIGTERM и terminal failure снимают готовность, отменяют ingest/relay,
-останавливают RPC с отменой и join активных handlers, затем закрывают свою БД.
-Это входит в существующий общий shutdown budget 20 с.
+## Общий обслуживаемый каталог
 
-Для фиксированного raw-профиля ожидание запуска: `/healthz` → 200 и успешный
-mTLS Fetch/Latest. `/readyz` остаётся **503**, `feed=unconfirmed` после первой
-сделки; при disconnect также 503. Этот профиль не доказывает live и не должен
-проверяться ожиданием readyz=200. Динамический каталог потоков сюда не входит.
+Готовый catalog.Client выбирает TRADING + spot + quoteAsset=USDT. Runtime
+оставляет символы `^[A-Z0-9]+USDT$`, совместимые с существующими контрактами
+storage/PriceObserved; остальные (включая Unicode) не выдаёт через Catalog RPC
+и не включает в ingest. Дубли символов объединяются. streamplan.Build разбивает
+отсортированные raw `@trade` потоки на группы до 1024.
+
+Первый Fetch обязателен при startup. Refresh выполняется с заданным интервалом;
+HTTP timeout — 1 с, proxy/redirect отключены. Ошибка Fetch оставляет последний
+успешный план, исходный UpdatedAt и безопасное сообщение в stderr. Успешный
+пустой каталог снимает все потоки. Переподключение управляется reconciler.
+
+Catalog/Fetch читает общий применённый снимок, без отдельного HTTP-запроса:
+новые пары видны после ACK; удалённые исчезают до снятия старых подписок.
+При смене набора prepared reconciler снимает все старые подписки и присоединяет
+callbacks перед созданием новых групп. Повтор того же плана не меняет поколения.
+ACK подтверждает план подписки, но не live. Снимок может оставаться доступным
+во время reconnect или отказа REST; возраст определяется сохранённым UpdatedAt.
+
+Удаление пары не удаляет её latest/outbox и пользовательские подписки. Последняя
+котировка остаётся доступна с unconfirmed, историческим gap и собственным возрастом.
+Новые подписки API отклоняются по отсутствию пары в каталоге; существующие остаются
+на прежних условиях и не получают выдуманных цен. При возвращении пары начинается
+новое поколение с прежней границей source ID. Backfill внешних сделок отсутствует.
+
+## Durable fencing и публикация
+
+Startup ограничен 15 с: credentials, bind HTTP/RPC, своя БД/схема, Kafka producer
+epoch без Claim, fencing всех сохранённых пар (включая удалённые за downtime) и
+первый каталог. До Latest RPC прежний live сбрасывается через BeginGeneration.
+Затем каждый dial группы готовит отдельные durable поколения всех её пар.
+Callbacks привязаны к immutable набору и поколениям; неожиданный символ — ошибка.
+
+Decode передаёт предварительную ревизию; storage под блокировкой назначает durable
+sequence, сохраняет source ID между соединениями/рестартами, latest и outbox в одной
+synchronous транзакции. Исходные цена, trade/event/receive time не подменяются.
+Повтор source ID не создаёт нового outbox. Sticky gap сохраняется при reconnect,
+смене плана и остановке. SQL-ошибка не считается Accept и завершает владельца.
+
+Relay публикует исходные bytes/event_id и подтверждает SQL после Kafka commit.
+Неопределённый commit оставляет каноническую работу для повтора после DB-clock lease
+до 30 с; возможны дубли. Терминальная ошибка любого компонента останавливает весь
+процесс. Ошибки не раскрывают credentials, remote response bodies или payloads.
+
+## Catalog/Latest RPC (OPS-069)
+
+Один mTLS listener: API имеет Fetch/Latest, matcher — только Latest. URI должны
+отличаться; остальные identities не получают прав. Клиент проверяет DNS SAN
+сертификата через явную authority. PEM берутся из внешних файлов/secret mount.
+Latest читает storage.Repository своей БД; ревизии и предупреждения сохраняются.
+
+## Готовность и остановка
+
+Операционное ожидание запуска: `/healthz` → 200, mTLS Fetch выдаёт применённый
+каталог, после принятой сделки Latest возвращает точную цену и предупреждение.
+`/readyz` остаётся **503**, `feed=unconfirmed`: dial, ACK и первая сделка не являются
+независимым live-подтверждением. Принимать и публиковать цены можно в этом состоянии.
+Не используйте readyz=200 как условие запуска. Ни runtime, ни smoke не выставляют
+SQL live ради готовности.
+
+SIGTERM снимает initialized, отменяет refresh/ingest/Accept/relay и RPC, присоединяет
+все handlers, группы и retry loops до pool.Close. HTTP имеет 2 с; общий watchdog —
+20 с, включая handshake ≤10 с и финальную SQL-запись/проверку ≤5 с. После join все
+подготовленные пары получают fenced unconfirmed + gap=true; stale от нового владельца
+не меняет его состояние. Ошибка gap/pending check или превышение deadline — exit 1.
+Штатная остановка сообщает число pending publications без payloads/credentials.
+
+Принятый буфер — durable outbox: остановка не ждёт его опустошения. При аварии или
+недоступной БД запись gap не гарантируется; следующий startup всё равно fence-ит
+сохранённые пары. Несколько одновременных feed-владельцев не поддерживаются.
+
+## Проверка
 
 ```sh
-GOCACHE=/tmp/binance-go-build PYTHONDONTWRITEBYTECODE=1 python3 scripts/check_marketdata_process.py --package ./cmd/market-data
+GOCACHE=/tmp/binance-go-build PYTHONDONTWRITEBYTECODE=1 \
+  python3 scripts/check_marketdata_process.py --package ./cmd/market-data
+GOCACHE=/tmp/binance-go-build GOTOOLCHAIN=local go test -race ./cmd/market-data
 ```
 
-Runner создаёт disposable PostgreSQL/Kafka; тест выпускает ephemeral CA и
-использует только loopback catalog/raw fixtures. Реальный Binance не вызывается.
+Runner создаёт disposable PostgreSQL/Kafka и проверяет cleanup. Малый динамический
+smoke на binancefake проверяет разные цены двух пар, добавление/удаление, reconnect,
+дедупликацию и неизменность принятого outbox после SIGTERM. Прежние process tests
+проверяют read_committed bytes, restart, SQL fencing, mTLS policy, startup/terminal
+failures и неопределённый Kafka commit с повтором после lease. Loopback-тест refresh
+проверяет сохранение плана при HTTP 503 и снятие потоков при пустом каталоге.
+Без opt-in SQL/Kafka процессные тесты явно SKIP. Реальные Binance/Telegram,
+нагрузка и публичный deployment в этот результат не входят.

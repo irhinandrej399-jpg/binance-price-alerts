@@ -23,15 +23,15 @@ func TestFourProcesses(t *testing.T) {
 		err := s.With(ctx, func(s *Stack) error {
 			probe, done := context.WithTimeout(ctx, 45*time.Second)
 			defer done()
-			conn, err := s.Binance.Next(probe)
+			conn, err := s.NextFeed(probe)
 			if err != nil {
 				return err
 			}
-			if conn.Symbol != "BTCUSDT" {
+			if conn.Symbol != "" {
 				return fmt.Errorf("unexpected raw stream")
 			}
 			now := time.Now().UnixMilli()
-			if err = conn.Trade(probe, binancefake.Trade{ID: uint64(100 + round), Price: "100.000000000000000001", TradeTime: now, EventTime: now}); err != nil {
+			if err = conn.TradePair(probe, "BTCUSDT", binancefake.Trade{ID: uint64(100 + round), Price: "100.000000000000000001", TradeTime: now, EventTime: now}); err != nil {
 				return err
 			}
 			if err = conn.Ping(probe, fmt.Sprint("round-", round)); err != nil {

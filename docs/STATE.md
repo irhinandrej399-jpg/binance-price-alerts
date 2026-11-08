@@ -4,11 +4,10 @@
 
 ## Активная работа
 
-- Активная реализация: нет. После E2E-008 осталось 7 planned; следующий — MKT-019. 22 тяжёлые задачи cancelled по [DEC-011](decisions/DEC-011.md).
-- Последний завершённый тикет: [E2E-008](backlog/tickets/E2E-008.md). Динамический binancefake: bare /ws, точные ACK, управляемый каталог, снимок потоков и TradePair. Настоящие catalog/reconciler/decode подтвердили 2 → 3 → 2 → 0 пар, разные цены, reconnect и cleanup. Целевой/общий race, vet/build, Protobuf PASS. Runtime/SQL не менялись.
+- Активная реализация: нет. После MKT-019 осталось 6 planned; следующий — OPS-074. 22 тяжёлые задачи cancelled по [DEC-011](decisions/DEC-011.md).
+- Последний завершённый тикет: [MKT-019](backlog/tickets/MKT-019.md). Общий ASCII USDT snapshot для Catalog RPC и prepared ingest, refresh/reconnect, fencing всех сохранённых пар до Latest и отдельные поколения каждой попытки. Удалённые пары сохраняют данные/gap; raw unconfirmed/readyz=503. Малый process/race smoke и прежние restart/shutdown проверки, общая race/vet/build, Protobuf PASS; cleanup подтверждён. [Настройки](../cmd/market-data/README.md).
+- Предыдущий завершённый тикет: [E2E-008](backlog/tickets/E2E-008.md). Динамический binancefake: bare /ws, точные ACK, управляемый каталог, снимок потоков и TradePair. Настоящие catalog/reconciler/decode подтвердили 2 → 3 → 2 → 0 пар, разные цены, reconnect и cleanup. Целевой/общий race, vet/build, Protobuf PASS. Runtime/SQL не менялись.
 - Предыдущий завершённый тикет: [MKT-020](backlog/tickets/MKT-020.md). Prepared reconciler готовит immutable callbacks до каждого dial; смена плана снимает старые подписки и присоединяет callbacks до нового владельца. Wait наблюдает terminal failure после возврата Reconcile. Целевые/общие race, vet/build, Protobuf и backlog PASS. При смене каталога пересоздаются все группы; runtime/SQL не менялись.
-- MKT-019 остаётся planned: lifecycle предпосылка MKT-020 и динамический процессный fake E2E-008 готовы. Перед реализацией
-  требуется повторная сессионная проверка MKT-019.
 - Последний результат планирования: DEC-011. Пять конкретных дефектов сохранены, добавлены семь практических задач выпуска; статусы cancelled проверяются tooling. Реального deployment ещё нет.
 - Записи о прошлых сессиях ниже — история проверок; актуальный объём и следующий шаг определены DEC-011 и ORDER.
 - Предыдущий завершённый тикет: [OPS-067](backlog/tickets/OPS-067.md). Исправлено условие готовности Kafka fixture: bounded discovery нового ID и готовой partition после CreateTopics; production guards сохранены. Управляемый ответ воспроизводит ErrMetadata, точный исторический ответ OPS-065 неизвестен. Целевой и общий race, disposable Kafka/race, vet/build, Protobuf PASS; cleanup подтверждён. [Диагностика](measurements/OPS-067/diagnosis.md).
@@ -147,7 +146,7 @@
 - Market-data storage: [контракт](../internal/marketdata/storage/README.md), миграция `migrations/market_data/001_quotes_outbox.sql`. BeginGeneration → SetStatus/Accept, Latest, Claim/MarkPublished; gap сохраняется исторически. Перед чтением после рестарта runtime обязан начать новое поколение. `check_postgres.py` проверяет раздельные БД API/market_data на disposable стенде; рабочая миграция этой сессией не применялась.
 
 - [Согласованные требования](requirements.md).
-- WebSocket transport: `internal/marketdata/stream.Read` и `ReadWithCommands(ctx, endpoint, config, commands, handle)`, gorilla/websocket v1.5.3. Общий бюджет команд/pong по умолчанию 5/с, ограниченная очередь pong, отмена и ожидание writer при выходе. `Reconnect` восстанавливает URL/начальные команды после сбоя, сообщает разрыв и ждёт bounded backoff с jitter. Синхронные callbacks должны учитывать context. Ротация через 23 часа/serverShutdown реализована в Reconnect и Reconciler. `NewReconciler`/`Reconcile`/`Close` управляют планом каталога, ACK и повторами; динамический runtime ещё отсутствует. Минимальный фиксированный raw поток подключён через ReconnectPrepared в OPS-048.
+- WebSocket transport: `internal/marketdata/stream.Read` и `ReadWithCommands(ctx, endpoint, config, commands, handle)`, gorilla/websocket v1.5.3. Общий бюджет команд/pong по умолчанию 5/с, ограниченная очередь pong, отмена и ожидание writer при выходе. `Reconnect` восстанавливает URL/начальные команды после сбоя, сообщает разрыв и ждёт bounded backoff с jitter. Синхронные callbacks должны учитывать context. Ротация через 23 часа/serverShutdown реализована в Reconnect и Reconciler. `NewReconciler`/`Reconcile`/`Close` управляют планом каталога, ACK и повторами; prepared reconciler и динамический runtime подключены в MKT-019; Catalog RPC выдаёт тот же применённый набор.
 - [Карточки и зависимости](backlog/README.md), включая разделение крупных задач.
 - [Единая последовательность выполнения](backlog/ORDER.md) — от первого тикета к последнему.
 - [Рекомендации моделей и reasoning](backlog/MODELS.md); для DEC-001 — GPT-6.1 Sol · Medium.
@@ -185,9 +184,8 @@ p99 и дисковым резервам не являются условиям�
 
 ## Следующий рекомендуемый шаг
 
-`python3 scripts/backlog.py next` → [MKT-019](backlog/tickets/MKT-019.md), planned:
-повторная сессионная проверка, затем каталог поддерживаемых пар и фактический
-приём цен. Предпосылки MKT-020 и E2E-008 завершены.
+`python3 scripts/backlog.py next` → [OPS-074](backlog/tickets/OPS-074.md), planned:
+сессионная проверка постоянного запуска четырёх сервисов; MKT-019 завершён.
 
 Практический выпуск: OPS-074 (постоянный запуск), OPS-075 (HTTPS/секреты),
 OPS-076 (backup/restore), OPS-077 (наблюдение/диск/maintenance), E2E-007
@@ -198,7 +196,7 @@ OPS-076 (backup/restore), OPS-077 (наблюдение/диск/maintenance), E
 
 E2E-001 подтвердил только функциональный сценарий на fake. Реальные интеграции,
 публичный HTTPS и проверенный restore ещё не выполнены. Текущий market-data
-принимает одну фиксированную пару, raw feed unconfirmed/readyz=503 сохраняется
+принимает общий поддерживаемый каталог ASCII USDT-пар; raw feed unconfirmed/readyz=503 сохраняется
 с предупреждением. SQL live не подставляется ради успешной проверки.
 Production ready не заявлять до фактического E2E-006. Ограничения Telegram
 после неоднозначного timeout и отсутствие backfill внешних сделок сохраняются.

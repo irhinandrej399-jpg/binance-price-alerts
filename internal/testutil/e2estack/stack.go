@@ -159,7 +159,7 @@ func New(t testing.TB, ctx context.Context) *Stack {
 	topicID := func(name string) string { id := sources[name].TopicID; return hex.EncodeToString(id[:]) }
 	market := map[string]string{
 		"MARKET_DATA_DATABASE_URL": os.Getenv("MARKET_DATA_DATABASE_URL"), "KAFKA_BROKERS": broker, "PRICES_TOPIC": prefix + "-prices", "MARKET_DATA_RELAY_TRANSACTIONAL_ID": prefix + "-market-relay",
-		"RAW_TRADE_PAIR": "BTCUSDT", "RAW_TRADE_URL": s.Binance.StreamURL("BTCUSDT"), "CATALOG_BASE_URL": s.Binance.URL(),
+		"RAW_TRADE_URL": s.Binance.WSURL(), "CATALOG_BASE_URL": s.Binance.URL(),
 		"RPC_ADDR": marketAddr, "RPC_CERT_FILE": serverCert["market-data"], "RPC_KEY_FILE": serverKey["market-data"], "RPC_CA_FILE": caFile, "API_SERVICE_URI": apiURI, "MATCHER_SERVICE_URI": matcherURI,
 	}
 	api := map[string]string{
@@ -341,4 +341,23 @@ func (s *Stack) AssertStopped(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// NextFeed waits for the catalog-owned BTC/SOL subscription ACKs.
+func (s *Stack) NextFeed(ctx context.Context) (*binancefake.Connection, error) {
+	c, err := s.Binance.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for {
+		names := c.Streams()
+		if len(names) == 2 && names[0] == "btcusdt@trade" && names[1] == "solusdt@trade" {
+			return c, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
 }

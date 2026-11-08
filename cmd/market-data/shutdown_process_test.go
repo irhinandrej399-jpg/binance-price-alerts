@@ -76,19 +76,20 @@ func TestShutdownProcess(t *testing.T) {
 	}
 	env := validEnv()
 	configureRPC(t, env)
+	env["CATALOG_BASE_URL"] = runtimeCatalog(t, "SOLUSDT", "SOL")
 	delete(env, "HTTP_ADDR")
 	env["MARKET_DATA_DATABASE_URL"] = os.Getenv("MARKET_DATA_DATABASE_URL")
 	env["KAFKA_BROKERS"] = os.Getenv("KAFKA_TEST_BROKER")
 	env["PRICES_TOPIC"] = os.Getenv("KAFKA_TEST_PREFIX") + "-prices"
 	env["MARKET_DATA_RELAY_TRANSACTIONAL_ID"] = os.Getenv("KAFKA_TEST_PREFIX") + "-shutdown"
-	env["RAW_TRADE_PAIR"] = "SOLUSDT"
+
 	// Hold a handshake so SIGTERM must join the reconnect attempt, with no retry.
 	var dials atomic.Int32
 	release := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { dials.Add(1); <-release }))
 	defer server.Close()
 	defer close(release)
-	env["RAW_TRADE_URL"] = "ws" + strings.TrimPrefix(server.URL, "http") + "/ws/solusdt@trade"
+	env["RAW_TRADE_URL"] = "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
 	marker := filepath.Join(t.TempDir(), "commit")
 	exit := filepath.Join(t.TempDir(), "exit")
 	env["SHUTDOWN_CHILD"] = "1"
@@ -187,6 +188,9 @@ func TestShutdownProcess(t *testing.T) {
 			return
 		}
 		defer c.Close()
+		if e = acknowledgeSubscribe(c); e != nil {
+			return
+		}
 		payload := bytes.Replace(raw, []byte(`"t":12345`), []byte(`"t":12346`), 1)
 		if c.WriteMessage(websocket.TextMessage, payload) != nil {
 			return
@@ -202,7 +206,7 @@ func TestShutdownProcess(t *testing.T) {
 		}
 	}))
 	defer live.Close()
-	env["RAW_TRADE_URL"] = "ws" + strings.TrimPrefix(live.URL, "http") + "/ws/solusdt@trade"
+	env["RAW_TRADE_URL"] = "ws" + strings.TrimPrefix(live.URL, "http") + "/ws"
 	cfg.Executable = binary
 	cfg.Args = nil
 	delete(env, "SHUTDOWN_CHILD")

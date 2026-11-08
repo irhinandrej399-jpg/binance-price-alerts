@@ -44,7 +44,7 @@ func TestMarketDataProcess(t *testing.T) {
 	if bytes.Equal(next, raw) {
 		t.Fatal("fixture substitution failed")
 	}
-	feed := marketprocess.NewRawFeed(next)
+	feed := newRuntimeFeed(t, next)
 	defer feed.Close()
 	binary := filepath.Join(t.TempDir(), "market-data")
 	if out, err := exec.CommandContext(ctx, "go", "build", "-race", "-o", binary, ".").CombinedOutput(); err != nil {
@@ -153,7 +153,7 @@ func TestMarketDataProcess(t *testing.T) {
 		t.Fatal("restart seed failed")
 	}
 	restartedRaw := bytes.Replace(next, []byte(`"t":12346`), []byte(`"t":12348`), 1)
-	feed2 := marketprocess.NewRawFeed(restartedRaw)
+	feed2 := newRuntimeFeed(t, restartedRaw)
 	defer feed2.Close()
 	env["RAW_TRADE_URL"] = feed2.URL
 	err = apiprocess.With(ctx, cfg, func(p *apiprocess.Process) error {
@@ -207,7 +207,7 @@ func TestMarketDataProcess(t *testing.T) {
 	}
 
 	// Invalid config and DB startup failure exit before the HTTP probe.
-	for _, bad := range []struct{ k, v string }{{"RAW_TRADE_PAIR", "bad"}, {"MARKET_DATA_DATABASE_URL", "postgres://market_data_runtime:secret@127.0.0.1:1/market_data"}, {"KAFKA_BROKERS", "127.0.0.1:1"}} {
+	for _, bad := range []struct{ k, v string }{{"RAW_TRADE_URL", "ws://localhost/ws/fixed@trade"}, {"MARKET_DATA_DATABASE_URL", "postgres://market_data_runtime:secret@127.0.0.1:1/market_data"}, {"KAFKA_BROKERS", "127.0.0.1:1"}} {
 		old := env[bad.k]
 		env[bad.k] = bad.v
 		e := apiprocess.With(ctx, cfg, func(*apiprocess.Process) error { return fmt.Errorf("unexpected startup") })

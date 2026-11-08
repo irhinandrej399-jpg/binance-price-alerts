@@ -8,7 +8,7 @@ import (
 )
 
 func validEnv() map[string]string {
-	return map[string]string{"HTTP_ADDR": "127.0.0.1:8081", "RPC_ADDR": "127.0.0.1:8082", "RPC_CERT_FILE": "cert.pem", "RPC_KEY_FILE": "key.pem", "RPC_CA_FILE": "ca.pem", "API_SERVICE_URI": "spiffe://local/api", "MATCHER_SERVICE_URI": "spiffe://local/matcher", "CATALOG_BASE_URL": "http://127.0.0.1:9000", "MARKET_DATA_DATABASE_URL": "postgres://market_data_runtime:secret@127.0.0.1:5432/market_data", "RAW_TRADE_URL": "ws://127.0.0.1:9000/ws/btcusdt@trade", "RAW_TRADE_PAIR": "BTCUSDT", "KAFKA_BROKERS": "127.0.0.1:9092", "PRICES_TOPIC": "local-prices", "MARKET_DATA_RELAY_TRANSACTIONAL_ID": "local-market-data-relay-shard-0"}
+	return map[string]string{"HTTP_ADDR": "127.0.0.1:8081", "RPC_ADDR": "127.0.0.1:8082", "RPC_CERT_FILE": "cert.pem", "RPC_KEY_FILE": "key.pem", "RPC_CA_FILE": "ca.pem", "API_SERVICE_URI": "spiffe://local/api", "MATCHER_SERVICE_URI": "spiffe://local/matcher", "CATALOG_BASE_URL": "http://127.0.0.1:9000", "MARKET_DATA_DATABASE_URL": "postgres://market_data_runtime:secret@127.0.0.1:5432/market_data", "RAW_TRADE_URL": "ws://127.0.0.1:9000/ws", "KAFKA_BROKERS": "127.0.0.1:9092", "PRICES_TOPIC": "local-prices", "MARKET_DATA_RELAY_TRANSACTIONAL_ID": "local-market-data-relay-shard-0"}
 }
 func TestConfig(t *testing.T) {
 	env := validEnv()
@@ -33,7 +33,7 @@ func TestConfig(t *testing.T) {
 		"CATALOG_BASE_URL":                   {"ftp://localhost", "http://localhost/path", "http://localhost?", "http://user:secret@localhost"},
 		"MARKET_DATA_DATABASE_URL":           {"postgres://api_runtime:secret@localhost/api", "secret"},
 		"RAW_TRADE_URL":                      {"https://localhost/ws/btcusdt@trade", "ws://user:secret@localhost/ws/btcusdt@trade", "ws://localhost/ws/ethusdt@trade", "ws://localhost/ws/btcusdt@trade?timeUnit=MICROSECOND"},
-		"RAW_TRADE_PAIR":                     {"btcusdt", "BTCUSD", "BTCUSDT/"},
+		"CATALOG_REFRESH_INTERVAL":           {"bad", "0s", "10ms", "2h"},
 		"KAFKA_BROKERS":                      {"localhost:0", "localhost:9092,"},
 		"PRICES_TOPIC":                       {"..", "has space"},
 		"MARKET_DATA_RELAY_TRANSACTIONAL_ID": {".", strings.Repeat("x", 250)},
