@@ -4,9 +4,10 @@
 
 ## Активная работа
 
-- Активная реализация: нет. OPS-072 завершён; следующий шаг — OPS-073 перед повторной проверкой E2E-002 (planned).
+- Активная реализация: нет. OPS-073 завершён; следующий шаг — повторная сессионная проверка E2E-002 (planned).
+- Последний завершённый тикет: [OPS-073](backlog/tickets/OPS-073.md), [HTTP подписок API](../cmd/api/README.md#http-подписок-ops-073). POST/GET через session/auth и управляемые mTLS Catalog/Latest рядом с DELETE. Race executable на disposable PostgreSQL/Kafka подтвердил registration/login/link, точный SQL snapshot/quota/journal и read_committed bytes, изоляцию владельцев, RPC failures, restart, SIGTERM и cleanup. Общая race/vet/build PASS; полный E2E впереди.
 - Независимый сбой Kafka-регрессии: [OPS-067](backlog/tickets/OPS-067.md) — changefeed metadata unavailable сразу после recreate в fixture; причина пока гипотеза, production guards не ослаблялись.
-- Последний завершённый тикет: [OPS-072](backlog/tickets/OPS-072.md), [Telegram HTTP API](../cmd/api/README.md#telegram-http-ops-072). Готовые выдача кода с Bearer и защищённый /start webhook, обязательный secret до startup, общий body limit/drain. Race executable на disposable PostgreSQL/Kafka подтвердил регистрацию/вход, точный chat/version, replay/перепривязку/restart, 401/403/413, invalid secret и SIGTERM; cleanup и общая Go race/vet/build PASS. Реального Telegram и полного E2E не было.
+- Предыдущий завершённый тикет: [OPS-072](backlog/tickets/OPS-072.md), [Telegram HTTP API](../cmd/api/README.md#telegram-http-ops-072). Готовые выдача кода с Bearer и защищённый /start webhook, обязательный secret до startup, общий body limit/drain. Race executable на disposable PostgreSQL/Kafka подтвердил регистрацию/вход, точный chat/version, replay/перепривязку/restart, 401/403/413, invalid secret и SIGTERM; cleanup и общая Go race/vet/build PASS. Реального Telegram и полного E2E не было.
 - Предыдущий завершённый тикет: [OPS-071](backlog/tickets/OPS-071.md), [notifications RPC API](../cmd/api/README.md#notifications-rpc-ops-071). Общий mTLS listener, раздельные exact права matcher/notifications, готовые PrepareRecipient/AdmitDelivery/SaveDeliveryResult и управляемый Latest client. Race executable на disposable API PostgreSQL/Kafka подтвердил CAS, точную цену, SQL commit/replay, pending report после restart, Latest/SQL cancellation, SIGTERM и cleanup. Общая race-регрессия/vet/build PASS; полный E2E впереди.
 - Предыдущий завершённый тикет: [OPS-070](backlog/tickets/OPS-070.md), [matcher RPC API](../cmd/api/README.md#matcher-rpc-ops-070). Один mTLS listener для snapshot/replay/RequestDelivery, exact matcher policy и certificate pin owner; API pool и отдельный защищённый Latest client. Race executable на disposable PostgreSQL/Kafka подтвердил точную цену/canonical outbox/read_committed bytes, restart, SIGTERM с SQL lock, bind/TLS/schema/terminal failures и cleanup. HTTP drain сохранён, RPC handlers join до pool.Close, общий предел 10 с также при terminal failure. Общая race-регрессия/vet/build PASS; полный E2E впереди.
 - Предыдущий завершённый тикет: [OPS-069](backlog/tickets/OPS-069.md), [Catalog/Latest RPC market-data](../cmd/market-data/README.md#cataloglatest-rpc-ops-069). Один mTLS listener, API Fetch/Latest и matcher только Latest; startup BeginGeneration до Serve, Stop/cancel/join handlers до pool.Close. Настоящий executable на disposable PostgreSQL/Kafka подтвердил точную цену/revision, права, restart/прежний live, SIGTERM с удерживаемым Fetch, bind/TLS/schema failure и cleanup. Общая race-регрессия/vet/build PASS. Raw feed остаётся unconfirmed, readyz=503; полный E2E впереди.
@@ -164,14 +165,14 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-[OPS-073](backlog/tickets/OPS-073.md): подключить создание и список подписок к API.
+[E2E-002](backlog/tickets/E2E-002.md): повторить сессионную проверку сборки четырёх процессов.
+OPS-073 завершил создание/список подписок API через управляемые Catalog/Latest.
 OPS-072 завершил Telegram HTTP; API требует явный TELEGRAM_WEBHOOK_SECRET.
 OPS-071 завершил RPC notifications; общая policy и конфигурация — cmd/api/README.md.
 OPS-069 завершил Catalog/Latest RPC market-data; конфигурация и проверки — cmd/market-data/README.md.
-Сессионная проверка [E2E-002](backlog/tickets/E2E-002.md) не пройдена:
-выделены OPS-069–073 для market-data RPC, API RPC matcher/notifications,
-Telegram HTTP и subscriptions HTTP. Карточки/ORDER синхронизированы;
-E2E-002 остаётся planned, общий стенд не запускался. Недостающие интерфейсы
+Предыдущая сессионная проверка E2E-002 выделила OPS-069–073 для market-data RPC,
+API RPC matcher/notifications, Telegram HTTP и subscriptions HTTP; все они завершены.
+E2E-002 остаётся planned до повторной проверки, общий стенд не запускался. Недостающие интерфейсы
 нельзя заменять fixture серверами внутри E2E.
 E2E-004 завершил fake Telegram; использовать internal/testutil/telegramfake/README.md,
 явные BaseURL/Token и тестовый Secret для webhook, Next/Reply/RateLimit/Forbid/Disconnect.
@@ -241,7 +242,7 @@ NTF-006 рассчитывает retry Plan и бюджет доказанных
 ## Проверка состояния
 
 - `python3 scripts/backlog.py check` — целостность карточек, зависимостей, статусов индекса и последовательности ORDER.md.
-- `python3 scripts/backlog.py show OPS-072` — следующая карточка и статус её зависимостей.
+- `python3 scripts/backlog.py show E2E-002` — следующая карточка и статус её зависимостей.
 - `git status --short`, соответствующий diff и `git log -1`.
 - `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v` — проверки очереди и инструмента коммитов во временных репозиториях.
 - `GOTOOLCHAIN=local go list ./...`, `GOTOOLCHAIN=local go test ./...`, `GOTOOLCHAIN=local go build ./...` — проверки каркаса. Тесты цены проверяют доменный контракт; успешная компиляция cmd не подтверждает runtime-сценарии.

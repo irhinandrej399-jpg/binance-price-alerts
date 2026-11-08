@@ -1,4 +1,30 @@
-# Локальный API (OPS-046, OPS-004, OPS-013, OPS-070, OPS-071, OPS-072)
+# Локальный API (OPS-046, OPS-004, OPS-013, OPS-070, OPS-071, OPS-072, OPS-073)
+
+## HTTP подписок (OPS-073)
+
+POST /v1/subscriptions использует subscription.NewHandler с catalogrpc.NewClient
+и latest.NewClient на общем управляемом MARKET_RPC_* mTLS соединении. Market-data
+должен разрешать API методы Catalog/Fetch и Quotes/Latest; адрес, DNS SAN и
+credentials задаются явно, как в примере ниже. Каждый RPC ограничен готовым клиентом
+до 1 с, без прикладных повторов; отмена HTTP передаётся в RPC. Недоступность Catalog
+даёт 503 catalog_unavailable, Latest — 503 quote_unavailable. Readiness проверяет
+собственную API-БД. Соединение закрывается после остановки и join HTTP/RPC handlers.
+
+Владелец берётся из проверенной Bearer-сессии; user_id в JSON отклоняется.
+Формы тела, точные decimal строки, ошибки и предупреждения — в
+[контракте создания](../../internal/api/subscription/README.md#http-создание-sub-003).
+API получает каталог/котировку до SQL lock, затем в одной транзакции фиксирует
+слот, подписку и immutable journal/outbox; ответ 201 только после commit.
+Relay публикует сохранённые bytes. Общие body limit и auth quota сохраняются.
+GET возвращает собственные active/pending_delivery/sending/delivery_blocked,
+workflow и причину блока по готовому обработчику, без market-data RPC.
+DELETE сохраняет прежний контракт отмены и освобождения слота.
+
+Процессный runner проверяет настоящие регистрацию/вход/Telegram link,
+POST/GET/DELETE, изоляцию двух пользователей, запрет user_id, body limit,
+RPC failures без слота/подписки, точные SQL snapshot/threshold и journal bytes
+в read_committed Kafka, restart и SIGTERM во время Catalog RPC с наблюдением
+upstream cancellation. Полный E2E, публичные Binance/Telegram и нагрузка не входят.
 
 Сборка и запуск из корня репозитория:
 
@@ -53,6 +79,8 @@ HTTP маршруты:
 | POST /v1/sessions | Вход, общий auth limit |
 | POST /v1/telegram/link-codes | Bearer session/auth, одноразовый код на 10 минут |
 | POST /v1/telegram/webhook | Webhook secret без Bearer, private /start, durable chat/version |
+| POST /v1/subscriptions | Bearer session/auth, Catalog/Latest, атомарные quota/subscription/journal |
+| GET /v1/subscriptions | Собственные занимающие слот подписки (до 15), без RPC |
 | DELETE /v1/subscriptions/{id} | Bearer session/auth, каноническая отмена с journal |
 
 Вход и регистрация используют [общую квоту PostgreSQL](../../internal/api/authlimit/README.md):
@@ -65,8 +93,8 @@ HTTP маршруты:
 максимум 64 КиБ тела, включая chunked; превышение даёт 413
 `request_body_too_large` до auth/SQL. Health поддерживает HEAD. Подробности HTTP-отмены —
 [контракт компонента](../../internal/api/subscription/README.md#http-отмена-sub-005).
-Создание подписки и метрики не смонтированы. Подписка для проверки создаётся fixture harness.
-Это минимальный процесс для OPS-004; полный API для E2E ещё предстоит собрать.
+Создание и список подключены через готовые subscription handlers (OPS-073).
+Метрики пока не смонтированы; полный сценарий четырёх процессов проверяется в E2E.
 
 До HTTP/RPC Serve проверяются оба bind, TLS, подключение/схема собственной БД и по одному
 Step обеих очередей. Общий startup budget — 15 с, каждый Step — до 5 с.
@@ -129,7 +157,7 @@ ReadReplayPage, AcknowledgeReplay, AbandonReplay) и Delivery/RequestDelivery.
 Owner snapshot/pin берётся адаптерами из сертификата, metadata его не меняет.
 
 RPC_CERT_FILE/RPC_KEY_FILE — server certificate/key; RPC_CA_FILE — доверенный
-CA клиентов. MARKET_RPC_* задают отдельную клиентскую mTLS связь API → Latest;
+CA клиентов. MARKET_RPC_* задают отдельную клиентскую mTLS связь API → Catalog/Latest;
 SERVER_NAME проверяется по DNS SAN сервера даже при подключении к IP.
 Адреса — явные host:port без resolver URL. Ключи хранятся во внешних файлах с
 доступом владельцу; PEM, credentials и DSN не логируются. Ротация требует

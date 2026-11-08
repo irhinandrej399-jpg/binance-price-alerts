@@ -30,6 +30,8 @@ import (
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/telegramcode"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/telegramlink"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/telegramwebhook"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/catalogrpc"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/latest"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafka"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/postgres"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -208,7 +210,10 @@ func run(ctx context.Context, c config) error {
 	mux.Handle("POST /v1/telegram/webhook", webhook)
 	mux.Handle("/healthz", h)
 	mux.Handle("/readyz", h)
-	mux.Handle("/v1/subscriptions/", auth.New(session.New(pool, nil), subscription.NewCancelHandler(pool)))
+	sessions := session.New(pool, nil)
+	mux.Handle("POST /v1/subscriptions", auth.New(sessions, subscription.NewHandler(pool, catalogrpc.NewClient(rpc.market), latest.NewClient(rpc.market), time.Now)))
+	mux.Handle("GET /v1/subscriptions", auth.New(sessions, subscription.NewListHandler(pool)))
+	mux.Handle("/v1/subscriptions/", auth.New(sessions, subscription.NewCancelHandler(pool)))
 	server := &http.Server{Handler: bodylimit.New(bodylimit.PublicLimit, mux), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second}
 	defer server.Close()
 	h.SetInitialized(true)

@@ -61,6 +61,7 @@ func TestAPIProcess(t *testing.T) {
 	pool := postgrestest.Open(t)
 	ca, addr, quotes := configureRPC(t, env)
 	testTelegramProcess(t, ctx, cfg, pool)
+	testSubscriptionsProcess(t, ctx, cfg, pool, quotes)
 	testNotificationsRPCProcess(t, ctx, cfg, pool, ca, addr, quotes)
 	testMatcherRPCProcess(t, ctx, cfg, pool, ca, addr)
 	testGracefulProcess(t, ctx, cfg, pool)

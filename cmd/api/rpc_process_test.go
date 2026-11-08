@@ -17,6 +17,8 @@ import (
 	changed "github.com/irhinandrej399-jpg/binance-price-alerts/internal/contracts/subscriptionchanged"
 	pb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/api/v1"
 	marketpb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/marketdata/v1"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/catalog"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/marketdata/catalogrpc"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/serviceauth"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/apiprocess"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -57,13 +59,14 @@ func configureRPC(t testing.TB, env map[string]string) (authority, string, *proc
 	if e != nil {
 		t.Fatal(e)
 	}
-	opts, e := serviceauth.ServerOptions(server.cert, server.key, ca.pem, map[string][]string{"spiffe://local/api": {marketpb.Quotes_Latest_FullMethodName}})
+	opts, e := serviceauth.ServerOptions(server.cert, server.key, ca.pem, map[string][]string{"spiffe://local/api": {marketpb.Quotes_Latest_FullMethodName, marketpb.Catalog_Fetch_FullMethodName}})
 	if e != nil {
 		t.Fatal(e)
 	}
 	market := grpc.NewServer(opts...)
 	quotes := &processQuotes{entered: make(chan struct{}, 10), canceled: make(chan struct{}, 10)}
 	marketpb.RegisterQuotesServer(market, quotes)
+	marketpb.RegisterCatalogServer(market, catalogrpc.NewServer(quotes))
 	go market.Serve(listener)
 	t.Cleanup(func() { market.Stop(); listener.Close() })
 	env["MARKET_RPC_ADDR"] = listener.Addr().String()
@@ -74,6 +77,7 @@ func configureRPC(t testing.TB, env map[string]string) (authority, string, *proc
 type processQuotes struct {
 	marketpb.UnimplementedQuotesServer
 	mode              atomic.Int32
+	catalogMode       atomic.Int32
 	entered, canceled chan struct{}
 }
 
@@ -326,4 +330,17 @@ func testMatcherRPCProcess(t *testing.T, ctx context.Context, cfg apiprocess.Con
 		t.Fatal("startup leaked RPC")
 	}
 	l.Close()
+}
+
+func (q *processQuotes) Fetch(ctx context.Context) (catalog.Snapshot, error) {
+	switch q.catalogMode.Load() {
+	case 1:
+		return catalog.Snapshot{}, errors.New("test catalog failure")
+	case 2:
+		q.entered <- struct{}{}
+		<-ctx.Done()
+		q.canceled <- struct{}{}
+		return catalog.Snapshot{}, ctx.Err()
+	}
+	return catalog.Snapshot{UpdatedAt: time.Now().UTC(), Pairs: []catalog.Pair{{Symbol: "BTCUSDT", BaseAsset: "BTC", QuoteAsset: "USDT"}}}, nil
 }
