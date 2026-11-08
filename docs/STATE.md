@@ -4,9 +4,10 @@
 
 ## Активная работа
 
-- Активная реализация: нет. OPS-071 завершён; следующий шаг — OPS-072–073 перед повторной проверкой E2E-002 (planned).
+- Активная реализация: нет. OPS-072 завершён; следующий шаг — OPS-073 перед повторной проверкой E2E-002 (planned).
 - Независимый сбой Kafka-регрессии: [OPS-067](backlog/tickets/OPS-067.md) — changefeed metadata unavailable сразу после recreate в fixture; причина пока гипотеза, production guards не ослаблялись.
-- Последний завершённый тикет: [OPS-071](backlog/tickets/OPS-071.md), [notifications RPC API](../cmd/api/README.md#notifications-rpc-ops-071). Общий mTLS listener, раздельные exact права matcher/notifications, готовые PrepareRecipient/AdmitDelivery/SaveDeliveryResult и управляемый Latest client. Race executable на disposable API PostgreSQL/Kafka подтвердил CAS, точную цену, SQL commit/replay, pending report после restart, Latest/SQL cancellation, SIGTERM и cleanup. Общая race-регрессия/vet/build PASS; полный E2E впереди.
+- Последний завершённый тикет: [OPS-072](backlog/tickets/OPS-072.md), [Telegram HTTP API](../cmd/api/README.md#telegram-http-ops-072). Готовые выдача кода с Bearer и защищённый /start webhook, обязательный secret до startup, общий body limit/drain. Race executable на disposable PostgreSQL/Kafka подтвердил регистрацию/вход, точный chat/version, replay/перепривязку/restart, 401/403/413, invalid secret и SIGTERM; cleanup и общая Go race/vet/build PASS. Реального Telegram и полного E2E не было.
+- Предыдущий завершённый тикет: [OPS-071](backlog/tickets/OPS-071.md), [notifications RPC API](../cmd/api/README.md#notifications-rpc-ops-071). Общий mTLS listener, раздельные exact права matcher/notifications, готовые PrepareRecipient/AdmitDelivery/SaveDeliveryResult и управляемый Latest client. Race executable на disposable API PostgreSQL/Kafka подтвердил CAS, точную цену, SQL commit/replay, pending report после restart, Latest/SQL cancellation, SIGTERM и cleanup. Общая race-регрессия/vet/build PASS; полный E2E впереди.
 - Предыдущий завершённый тикет: [OPS-070](backlog/tickets/OPS-070.md), [matcher RPC API](../cmd/api/README.md#matcher-rpc-ops-070). Один mTLS listener для snapshot/replay/RequestDelivery, exact matcher policy и certificate pin owner; API pool и отдельный защищённый Latest client. Race executable на disposable PostgreSQL/Kafka подтвердил точную цену/canonical outbox/read_committed bytes, restart, SIGTERM с SQL lock, bind/TLS/schema/terminal failures и cleanup. HTTP drain сохранён, RPC handlers join до pool.Close, общий предел 10 с также при terminal failure. Общая race-регрессия/vet/build PASS; полный E2E впереди.
 - Предыдущий завершённый тикет: [OPS-069](backlog/tickets/OPS-069.md), [Catalog/Latest RPC market-data](../cmd/market-data/README.md#cataloglatest-rpc-ops-069). Один mTLS listener, API Fetch/Latest и matcher только Latest; startup BeginGeneration до Serve, Stop/cancel/join handlers до pool.Close. Настоящий executable на disposable PostgreSQL/Kafka подтвердил точную цену/revision, права, restart/прежний live, SIGTERM с удерживаемым Fetch, bind/TLS/schema failure и cleanup. Общая race-регрессия/vet/build PASS. Raw feed остаётся unconfirmed, readyz=503; полный E2E впереди.
 - Предыдущий завершённый тикет: [E2E-004](backlog/tickets/E2E-004.md), [управляемый fake Telegram](../internal/testutil/telegramfake/README.md). Явные success/message_id, 429/retry_after, 403, TCP drop и журнал sendMessage; Link посылает private /start update только в loopback webhook с тестовым секретом. Настоящие sender/webhook/link handlers, десять race-повторов, общая race-регрессия/vet/build PASS. Cleanup held/неполного HTTP подтверждён. Реальных сообщений не было; полный E2E и лимиты нагрузки ещё впереди.
@@ -163,7 +164,8 @@ DEC-001–009 приняты. DEC-004 пересматривает прежню�
 
 ## Следующий рекомендуемый шаг
 
-[OPS-072](backlog/tickets/OPS-072.md): подключить Telegram-привязку к API.
+[OPS-073](backlog/tickets/OPS-073.md): подключить создание и список подписок к API.
+OPS-072 завершил Telegram HTTP; API требует явный TELEGRAM_WEBHOOK_SECRET.
 OPS-071 завершил RPC notifications; общая policy и конфигурация — cmd/api/README.md.
 OPS-069 завершил Catalog/Latest RPC market-data; конфигурация и проверки — cmd/market-data/README.md.
 Сессионная проверка [E2E-002](backlog/tickets/E2E-002.md) не пройдена:

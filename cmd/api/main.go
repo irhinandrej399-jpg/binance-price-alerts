@@ -27,6 +27,9 @@ import (
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/relay"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/session"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/subscription"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/telegramcode"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/telegramlink"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/telegramwebhook"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafka"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/postgres"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -36,6 +39,7 @@ type config struct {
 	addr, dsn, changes, deliveries string
 	subscriptions, delivery        kafka.Config
 	rpc                            rpcConfig
+	webhookSecret                  string
 }
 
 var kafkaName = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
@@ -43,6 +47,10 @@ var kafkaName = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 func loadConfig(get func(string) string) (config, error) {
 	c := config{addr: get("HTTP_ADDR"), dsn: get("DATABASE_URL"), changes: get("SUBSCRIPTION_CHANGES_TOPIC"), deliveries: get("DELIVERY_REQUESTS_TOPIC")}
 	bad := errors.New("api: invalid configuration")
+	c.webhookSecret = get("TELEGRAM_WEBHOOK_SECRET")
+	if _, err := telegramwebhook.Handler(c.webhookSecret, http.NotFoundHandler()); err != nil {
+		return config{}, bad
+	}
 
 	if !addressOK(c.addr) || c.dsn == "" {
 		return config{}, bad
@@ -165,7 +173,7 @@ func run(ctx context.Context, c config) error {
 		return err
 	}
 	// Check the HTTP storage contract as well as relay tables before readiness.
-	rows, err := pool.Query(startup, `SELECT s.token_hash,u.id,x.id,l.used FROM app.sessions s JOIN app.users u ON u.id=s.user_id JOIN app.subscriptions x ON x.owner_id=u.id CROSS JOIN app.auth_limits l LIMIT 0`)
+	rows, err := pool.Query(startup, `SELECT s.token_hash,u.id,u.telegram_chat_id,u.telegram_version,x.id,l.used,c.code_hash,c.expires_at FROM app.sessions s JOIN app.users u ON u.id=s.user_id JOIN app.subscriptions x ON x.owner_id=u.id CROSS JOIN app.auth_limits l CROSS JOIN app.telegram_link_codes c LIMIT 0`)
 	if err != nil {
 		return errors.New("api: API schema unavailable; run migrations separately")
 	}
@@ -187,11 +195,17 @@ func run(ctx context.Context, c config) error {
 		return errors.New("api: delivery relay startup failed")
 	}
 	done()
+	webhook, err := telegramwebhook.Handler(c.webhookSecret, telegramlink.Handler(telegramlink.New(pool, nil)))
+	if err != nil {
+		return errors.New("api: invalid configuration")
+	}
 	h := health.New(pool.Ping, time.Second)
 	mux := http.NewServeMux()
 	limits := authlimit.New(pool, nil)
 	mux.Handle("POST /v1/accounts", limits.Handler(registration.New(account.New(pool))))
 	mux.Handle("POST /v1/sessions", limits.Handler(login.New(account.New(pool), session.New(pool, nil))))
+	mux.Handle("POST /v1/telegram/link-codes", telegramcode.Handler(session.New(pool, nil), telegramcode.New(pool, nil)))
+	mux.Handle("POST /v1/telegram/webhook", webhook)
 	mux.Handle("/healthz", h)
 	mux.Handle("/readyz", h)
 	mux.Handle("/v1/subscriptions/", auth.New(session.New(pool, nil), subscription.NewCancelHandler(pool)))

@@ -278,7 +278,7 @@ OPS-032/018 ждут готового observer.
 | [OPS-069](tickets/OPS-069.md) | Подключить Catalog и Latest RPC к процессу market-data | OPS-009, MKT-006, MKT-018, SET-008 | done |
 | [OPS-070](tickets/OPS-070.md) | Подключить RPC matcher к процессу API | OPS-004, SUB-016, SUB-022, SUB-014, SET-008 | done |
 | [OPS-071](tickets/OPS-071.md) | Подключить RPC notifications к процессу API | OPS-070, SUB-018, SUB-020, SUB-027, MKT-006 | done |
-| [OPS-072](tickets/OPS-072.md) | Подключить Telegram-привязку к процессу API | OPS-004, OPS-012, IAM-006, IAM-007, IAM-008, E2E-004 | planned |
+| [OPS-072](tickets/OPS-072.md) | Подключить Telegram-привязку к процессу API | OPS-004, OPS-012, IAM-006, IAM-007, IAM-008, E2E-004 | done |
 | [OPS-073](tickets/OPS-073.md) | Подключить создание и список подписок к процессу API | OPS-071, OPS-072, SUB-003, SUB-004, SUB-011, MKT-018 | planned |
 
 ### Сквозная проверка

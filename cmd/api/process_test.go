@@ -60,6 +60,7 @@ func TestAPIProcess(t *testing.T) {
 	cfg := apiprocess.Config{Executable: binary, Env: env, StartupTimeout: 20 * time.Second, StopTimeout: time.Second}
 	pool := postgrestest.Open(t)
 	ca, addr, quotes := configureRPC(t, env)
+	testTelegramProcess(t, ctx, cfg, pool)
 	testNotificationsRPCProcess(t, ctx, cfg, pool, ca, addr, quotes)
 	testMatcherRPCProcess(t, ctx, cfg, pool, ca, addr)
 	testGracefulProcess(t, ctx, cfg, pool)

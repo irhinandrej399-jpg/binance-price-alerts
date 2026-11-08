@@ -60,5 +60,5 @@ ErrChatInUse, неизвестный/заменённый/поглощённый
 Проверка: `go test ./internal/api/telegramlink`; реальные транзакции, гонки,
 защищённый HTTP flow и race detector — `python3 scripts/check_postgres.py`.
 Тесты принудительно удерживают owner lock и проверяют замену/истечение во время
-ожидания. Runtime cmd/api и реальный Telegram ещё не подключены; рабочая БД
+ожидания. Runtime cmd/api подключён в OPS-072; реальный Telegram не подключён; рабочая БД
 миграцией этой сессии не изменялась. Rate limits — отдельные задачи OPS.

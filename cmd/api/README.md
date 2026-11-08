@@ -1,10 +1,10 @@
-# Локальный API (OPS-046, OPS-004, OPS-013, OPS-070, OPS-071)
+# Локальный API (OPS-046, OPS-004, OPS-013, OPS-070, OPS-071, OPS-072)
 
 Сборка и запуск из корня репозитория:
 
 ```sh
 GOTOOLCHAIN=local go build -o /tmp/binance-api ./cmd/api
-# DATABASE_URL загрузить в окружение из локального хранилища секретов.
+# DATABASE_URL и TELEGRAM_WEBHOOK_SECRET загрузить из локального хранилища секретов.
 # Пример формата: postgres://api_runtime:<password>@127.0.0.1:5432/api
 HTTP_ADDR=127.0.0.1:8080 \
 KAFKA_BROKERS=127.0.0.1:9092 \
@@ -27,7 +27,7 @@ MARKET_RPC_CA_FILE=/path/to/market-ca.pem \
 /tmp/binance-api
 ```
 
-Все показанные переменные и DATABASE_URL обязательны. HTTP_ADDR и каждый адрес в KAFKA_BROKERS
+Все показанные переменные, DATABASE_URL и TELEGRAM_WEBHOOK_SECRET обязательны. HTTP_ADDR и каждый адрес в KAFKA_BROKERS
 (через запятую без пробелов) должны иметь host:port. DATABASE_URL — только
 собственная API-БД под `api_runtime`; pool открывается один раз. Ошибки процесса
 содержат только фиксированные сообщения, без DSN, токенов и broker responses.
@@ -51,6 +51,8 @@ HTTP маршруты:
 | GET /readyz | После startup — API pool.Ping, бюджет 1 с |
 | POST /v1/accounts | Регистрация, общий auth limit |
 | POST /v1/sessions | Вход, общий auth limit |
+| POST /v1/telegram/link-codes | Bearer session/auth, одноразовый код на 10 минут |
+| POST /v1/telegram/webhook | Webhook secret без Bearer, private /start, durable chat/version |
 | DELETE /v1/subscriptions/{id} | Bearer session/auth, каноническая отмена с journal |
 
 Вход и регистрация используют [общую квоту PostgreSQL](../../internal/api/authlimit/README.md):
@@ -63,8 +65,7 @@ HTTP маршруты:
 максимум 64 КиБ тела, включая chunked; превышение даёт 413
 `request_body_too_large` до auth/SQL. Health поддерживает HEAD. Подробности HTTP-отмены —
 [контракт компонента](../../internal/api/subscription/README.md#http-отмена-sub-005).
-Создание подписки, Telegram webhook, RPC notifications и метрики
-не смонтированы. Аккаунт/сессия/подписка для проверки создаются fixture harness.
+Создание подписки и метрики не смонтированы. Подписка для проверки создаётся fixture harness.
 Это минимальный процесс для OPS-004; полный API для E2E ещё предстоит собрать.
 
 До HTTP/RPC Serve проверяются оба bind, TLS, подключение/схема собственной БД и по одному
@@ -191,3 +192,35 @@ owner/workflow, CAS, точную цену, отсутствие попытки 
 SQL commit до ответа, canonical permit после restart, отмену сохранения под
 SQL lock и повтор удержанного report, idempotent success/conflict и SIGTERM
 с активным Latest. Telegram не вызывается; полный E2E остаётся отдельной задачей.
+
+## Telegram HTTP (OPS-072)
+
+`TELEGRAM_WEBHOOK_SECRET` обязателен: 1–256 ASCII-символов A–Z, a–z, 0–9,
+`_`, `-`. Проверяется готовым telegramwebhook constructor при чтении
+конфигурации до bind/SQL/Kafka; неверное значение завершает процесс с кодом 1
+и фиксированной ошибкой без секрета. Bot token и setWebhook для запуска API
+не нужны. Реальный webhook регистрируется оператором отдельно по инструкции
+[telegramwebhook](../../internal/api/telegramwebhook/README.md).
+
+Выдача кода — POST без тела с Bearer; 201 с code/expires_in/expires_at и
+Cache-Control: no-store. Только хеш хранится в API БД. Webhook принимает ровно
+один X-Telegram-Bot-Api-Secret-Token, затем передаёт update в готовый
+[telegramlink](../../internal/api/telegramlink/README.md). Успех, неизвестный
+или уже поглощённый код подтверждаются 200; storage failure — 500.
+Новый код при перепривязке увеличивает версию, replay старого её не меняет.
+Оба endpoint находятся внутри общего body limit и HTTP drain; коды/секреты
+не записываются в логи. Startup проверяет таблицу кодов и поля binding;
+миграции 003/004 применяются отдельно. SQL владельцев других сервисов API
+не использует, Telegram-вызовов при привязке нет.
+
+Проверка настоящего race executable:
+
+```sh
+GOCACHE=/tmp/binance-go-build GOTOOLCHAIN=local python3 scripts/check_api_process.py --package ./cmd/api
+```
+
+Тест использует disposable PostgreSQL/Kafka, регистрацию и вход по HTTP,
+`telegramfake.Link`, независимое чтение chat/version, повтор update/code,
+перепривязку, restart, 401/403, body limit, invalid secret startup и SIGTERM.
+Runner проверяет удаление контейнеров, сетей и volumes. Публичный Telegram
+не вызывается; полный E2E и нагрузочные лимиты сюда не входят.
