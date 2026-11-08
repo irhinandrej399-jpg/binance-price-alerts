@@ -92,3 +92,6 @@ go test -race ./...
 Для новой сессии в этой папке достаточно «Выполни тикет <ID>»: `AGENTS.md` требует прочитать [skill сессии](.agents/skills/binance-ticket-session/SKILL.md), состояние проекта и нужную карточку. Skill сообщает рекомендацию модели и reasoning; выбор делается в клиенте. Можно также поручить «Возьми следующий тикет из бэклога». Следующая задача по `docs/backlog/ORDER.md`: `python3 scripts/backlog.py next`. Проверка целостности бэклога и очереди: `python3 scripts/backlog.py check`.
 
 Минимальный процесс API (HTTP-отмена, health и два relay): [запуск и проверка](cmd/api/README.md).
+
+Локальная явная очистка Kafka по durable SQL progress и обязательному реестру:
+[maintenance-команда kafka-cleaner](cmd/kafka-cleaner/README.md). Не запускается автоматически.
