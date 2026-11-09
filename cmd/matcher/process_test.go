@@ -84,7 +84,7 @@ func TestMatcherProcess(t *testing.T) {
 	proof := func(kind progresspb.ConsumerKind, id string, sourceTopic string, tid [16]byte, partition int32) (*progresspb.ReadProgressResponse, error) {
 		return progress.ReadProgress(ctx, &progresspb.ReadProgressRequest{Kind: kind, ConsumerId: id, ClusterId: f.PricesSource.ClusterID, TopicId: tid[:], Topic: sourceTopic, Partition: partition})
 	}
-	cfg := apiprocess.Config{Executable: binary, Env: env, StartupProbePath: "/healthz", StartupTimeout: 12 * time.Second, StopTimeout: time.Second}
+	cfg := apiprocess.Config{DiagnosticLines: startupDiagnosticLines(), Executable: binary, Env: env, StartupProbePath: "/healthz", StartupTimeout: 12 * time.Second, StopTimeout: time.Second}
 	wait := func(label string, ok func() bool) {
 		t.Helper()
 		tick := time.NewTicker(10 * time.Millisecond)

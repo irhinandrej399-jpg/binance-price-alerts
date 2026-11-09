@@ -157,7 +157,11 @@ func run(parent context.Context, c config) error {
 	remaining := 3
 	componentFailed := false
 	var sourceFailure error
+	var componentDiagnostics error
 	record := func(err error) {
+		if category := componentDiagnostic(err); category != "" {
+			componentDiagnostics = errors.Join(componentDiagnostics, errors.New(category))
+		}
 		for _, kind := range []error{sourcebinding.ErrUnbound, kafkasource.ErrMismatch, kafkasource.ErrIdentity, kafkasource.ErrMetadata} {
 			if errors.Is(err, kind) {
 				// Cancellation of metadata during a requested shutdown is normal.
@@ -201,7 +205,7 @@ func run(parent context.Context, c config) error {
 	if parent.Err() != nil && !componentFailed {
 		return nil
 	}
-	return errors.Join(errors.New("matcher: required component stopped"), sourceFailure)
+	return errors.Join(errors.New("matcher: required component stopped"), sourceFailure, componentDiagnostics)
 }
 
 // Cancellation stops admission immediately; accepted SQL work is the drain

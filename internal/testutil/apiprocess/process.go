@@ -1,6 +1,7 @@
 // Package apiprocess owns a disposable executable's bounded lifecycle.
-// It passes only explicit environment variables and discards child output,
-// which may contain credentials. Intended for local Unix integration tests.
+// It passes only explicit environment variables and discards child output by
+// default. A trusted exact-line allowlist can retain safe startup categories.
+// Intended for local Unix integration tests.
 package apiprocess
 
 import (
@@ -28,8 +29,11 @@ var (
 )
 
 type Config struct {
-	Executable string
-	Args       []string
+	// DiagnosticLines is a trusted allowlist of exact, credential-free stderr lines.
+	// Only matched lines may be attached to ErrEarlyExit; nil discards all output.
+	DiagnosticLines []string
+	Executable      string
+	Args            []string
 	// StartupProbePath is an origin-local absolute path; empty means /readyz.
 	// A successful probe only confirms HTTP 200 at this endpoint.
 	StartupProbePath string
@@ -104,6 +108,10 @@ func With(ctx context.Context, cfg Config, check func(*Process) error) (err erro
 	if cfg.Executable == "" || cfg.StartupTimeout <= 0 || cfg.StopTimeout <= 0 || check == nil {
 		return ErrConfig
 	}
+	diagnostics, e := newDiagnosticSink(cfg.DiagnosticLines)
+	if e != nil {
+		return e
+	}
 	probePath := cfg.StartupProbePath
 	if probePath == "" {
 		probePath = "/readyz"
@@ -128,6 +136,9 @@ func With(ctx context.Context, cfg Config, check func(*Process) error) (err erro
 			return ErrConfig
 		}
 		cmd.Env = append(cmd.Env, k+"="+v)
+	}
+	if len(cfg.DiagnosticLines) != 0 {
+		cmd.Stderr = diagnostics
 	}
 	if cmd.Start() != nil {
 		return ErrStart
@@ -170,12 +181,7 @@ func With(ctx context.Context, cfg Config, check func(*Process) error) (err erro
 	for {
 		select {
 		case <-p.done:
-			// Exit code is safe metadata, child output and command are not.
-			code := -1
-			if p.cmd.ProcessState != nil {
-				code = p.cmd.ProcessState.ExitCode()
-			}
-			return errors.Join(ErrEarlyExit, errors.New("exit status "+strconv.Itoa(code)))
+			return earlyExit(p, diagnostics)
 		case <-readyCtx.Done():
 			return readyCtx.Err()
 		default:
@@ -187,7 +193,7 @@ func With(ctx context.Context, cfg Config, check func(*Process) error) (err erro
 			if resp.StatusCode == http.StatusOK {
 				select {
 				case <-p.done:
-					return ErrEarlyExit
+					return earlyExit(p, diagnostics)
 				default:
 				}
 				return check(p)

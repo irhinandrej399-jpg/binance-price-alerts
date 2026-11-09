@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -67,7 +68,7 @@ func TestMatcherSourceProcess(t *testing.T) {
 	env["MATCHER_GROUP"] = f.Prefix + "-source"
 	env["PRICES_BOOTSTRAP"] = string(b)
 	env["HEAD_INTERVAL"] = "50ms"
-	cfg := apiprocess.Config{Executable: binary, Env: env, StartupProbePath: "/readyz", StartupTimeout: 10 * time.Second, StopTimeout: 22 * time.Second}
+	cfg := apiprocess.Config{DiagnosticLines: startupDiagnosticLines(), Executable: binary, Env: env, StartupProbePath: "/readyz", StartupTimeout: 10 * time.Second, StopTimeout: 22 * time.Second}
 	wait := func(label string, ok func() bool) {
 		t.Helper()
 		for !ok() {
@@ -78,9 +79,9 @@ func TestMatcherSourceProcess(t *testing.T) {
 			}
 		}
 	}
-	failed := func(c apiprocess.Config) {
+	failed := func(c apiprocess.Config, category string) {
 		t.Helper()
-		if e := apiprocess.With(ctx, c, func(*apiprocess.Process) error { return errors.New("unexpected ready") }); !errors.Is(e, apiprocess.ErrEarlyExit) {
+		if e := apiprocess.With(ctx, c, func(*apiprocess.Process) error { return errors.New("unexpected ready") }); !errors.Is(e, apiprocess.ErrEarlyExit) || !strings.Contains(e.Error(), category) {
 			t.Fatal("expected terminal refusal", e)
 		}
 	}
@@ -98,7 +99,7 @@ func TestMatcherSourceProcess(t *testing.T) {
 	must(legacy.Accept(ctx, pricework.Input{Key: "legacy-completed-latest", ProjectionID: grant.ProjectionID, C: cp.C, Quote: f.SetPrice("LEGACYUSDT", "99", 11)}))
 	must(legacy.Complete(ctx, "legacy-completed-latest", nil, nil, nil))
 	must(fencing.New(sql).Revoke(ctx, grant))
-	failed(cfg) // Completed Latest without a cursor must still reject bootstrap.
+	failed(cfg, "matcher source: legacy state has no proven provenance") // Completed Latest without a cursor must still reject bootstrap.
 	var legacyCount int
 	must(sql.QueryRow(ctx, `SELECT count(*) FROM app.matcher_price_work WHERE scope=$1 AND work_key='legacy-completed-latest' AND state='completed'`, grant.Scope).Scan(&legacyCount))
 	if legacyCount != 1 {
@@ -190,14 +191,14 @@ func TestMatcherSourceProcess(t *testing.T) {
 	}))
 	pause.Release()
 	cfg.StartupProbePath = "/readyz"
-	failed(cfg) // old configured ID rejects the replacement metadata.
+	failed(cfg, kafkasource.ErrMismatch.Error()) // old configured ID rejects the replacement metadata.
 	replacement, _, e := kafkasource.Metadata(ctx, client, f.PricesSource.Topic)
 	must(e)
 	if replacement == f.PricesSource {
 		t.Fatal("topic ID unchanged")
 	}
 	env["PRICES_TOPIC_ID"] = hex.EncodeToString(replacement.TopicID[:])
-	failed(cfg) // valid new metadata still cannot rename durable SQL history.
+	failed(cfg, kafkasource.ErrMismatch.Error()) // valid new metadata still cannot rename durable SQL history.
 	var after string
 	must(sql.QueryRow(ctx, `SELECT jsonb_build_object(
  'work',(SELECT jsonb_agg(to_jsonb(w) ORDER BY work_key) FROM app.matcher_price_work w WHERE scope=$1),

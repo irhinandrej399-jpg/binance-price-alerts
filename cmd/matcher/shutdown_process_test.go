@@ -54,7 +54,7 @@ func testMatcherShutdown(t *testing.T, binary string) {
 	env["MATCHER_GROUP"] = f.Prefix + "-shutdown"
 	env["PRICES_BOOTSTRAP"] = string(b)
 	env["HEAD_INTERVAL"] = "50ms"
-	cfg := apiprocess.Config{Executable: binary, Env: env, StartupProbePath: "/healthz", StartupTimeout: 12 * time.Second, StopTimeout: 22 * time.Second}
+	cfg := apiprocess.Config{DiagnosticLines: startupDiagnosticLines(), Executable: binary, Env: env, StartupProbePath: "/healthz", StartupTimeout: 12 * time.Second, StopTimeout: 22 * time.Second}
 	pause := f.PauseDelivery(d.IDs[1])
 	defer pause.Release()
 	record, err := f.PublishPrice(ctx, f.SetPrice(d.Pair, "101", 10))

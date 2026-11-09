@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -25,6 +26,15 @@ func TestChild(t *testing.T) {
 	}
 	if file := os.Getenv("CHILD_PID_FILE"); file != "" {
 		_ = os.WriteFile(file, []byte(fmt.Sprint(os.Getpid())), 0600)
+	}
+	if mode == "diagnostic-exit" {
+		fmt.Fprintln(os.Stderr, "postgres://user:secret@localhost/db")
+		fmt.Fprintln(os.Stderr, strings.Repeat("x", 4096)+"safe startup category")
+		fmt.Fprintln(os.Stderr, "safe startup category with secret")
+		fmt.Fprint(os.Stderr, "safe startup ")
+		fmt.Fprintln(os.Stderr, "category")
+		fmt.Fprintln(os.Stderr, "safe startup category")
+		os.Exit(23)
 	}
 	if mode == "exit" {
 		os.Exit(23)

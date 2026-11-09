@@ -88,6 +88,12 @@ exit 0 без harness Kill, отзыв всех 16 grants, неизменные 
 SQL/broker Prefix сходятся. SIGINT после recovery также даёт exit 0. Реальная
 SQL row lock при отзыве authority проверяет exit 1 вместо скрытого успеха.
 
+При terminal отказе matcher сохраняет только фиксированную категорию компонента
+(например invalid snapshot, Latest unavailable, RPC/SQL failure), без сырых
+описаний зависимостей. Process fixture добавляет в ошибку раннего выхода лишь
+точные строки своего bounded allowlist; stdout и остальной stderr отбрасываются.
+Это помогает диагностике, но общий `component failure` ещё требует локализации.
+
 Без opt-in тест явно SKIP; при opt-in без конфигурации — FAIL. Это минимальный
 local runtime; полный E2E четырёх сервисов, production PKI и нагрузка остаются отдельно.
 
