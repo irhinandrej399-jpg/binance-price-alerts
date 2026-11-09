@@ -20,6 +20,7 @@ import (
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/auth"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/authlimit"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/bodylimit"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/clientip"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/deliveryrelay"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/health"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/api/login"
@@ -42,6 +43,7 @@ type config struct {
 	subscriptions, delivery        kafka.Config
 	rpc                            rpcConfig
 	webhookSecret                  string
+	trustedProxy                   string
 }
 
 var kafkaName = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
@@ -49,6 +51,10 @@ var kafkaName = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 func loadConfig(get func(string) string) (config, error) {
 	c := config{addr: get("HTTP_ADDR"), dsn: get("DATABASE_URL"), changes: get("SUBSCRIPTION_CHANGES_TOPIC"), deliveries: get("DELIVERY_REQUESTS_TOPIC")}
 	bad := errors.New("api: invalid configuration")
+	c.trustedProxy = get("TRUSTED_PROXY_IP")
+	if _, err := clientip.Handler(c.trustedProxy, http.NotFoundHandler()); err != nil {
+		return config{}, bad
+	}
 	c.webhookSecret = get("TELEGRAM_WEBHOOK_SECRET")
 	if _, err := telegramwebhook.Handler(c.webhookSecret, http.NotFoundHandler()); err != nil {
 		return config{}, bad
@@ -214,7 +220,11 @@ func run(ctx context.Context, c config) error {
 	mux.Handle("POST /v1/subscriptions", auth.New(sessions, subscription.NewHandler(pool, catalogrpc.NewClient(rpc.market), latest.NewClient(rpc.market), time.Now)))
 	mux.Handle("GET /v1/subscriptions", auth.New(sessions, subscription.NewListHandler(pool)))
 	mux.Handle("/v1/subscriptions/", auth.New(sessions, subscription.NewCancelHandler(pool)))
-	server := &http.Server{Handler: bodylimit.New(bodylimit.PublicLimit, mux), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second}
+	public, err := clientip.Handler(c.trustedProxy, mux)
+	if err != nil {
+		return err
+	}
+	server := &http.Server{Handler: bodylimit.New(bodylimit.PublicLimit, public), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second}
 	defer server.Close()
 	h.SetInitialized(true)
 	defer h.SetInitialized(false)

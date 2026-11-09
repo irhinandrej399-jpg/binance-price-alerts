@@ -35,7 +35,7 @@ python3 infra/deploy/deploy.py --env /srv/binance/deploy.env start
 возвращает ненулевой код. Автоматического rollback migrations/update нет.
 Сервисы используют настоящие `api.binance.com`, `stream.binance.com:9443` и
 `api.telegram.org`; `MODE=smoke` обычная CLI отвергает. Startup требует Binance
-catalog. Регистрация Telegram webhook и публичный HTTPS относятся к OPS-075.
+catalog. Публичный HTTPS и provisioning webhook описаны в [PUBLIC.md](PUBLIC.md).
 
 ```sh
 python3 infra/deploy/deploy.py --env /srv/binance/deploy.env status
@@ -74,7 +74,7 @@ checkpoints, повторный bootstrap и очистка broker запрещ�
 
 ## Доступ, секреты и диагностика
 
-Только API HTTP опубликован на `127.0.0.1:API_PORT`; SQL, Kafka, health остальных
+В базовом локальном профиле только API HTTP опубликован на `127.0.0.1:API_PORT`; SQL, Kafka, health остальных
 сервисов и все RPC остаются в Compose bridge. Kafka/SQL внутри доверенной сети
 используют plaintext, RPC — TLS 1.3/mTLS. Доступ к Docker daemon и каталогу DATA_DIR
 эквивалентен доступу к секретам. Хост и Docker должны быть доверенными.
@@ -93,8 +93,8 @@ Dev-PKI: сертификаты серверов имеют DNS SAN `services.in
 проверяемого имени у matcher для API и Latest); клиенты имеют различные
 `spiffe://deploy/api`, `/matcher`, `/notifications`. Разрешения задаёт существующая
 RPC policy. Листовые сертификаты действуют 7 дней, CA — 30 дней. `dev-pki` никогда
-не перезаписывает существующую PKI. Это локальная development выдача; внешняя
-выдача/ротация и публичный TLS — OPS-075. Истёкшие сертификаты требуют остановки,
+не перезаписывает существующую PKI. Это локальная development выдача; production
+выдача/ротация и публичный TLS описаны в [PUBLIC.md](PUBLIC.md). Истёкшие сертификаты требуют остановки,
 согласованной замены и restart; команду не считать автоматической ротацией.
 
 `check` проверяет формат настроек, обязательные private inputs и Compose config
@@ -114,6 +114,10 @@ Docker healthcheck проверяет `/healthz`, а не рыночное по�
 перезапуске daemon, startup errors повторяются с прежними IDs; при устойчивой ошибке
 оператор останавливает сервис. Логи ограничены 3×10 MiB на контейнер, Kafka retention
 не ограничен — обслуживание диска/cleaner относится к OPS-077.
+
+Публичный профиль — [PUBLIC.md](PUBLIC.md): PUBLIC_DOMAIN включает Caddy, удаляет
+API_PORT binding и закрывает служебные маршруты. Dev-PKI для публичного start
+отклоняется; нужны отдельные production credentials.
 
 ## Малый изолированный smoke
 
@@ -139,5 +143,5 @@ notifications для health указывает на этот общий namespac
 сценарий. После него удаляются только disposable containers/volumes/network/private
 files и проверяется cleanup. Build cache/образы остаются в Docker.
 
-Production ready и внешняя доставка этим smoke не подтверждаются: публичный HTTPS,
+Production ready и внешняя доставка этим smoke не подтверждаются: реальный домен/ACME,
 backup/restore, maintenance и E2E с настоящими Binance/своим Telegram ещё впереди.

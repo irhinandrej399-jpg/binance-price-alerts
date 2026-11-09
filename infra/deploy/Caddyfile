@@ -1,0 +1,41 @@
+{
+ admin off
+ persist_config off
+ # No request-bearing diagnostics (including webhook secrets or link codes).
+ log default {
+  level FATAL
+ }
+ servers {
+  protocols h1 h2
+  timeouts {
+   read_header 5s
+   read_body 10s
+   write 15s
+   idle 30s
+  }
+  max_header_size 16384
+ }
+}
+{$PUBLIC_DOMAIN} {
+ import /run/ingress/tls.caddy
+ @public {
+  path /v1/accounts /v1/sessions /v1/telegram/link-codes /v1/telegram/webhook /v1/subscriptions /v1/subscriptions/*
+ }
+ handle @public {
+  request_body {
+   max_size 65536
+  }
+  reverse_proxy api:8080 {
+   header_up X-Real-IP {http.request.remote.host}
+   header_up -Forwarded
+   header_up -X-Forwarded-For
+   transport http {
+    dial_timeout 2s
+    response_header_timeout 12s
+   }
+  }
+ }
+ handle {
+  respond 404
+ }
+}

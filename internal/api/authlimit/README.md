@@ -44,3 +44,7 @@ production использует только общее время БД. `Allow`
 временных границ, HTTP credentials, общей квоты, clock/timeout/cancel и
 безопасного отказа хранилища под race detector. Настоящий cmd/api:
 `python3 scripts/check_api_process.py --package ./cmd/api`.
+
+В публичном профиле OPS-075 внешний middleware clientip нормализует RemoteAddr
+только для одного TRUSTED_PROXY_IP. Сам limiter forwarding headers не читает.
+Контракт доверия — [PUBLIC.md](../../../infra/deploy/PUBLIC.md).

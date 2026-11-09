@@ -9,10 +9,10 @@
 
 ## Порядок работ
 
-В очереди 5 незавершённых практических задач выпуска. OPS-074 завершён:
-[постоянный Compose стенд](../../infra/deploy/README.md), четыре runtime,
-миграции/provisioning, private inputs и fake smoke с полным stop/start готовы.
-Следующий — OPS-075 (HTTPS/секреты). Затем backup/restore, базовое наблюдение,
+В очереди 4 незавершённых практических задачи выпуска. OPS-075 завершён:
+[публичный профиль](../../infra/deploy/PUBLIC.md), HTTPS ingress, trusted IP,
+секреты/ротация и локальный TLS smoke с полным stop/start проверены.
+Следующий — OPS-076 (backup/restore). Затем базовое наблюдение,
 малый restart smoke и реальный сценарий Binance → свой Telegram.
 Подробные критерии — в карточках.
 
@@ -278,7 +278,7 @@
 | [OPS-078](tickets/OPS-078.md) | Подготовить явный source provisioning постоянного стенда | OPS-062, OPS-066, E2E-005 | done |
 | [E2E-009](tickets/E2E-009.md) | Разрешить явный listener существующих vendor fake | E2E-008, E2E-004 | done |
 | [OPS-074](tickets/OPS-074.md) | Собрать постоянный запуск четырёх сервисов | DEC-011, MKT-019, E2E-002, OPS-078, E2E-009 | done |
-| [OPS-075](tickets/OPS-075.md) | Защитить публичный вход и секреты развёртывания | DEC-011, OPS-074, OPS-013, OPS-072 | planned |
+| [OPS-075](tickets/OPS-075.md) | Защитить публичный вход и секреты развёртывания | DEC-011, OPS-074, OPS-013, OPS-072 | done |
 | [OPS-076](tickets/OPS-076.md) | Подготовить резервную копию и восстановление стенда | DEC-011, OPS-074, OPS-014 | planned |
 | [OPS-077](tickets/OPS-077.md) | Оформить наблюдение и обслуживание постоянного стенда | DEC-011, OPS-074, OPS-014, OPS-002, OPS-003 | planned |
 | [E2E-007](tickets/E2E-007.md) | Проверить восстановление малого рабочего стенда | DEC-011, OPS-074, NTF-018, SUB-024, OPS-067 | planned |

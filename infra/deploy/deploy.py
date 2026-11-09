@@ -4,6 +4,7 @@ import argparse
 import base64
 import importlib.util
 import json
+import ipaddress
 import os
 from pathlib import Path
 import re
@@ -41,7 +42,7 @@ class Deployment:
             if not line.strip() or line.lstrip().startswith('#'):
                 continue
             key, value = line.split('=', 1)
-            if key in self.values or key not in {'DATA_DIR', 'PROJECT', 'PREFIX', 'API_PORT', 'MODE'}:
+            if key in self.values or key not in {'DATA_DIR', 'PROJECT', 'PREFIX', 'API_PORT', 'MODE', 'PUBLIC_DOMAIN', 'INGRESS_SUBNET'}:
                 raise ValueError('unknown or duplicate configuration key')
             self.values[key] = value
         v = self.values
@@ -68,6 +69,16 @@ class Deployment:
         if smoke:
             self.compose += ['-f', str(HERE / 'compose.smoke.yaml')]
             self.env['COMPOSE_PROFILES'] = 'smoke'
+        self.public = bool(v.get('PUBLIC_DOMAIN'))
+        if self.public:
+            domain = v['PUBLIC_DOMAIN']
+            if not re.fullmatch(r'(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,62}', domain):
+                raise ValueError('invalid public domain')
+            subnet = ipaddress.ip_network(v.get('INGRESS_SUBNET', '172.29.75.0/29'))
+            if subnet.version != 4 or subnet.prefixlen != 29 or not subnet.is_private:
+                raise ValueError('ingress needs a private IPv4 /29')
+            self.env.update(INGRESS_SUBNET=str(subnet), INGRESS_PROXY_IP=str(subnet[2]), INGRESS_API_IP=str(subnet[3]))
+            self.compose += ['-f', str(HERE / 'compose.ingress.yaml')]
         self.smoke = smoke
 
     def run(self, args, **kw):
@@ -85,8 +96,10 @@ class Deployment:
         self.data.mkdir(mode=0o700, parents=True, exist_ok=True)
         if self.data.stat().st_mode & 0o077:
             raise ValueError('DATA_DIR must be private (chmod 700)')
-        for sub in ('secrets', 'config', 'inventory', 'smoke'):
+        for sub in ('secrets', 'config', 'inventory', 'smoke', 'ingress', 'caddy'):
             (self.data / sub).mkdir(mode=0o700, exist_ok=True)
+        if self.public and not (self.data / 'ingress/tls.caddy').exists():
+            private(self.data / 'ingress/tls.caddy', '# Public ACME; no local CA or manual certificate.\n')
         names = ['postgres_password', 'webhook_secret', 'cluster_id']
         names += [f'{o}_{role}_password' for o in OWNERS for role in ('runtime', 'migration')]
         for name in names:
@@ -113,6 +126,12 @@ class Deployment:
         return f'postgres://{owner}_{role}:{password}@postgres:5432/{owner}?sslmode=disable'
 
     def base(self):
+        if self.public and not self.smoke:
+            subject = self.run(['openssl', 'x509', '-in', str(self.data / 'pki/api/ca.pem'), '-noout', '-subject'])
+            if (self.data / 'pki/dev-only').exists() or 'Binance local development CA' in subject:
+                raise ValueError('development PKI refused for public profile')
+            if (self.data / 'ingress/tls.caddy').read_text() != '# Public ACME; no local CA or manual certificate.\n':
+                raise ValueError('public profile requires automatic public TLS')
         self.env['CLUSTER_ID'] = self.secret('cluster_id')
         if not re.fullmatch(r'[A-Za-z0-9_-]{22}', self.env['CLUSTER_ID']):
             raise ValueError('invalid cluster id')
@@ -135,11 +154,14 @@ class Deployment:
         for name in APPS:
             (self.data / 'config' / name).mkdir(mode=0o700, exist_ok=True)
         self.dc('config', '--quiet')
+        if self.public:
+            self.dc('run', '--rm', '--no-deps', 'ingress', 'caddy', 'validate', '--config', '/etc/caddy/Caddyfile', '--adapter', 'caddyfile')
 
     def pki(self):
         """Local development CA only. Never overwrite an existing authority."""
         pki = self.data / 'pki'
         pki.mkdir(mode=0o700)
+        private(pki / 'dev-only', 'Development only\n')
         ca = pki / 'ca.pem'
         key = pki / 'ca.key'
         self.run(['openssl', 'req', '-x509', '-sha256', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:P-256', '-pkeyopt', 'ec_param_enc:named_curve',
@@ -181,6 +203,8 @@ class Deployment:
                               RAW_TRADE_URL='ws://smoke:18080/ws' if self.smoke else 'wss://stream.binance.com:9443/ws',
                               CATALOG_BASE_URL='http://smoke:18080' if self.smoke else 'https://api.binance.com')
             if name == 'api':
+                if self.public:
+                    values['TRUSTED_PROXY_IP'] = self.env['INGRESS_PROXY_IP']
                 values.update(TELEGRAM_WEBHOOK_SECRET=self.secret('webhook_secret'), MATCHER_SERVICE_URI=uri('matcher'),
                               NOTIFICATIONS_SERVICE_URI=uri('notifications'), ADMISSION_PERMIT_TTL='10s',
                               MARKET_RPC_ADDR='market-data:9080', MARKET_RPC_SERVER_NAME='services.internal',
@@ -226,6 +250,8 @@ class Deployment:
             self.dc('up', '-d', '--wait', '--wait-timeout', '70', name)
 
     def stop_apps(self):
+        if self.public:
+            self.dc('stop', 'ingress')
         # Compose stops a list concurrently; argument order is not a dependency
         # order. Join each runtime before stopping its SQL/Kafka dependencies.
         for name in reversed(APPS):
@@ -247,6 +273,8 @@ class Deployment:
         self.provision()
         print('Starting services', flush=True)
         self.start_apps()
+        if self.public:
+            self.dc('up', '-d', 'ingress')
         print('Started; market-data raw feed remains unconfirmed (/readyz=503)', flush=True)
 
 

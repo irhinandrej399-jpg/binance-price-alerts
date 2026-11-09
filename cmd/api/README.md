@@ -252,3 +252,10 @@ GOCACHE=/tmp/binance-go-build GOTOOLCHAIN=local python3 scripts/check_api_proces
 перепривязку, restart, 401/403, body limit, invalid secret startup и SIGTERM.
 Runner проверяет удаление контейнеров, сетей и volumes. Публичный Telegram
 не вызывается; полный E2E и нагрузочные лимиты сюда не входят.
+
+## Trusted ingress (OPS-075)
+
+TRUSTED_PROXY_IP необязателен; по умолчанию auth quota использует TCP RemoteAddr.
+Заданный literal IP разрешает X-Real-IP только от этого peer. Ingress обязан
+перезаписывать header TCP адресом клиента; цепочки forwarding не разбираются.
+Проверка конфигурации выполняется до startup. См. [публичный профиль](../../infra/deploy/PUBLIC.md).

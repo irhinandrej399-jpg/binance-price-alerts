@@ -4,8 +4,15 @@
 
 ## Активная работа
 
-- Активная реализация: нет. Осталось 5 planned; следующий — OPS-075.
-- Последний завершённый тикет: [OPS-074](backlog/tickets/OPS-074.md).
+- Активная реализация: нет. Осталось 4 planned; следующий — OPS-076.
+- Последний завершённый тикет: [OPS-075](backlog/tickets/OPS-075.md).
+  [Публичный профиль](../infra/deploy/PUBLIC.md): Caddy HTTPS/ACME, закрытые bindings
+  и служебные routes, один trusted proxy и независимая quota двух IP, инструкции
+  provisioning/ротации. Локальный TLS smoke с fake vendors подтвердил guards,
+  anti-spoofing и две доставки до/после полного stop/start, cleanup PASS.
+  Общий/целевой race, vet/build, Protobuf и backlog PASS. Публичный домен/renewal
+  ACME, внешнее развёртывание и setWebhook не выполнялись; финальная проверка E2E-006.
+- Предыдущий завершённый тикет: [OPS-074](backlog/tickets/OPS-074.md).
   [Постоянный Compose стенд](../infra/deploy/README.md): четыре образа/runtime,
   отдельные migrations/topics/source provisioning, private inputs и dev-PKI.
   Fake smoke подтвердил доставку и полный stop/start с прежними volumes,
@@ -193,17 +200,18 @@ p99 и дисковым резервам не являются условиям�
 
 ## Следующий рекомендуемый шаг
 
-`python3 scripts/backlog.py next` → [OPS-075](backlog/tickets/OPS-075.md), planned:
-публичный HTTPS/webhook, секреты и доверенный proxy. OPS-074 завершён;
-основа запуска — [infra/deploy](../infra/deploy/README.md).
+`python3 scripts/backlog.py next` → [OPS-076](backlog/tickets/OPS-076.md), planned:
+согласованный cold backup/restore. OPS-074/075 завершены; основа запуска —
+[infra/deploy](../infra/deploy/README.md), публичный профиль —
+[PUBLIC.md](../infra/deploy/PUBLIC.md). Private ACME state находится в DATA_DIR/caddy.
 
-Дальше отдельно: OPS-076 (backup/restore), OPS-077 (наблюдение/диск/maintenance),
+Дальше отдельно: OPS-077 (наблюдение/диск/maintenance),
 E2E-007 (малый restart smoke), E2E-006 (реальный Binance → свой Telegram).
 Хост/домен/credentials понадобятся при соответствующих задачах; эту ревизию
 не считать разрешением внешнего deployment или отправки сообщений.
 
 E2E-001 подтвердил только функциональный сценарий на fake. Реальные интеграции,
-публичный HTTPS и проверенный restore ещё не выполнены. Текущий market-data
+реальный домен/ACME и проверенный restore ещё не выполнены. Текущий market-data
 принимает общий поддерживаемый каталог ASCII USDT-пар; raw feed unconfirmed/readyz=503 сохраняется
 с предупреждением. SQL live не подставляется ради успешной проверки.
 Production ready не заявлять до фактического E2E-006. Ограничения Telegram

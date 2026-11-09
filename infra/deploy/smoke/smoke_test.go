@@ -2,6 +2,8 @@ package smoke_test
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -92,10 +94,21 @@ func TestCompose(t *testing.T) {
 	}
 	client := &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{Proxy: nil}}
 	defer client.CloseIdleConnections()
+	base := "http://api:8080"
+	if os.Getenv("DEPLOY_INGRESS") == "1" {
+		pem, e := os.ReadFile("/run/ingress/tls.pem")
+		must(e)
+		roots := x509.NewCertPool()
+		if !roots.AppendCertsFromPEM(pem) {
+			t.Fatal("bad ingress CA")
+		}
+		client.Transport = &http.Transport{Proxy: nil, TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}}
+		base = "https://alerts.test"
+	}
 	token := ""
 	request := func(method, path, body string, want int, dst any) {
 		t.Helper()
-		req, e := http.NewRequestWithContext(ctx, method, "http://api:8080"+path, strings.NewReader(body))
+		req, e := http.NewRequestWithContext(ctx, method, base+path, strings.NewReader(body))
 		must(e)
 		req.Header.Set("Content-Type", "application/json")
 		if token != "" {
@@ -131,6 +144,23 @@ func TestCompose(t *testing.T) {
 			return res.StatusCode == 200
 		})
 	}
+	waitIngress := func() {
+		if os.Getenv("DEPLOY_INGRESS") != "1" {
+			return
+		}
+		wait("TLS ingress", func() bool {
+			res, e := client.Get(base + "/healthz")
+			if e != nil {
+				return false
+			}
+			defer res.Body.Close()
+			return res.StatusCode == 404
+		})
+	}
+	if os.Getenv("DEPLOY_INGRESS") == "1" {
+		wait("host ingress checks", func() bool { _, e := os.Stat("/state/ingress_checked"); return e == nil })
+	}
+	waitIngress()
 	credentials := `{"email":"compose@example.test","password":"test-only-password"}`
 	request("POST", "/v1/accounts", credentials, 201, nil)
 	var session struct {
@@ -193,6 +223,7 @@ func TestCompose(t *testing.T) {
 	t.Log("registration/link/two subscriptions/real raw trade/confirmed delivery PASS")
 	signal("restart")
 	wait("host restart", func() bool { _, e := os.Stat("/state/restarted"); return e == nil })
+	waitIngress()
 	feed()
 	trade("101")
 	ids := list()
