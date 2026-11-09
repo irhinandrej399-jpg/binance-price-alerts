@@ -140,6 +140,21 @@ services:
       - ${DATA_DIR:?}/inventory:/state
     profiles: [tools]
     restart: "no"
+  kafka-cleaner:
+    <<: *app
+    image: ${PROJECT:?}-kafka-cleaner:local
+    build:
+      context: ../..
+      dockerfile: infra/deploy/Dockerfile
+      target: runtime
+      args: {SERVICE: kafka-cleaner}
+    entrypoint: [/app/service]
+    volumes:
+      - ${DATA_DIR:?}/cleaner:/state
+      - ${DATA_DIR:?}/config/cleaner:/inputs:ro
+      - ${DATA_DIR:?}/pki/cleaner:/run/pki:ro
+    profiles: [maintenance]
+    restart: "no"
   smoke:
     <<: *app
     image: ${PROJECT:?}-smoke:local

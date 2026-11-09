@@ -262,6 +262,9 @@ class Deployment:
             self.dc('up', '-d', '--wait', '--wait-timeout', '70', name)
 
     def stop_apps(self):
+        # Lifecycle changes require an explicit review of all historical and new
+        # consumer identities before the next scheduled deletion cycle.
+        (self.data / 'cleaner/enabled').unlink(missing_ok=True)
         if self.public:
             self.dc('stop', 'ingress')
         # Compose stops a list concurrently; argument order is not a dependency

@@ -35,6 +35,8 @@ jobs:
           fi
       - name: Check generated Protobuf code
         run: python3 scripts/generate_proto.py --check
+      - name: Check deployment warning signals and inventory guards
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s infra/deploy -p test_observe.py -v
       - name: Vet
         run: go vet ./...
       - name: Test with race detector

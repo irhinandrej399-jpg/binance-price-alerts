@@ -4,14 +4,21 @@
 
 ## Активная работа
 
-- Активная реализация: нет. Осталось 3 planned; следующий — OPS-077.
-- Последний завершённый тикет: [OPS-079](backlog/tickets/OPS-079.md).
+- Активная реализация: нет. Осталось 2 planned; следующий — E2E-007.
+- Последний завершённый тикет: [OPS-077](backlog/tickets/OPS-077.md).
+  [Эксплуатационный runbook](../infra/deploy/OPERATIONS.md), внутренние probes,
+  локальный WARNING, диск/логи и периодический safe cleaner. Compose smoke
+  подтвердил 33 inventory/init, unknown refusal без удаления, floor=1,
+  SQL/process warning, отсутствие секретов и две доставки через stop/start;
+  cleanup и штатные race/vet/build/Protobuf PASS. Расписания/пороги/PKI и явное
+  enable на целевом хосте остаются оператору; локальный journal требует просмотра.
+- Предыдущий завершённый тикет: [OPS-079](backlog/tickets/OPS-079.md).
   Внутренний GET /metrics notifications, один exporter и реальный admission
   histogram; SQL context deadline 2 с, безопасный 503, request/shutdown cancellation.
   Process/SQL/race подтвердил pending/blocked/reports, histogram, timeout/recovery
   и прежние restart/shutdown guards; общий race/vet/build/Protobuf PASS, cleanup PASS.
   [Внутренний scrape](../infra/deploy/README.md) не требует published port;
-  DB-wide gauges не суммировать по репликам. OPS-077 требует своей проверки.
+  DB-wide gauges не суммировать по репликам.
 - Предыдущий завершённый тикет: [OPS-076](backlog/tickets/OPS-076.md).
   [Cold backup/restore](../infra/deploy/BACKUP.md): два offline volumes + private
   inputs/inventory/cleaner floors, checksums, новый target и source binding verify.
@@ -213,27 +220,28 @@ p99 и дисковым резервам не являются условиям�
 
 ## Следующий рекомендуемый шаг
 
-`python3 scripts/backlog.py next` → [OPS-077](backlog/tickets/OPS-077.md), planned:
-наблюдение/диск/maintenance. Предпосылка [OPS-079](backlog/tickets/OPS-079.md)
-завершена: внутренние queue metrics и admission histogram доступны в notifications,
-SQL collection ограничена 2 с. Перед реализацией проверить оставшиеся критерии
-OPS-077 по фактическим инструментам и данным. Основа запуска — [infra/deploy](../infra/deploy/README.md),
-public ingress — [PUBLIC.md](../infra/deploy/PUBLIC.md), проверенный cold recovery —
-[BACKUP.md](../infra/deploy/BACKUP.md). Cleaner state-dir хранить под DATA_DIR/cleaner,
-private ACME state — DATA_DIR/caddy; snapshot включает оба.
+`python3 scripts/backlog.py next` → [E2E-007](backlog/tickets/E2E-007.md), planned:
+малый restart smoke с временной недоступностью Kafka и остановками matcher /
+notifications при pending работе. OPS-077 завершён; обычный полный stop/start
+в его smoke не заменяет эти отдельные fault-сценарии. Использовать существующие
+fixtures, перед ready проверить нужные границы остановки.
 
-Дальше отдельно: E2E-007 (малый restart smoke), E2E-006 (реальный Binance → свой
-Telegram). Внешние backup storage/keys/расписание на целевом хосте настроить по
-runbook: disposable drill не создаёт действующей offsite копии. Хост/домен/
-credentials понадобятся при соответствующих задачах; эту ревизию не считать
-разрешением внешнего deployment или отправки сообщений.
+Эксплуатация — [OPERATIONS.md](../infra/deploy/OPERATIONS.md), постоянный запуск —
+[README](../infra/deploy/README.md), public ingress — [PUBLIC.md](../infra/deploy/PUBLIC.md),
+cold recovery — [BACKUP.md](../infra/deploy/BACKUP.md). Cleaner state-dir под
+DATA_DIR/cleaner, ACME state под DATA_DIR/caddy; snapshot сохраняет оба.
+После start/update/restore явно сверять inventory и заново enable cleaner.
+Поддерживается одна fixed replica; unknown/offline consumer запрещает clean.
+Локальные units/пороги/журнал, production PKI, offsite storage/keys/расписание
+на целевом хосте ещё требуют настройки оператором по runbooks.
 
-E2E-001 подтвердил только функциональный сценарий на fake. Реальные интеграции,
-реальный домен/ACME ещё не проверены; cold restore на fake выполнен в OPS-076. Текущий market-data
-принимает общий поддерживаемый каталог ASCII USDT-пар; raw feed unconfirmed/readyz=503 сохраняется
-с предупреждением. SQL live не подставляется ради успешной проверки.
-Production ready не заявлять до фактического E2E-006. Ограничения Telegram
-после неоднозначного timeout и отсутствие backfill внешних сделок сохраняются.
+Затем отдельно E2E-006: реальный Binance → свой Telegram и проверка выпуска.
+Хост/домен/credentials нужны при соответствующей задаче; эта ревизия не разрешает
+внешний deployment или отправку сообщений. E2E-001 и deployment smoke используют
+fake. Raw feed остаётся unconfirmed/readyz=503 с предупреждением; SQL live ради
+успешной проверки не подставляется. Production ready до E2E-006 не заявлять.
+Ограничения Telegram после неоднозначного timeout и отсутствие backfill внешних
+сделок сохраняются. SQL cleaner не существует; опасный рост SQL не доказан.
 
 ## Проверка состояния
 

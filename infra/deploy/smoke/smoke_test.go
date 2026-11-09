@@ -224,7 +224,7 @@ func TestCompose(t *testing.T) {
 		return len(ids) == 1 && ids[0] == second && ids[0] != first
 	})
 	t.Log("registration/link/two subscriptions/real raw trade/confirmed delivery PASS")
-	if os.Getenv("DEPLOY_RESTORE") == "1" {
+	if os.Getenv("DEPLOY_RESTORE") == "1" || os.Getenv("DEPLOY_OPERATIONS") == "1" {
 		wait("saved source inventory", func() bool { _, e := os.Stat("/state/inventory.json"); return e == nil })
 		data, e := os.ReadFile("/state/inventory.json")
 		must(e)
@@ -259,10 +259,33 @@ func TestCompose(t *testing.T) {
 			return false
 		})
 		dir := fmt.Sprintf("/cleaner/delivery-p%d", partition)
+		if os.Getenv("DEPLOY_OPERATIONS") == "1" {
+			dir = "/cleaner/confirmed"
+		}
 		must(os.MkdirAll(dir, 0700))
 		store := cleaner.NewStore(dir)
 		engine := cleaner.New(store, cleaner.KafkaBroker{Client: broker}, reader)
 		must(engine.Init(ctx, cleaner.Inventory{Source: source, Partition: partition, Consumers: []cleaner.Consumer{consumer}}))
+		if os.Getenv("DEPLOY_OPERATIONS") == "1" {
+			unknown := consumer
+			unknown.Name, unknown.ID = "unknown", "not-provisioned"
+			unknownDir := "/cleaner/unknown"
+			must(os.MkdirAll(unknownDir, 0700))
+			blocked := cleaner.New(cleaner.NewStore(unknownDir), cleaner.KafkaBroker{Client: broker}, reader)
+			must(blocked.Init(ctx, cleaner.Inventory{Source: source, Partition: partition, Consumers: []cleaner.Consumer{consumer, unknown}}))
+			before, _, e := (cleaner.KafkaBroker{Client: broker}).Bounds(ctx, source, partition)
+			must(e)
+			result, e := blocked.Clean(ctx, 1)
+			if e == nil || result.Attempted || result.Status != "blocked" {
+				t.Fatal("unknown consumer did not block cleaner")
+			}
+			after, _, e := (cleaner.KafkaBroker{Client: broker}).Bounds(ctx, source, partition)
+			must(e)
+			if before != after {
+				t.Fatal("blocked cleaner changed retained start")
+			}
+			t.Log("unknown SQL consumer: no delete attempted, retained start unchanged PASS")
+		}
 		result, e := engine.Clean(ctx, 1)
 		must(e)
 		if result.Floor <= 0 {

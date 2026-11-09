@@ -113,7 +113,7 @@ Docker healthcheck проверяет `/healthz`, а не рыночное по�
 ради зелёного readiness. `restart: unless-stopped` сохраняет настройку при
 перезапуске daemon, startup errors повторяются с прежними IDs; при устойчивой ошибке
 оператор останавливает сервис. Логи ограничены 3×10 MiB на контейнер, Kafka retention
-не ограничен — обслуживание диска/cleaner относится к OPS-077.
+не ограничен — [наблюдение, диск и safe cleaner](OPERATIONS.md).
 
 Публичный профиль — [PUBLIC.md](PUBLIC.md): PUBLIC_DOMAIN включает Caddy, удаляет
 API_PORT binding и закрывает служебные маршруты. Dev-PKI для публичного start
@@ -149,7 +149,7 @@ Cold backup/restore: [состав, downtime, команды, offsite/распи
 набор остаётся offline, подтверждённая доставка не повторяется.
 
 Production ready и внешняя доставка этим smoke не подтверждаются: реальный домен/ACME,
-maintenance и E2E с настоящими Binance/своим Telegram ещё впереди.
+установка расписаний на целевом хосте и E2E с настоящими Binance/своим Telegram ещё впереди.
 
 ## Внутренние метрики notifications — OPS-079
 
@@ -181,4 +181,5 @@ PYCODE
 каждого процесса; его bucket/sum/count rates можно агрегировать по процессам.
 Полный контракт, bounded labels и ограничения drain rate — в
 [metrics README](../../internal/notifications/metrics/README.md).
-Мониторинг/alerts и обслуживание оформляются отдельно в OPS-077.
+Локальные предупреждения, пороги и периодическое обслуживание —
+[OPERATIONS.md](OPERATIONS.md).

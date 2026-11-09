@@ -12,8 +12,10 @@ import socket
 import tempfile
 import time
 
-from deploy import APPS, Deployment, private
+from deploy import APPS, OWNERS, Deployment, private
 from backup import snapshot, restore, verify, volume_names
+from observe import collect, observe, Limits, signals, sql
+from clean_cycle import cycle, plans, REGISTRIES, review
 
 
 def ingress_checks(d, folder):
@@ -64,8 +66,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--ingress', action='store_true')
     parser.add_argument('--restore', action='store_true', help='OPS-076 cold restore into independent volumes')
+    parser.add_argument('--operations', action='store_true', help='OPS-077 local observations and cleaner refusal')
     args = parser.parse_args()
-    if args.ingress and args.restore:
+    if sum((args.ingress, args.restore, args.operations)) > 1:
         parser.error('choose one smoke profile')
     os.umask(0o077)
     folder = Path(tempfile.mkdtemp(prefix='binance-ops074-'))
@@ -105,7 +108,7 @@ def main():
     try:
         d.prepare()
         d.pki()
-        if args.restore:
+        if args.restore or args.operations:
             # A test-only cleaner client, issued by this disposable CA.
             (folder / 'cleaner').mkdir(mode=0o700)
             certs = folder / 'smoke/cleaner-client'
@@ -114,7 +117,8 @@ def main():
             d.run(['openssl', 'req', '-new', '-sha256', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:P-256', '-pkeyopt', 'ec_param_enc:named_curve', '-nodes', '-keyout', str(certs / 'client.key'), '-out', str(certs / 'request.csr'), '-subj', '/CN=cleaner'])
             d.run(['openssl', 'x509', '-req', '-sha256', '-in', str(certs / 'request.csr'), '-CA', str(folder / 'pki/ca.pem'), '-CAkey', str(folder / 'pki/ca.key'), '-set_serial', '76', '-out', str(certs / 'client.pem'), '-days', '1', '-extfile', str(certs / 'extensions')])
             override = folder / 'backup-smoke.yaml'
-            private(override, 'services:\n  smoke:\n    environment: {DEPLOY_RESTORE: "1"}\n    volumes:\n      - '+str(folder)+'/cleaner:/cleaner\n')
+            flag = 'DEPLOY_RESTORE' if args.restore else 'DEPLOY_OPERATIONS'
+            private(override, 'services:\n  smoke:\n    environment: {'+flag+': "1"}\n    volumes:\n      - '+str(folder)+'/cleaner:/cleaner\n')
             d.compose += ['-f', str(override)]
         if args.ingress:
             d.run(['openssl', 'req', '-x509', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:P-256', '-pkeyopt', 'ec_param_enc:named_curve', '-sha256', '-nodes',
@@ -142,15 +146,101 @@ def main():
             raise RuntimeError('invalid service built')
         print('Building services and isolated smoke fixtures', flush=True)
         d.dc('build', *APPS, 'source-provision', 'smoke')
+        if args.operations:
+            d.dc('build', 'kafka-cleaner')
         d.dc('up', '-d', 'smoke')
         phase('fixtures')
         d.start()
-        if args.restore:
+        if args.restore or args.operations:
             private(folder / 'smoke/inventory.json', (folder / 'inventory/sources.json').read_text())
         if args.ingress:
             ingress_checks(d, folder)
             private(folder / 'smoke/ingress_checked', 'ok')
         phase('restart')
+        if args.operations:
+            import contextlib
+            import io
+            captured = io.StringIO()
+            # Real internal HTTP/SQL/volume probes; deliberately high free-space
+            # threshold triggers a local warning without filling a filesystem.
+            with contextlib.redirect_stdout(captured), contextlib.redirect_stderr(captured):
+                alerts = observe(d, Limits(free_percent=100, quote_age=0.001))
+            assert 'feed' in alerts and 'quote_age' in alerts
+            assert all('disk.'+name in alerts for name in ('host', 'postgres', 'kafka'))
+            assert 'WARNING disk.postgres' in captured.getvalue()
+            sample = json.loads((folder / 'observation.json').read_text())
+            assert sample['metrics'] is not None and sample['market'] is not None and sample['api'] is not None
+            assert sample['processes'] is True
+            for owner in OWNERS:
+                assert sql(d, owner, "SELECT json_build_object('bytes',pg_database_size(current_database()));")['bytes'] > 0
+            sizes = sql(d, 'api', """SELECT json_build_object(
+ 'snapshots',(SELECT count(*) FROM app.subscription_snapshots),
+ 'rows',(SELECT count(*) FROM app.subscription_snapshot_rows),
+ 'active_pins',(SELECT count(*) FROM app.subscription_replay_pins WHERE phase<>'abandoned' AND expires_at>clock_timestamp()),
+ 'expired_pins',(SELECT count(*) FROM app.subscription_replay_pins WHERE expires_at<=clock_timestamp()));""")
+            assert all(isinstance(v, int) for v in sizes.values())
+            runtime_logs = d.dc('logs', '--no-log-prefix', *APPS)
+            for secret in (folder / 'secrets').glob('*'):
+                assert secret.read_text().strip() not in captured.getvalue(), 'secret in observation'
+                assert secret.read_text().strip() not in runtime_logs, 'secret in runtime logs'
+            assert 'BEGIN PRIVATE KEY' not in runtime_logs
+            # The real CLI must refuse an unknown SQL consumer. The Go fixture
+            # additionally observes unchanged broker start and no attempted delete.
+            clients = folder / 'config/cleaner'
+            clients.mkdir(mode=0o700)
+            pki = folder / 'pki/cleaner'
+            pki.mkdir(mode=0o700)
+            for name, src in (('ca.pem', folder / 'pki/ca.pem'), ('client.pem', folder / 'smoke/cleaner-client/client.pem'),
+                              ('client.key', folder / 'smoke/cleaner-client/client.key')):
+                private(pki / name, src.read_text())
+            private(clients / 'clients.json', json.dumps({'brokers': ['kafka:9092'], 'endpoints': {'notifications': {
+                'Address': 'notifications:9080', 'ServerName': 'services.internal', 'CAFile': '/run/pki/ca.pem',
+                'CertFile': '/run/pki/client.pem', 'KeyFile': '/run/pki/client.key'}, 'matcher': {
+                'Address': 'matcher:9080', 'ServerName': 'services.internal', 'CAFile': '/run/pki/ca.pem',
+                'CertFile': '/run/pki/client.pem', 'KeyFile': '/run/pki/client.key'}}}))
+            try:
+                d.dc('run', '--rm', '--no-deps', 'kafka-cleaner', '-operation', 'clean', '-state-dir', '/state/unknown',
+                     '-config', '/inputs/clients.json', '-max-offsets', '1', '-timeout', '15s')
+            except RuntimeError:
+                pass
+            else:
+                raise RuntimeError('CLI accepted unknown consumer')
+            # Disabled/incomplete setup must never start a scheduled deletion.
+            for enable in (False, True):
+                if enable:
+                    private(folder / 'cleaner/enabled', 'reviewed test\n')
+                try:
+                    cycle(d)
+                except ValueError:
+                    pass
+                else:
+                    raise RuntimeError('incomplete cleaner setup accepted')
+            expected = plans(d)
+            # A fresh fixture has only the prospective deterministic identities.
+            # Different runtime hashes would produce extra members and fail here.
+            assert all(len(plan['consumers']) == 1 for plan in expected.values())
+            for name, plan in expected.items():
+                private(clients / (name + '.json'), json.dumps(plan))
+                (folder / 'cleaner' / name).mkdir(mode=0o700)
+            d.dc('run', '--rm', '--no-deps', '--entrypoint', '/bin/bash', 'kafka-cleaner', '-ec',
+                 'set -e; for name in "$@"; do /app/service -operation init -state-dir "/state/$name" -config /inputs/clients.json -inventory "/inputs/$name.json"; done',
+                 'init-reviewed', *REGISTRIES)
+            review(d, expected)
+            # Untraded partitions may have no SQL checkpoint yet: the complete
+            # cycle must either confirm all proofs or return a safe refusal.
+            try:
+                cycle(d)
+            except RuntimeError:
+                pass
+            # Known partition's confirmed prefix remains a working CLI noop.
+            d.dc('run', '--rm', '--no-deps', 'kafka-cleaner', '-operation', 'clean', '-state-dir', '/state/confirmed',
+                 '-config', '/inputs/clients.json', '-max-offsets', '1', '-timeout', '15s')
+            d.dc('stop', 'postgres')
+            failed = collect(d)
+            warnings = signals(failed, None, Limits())
+            assert 'process' in warnings and 'probe.market' in warnings and 'probe.api' in warnings and 'probe.metrics' in warnings
+            d.storage()
+            print('Real HTTP/SQL/volume probes; local warning; secret scan; DB/process failure; 33 inventories/CLI init/cycle; unknown and incomplete refusal PASS', flush=True)
         before = (folder / 'inventory/sources.json').read_bytes()
         volumes = json.loads(d.run(['docker', 'volume', 'ls', '--filter', 'label=com.docker.compose.project='+project, '--format', 'json']).replace('}\n{', '},{').join(('[', ']')))
         if len(volumes) != 2:
@@ -243,13 +333,13 @@ def main():
         # The controller generated BOTH project and credentials. No permanent
         # profile can be supplied here. Deletion is confined to this dataset.
         if recovery:
-            recovery.dc('--profile', 'smoke', '--profile', 'tools', 'down', '--volumes', '--remove-orphans')
+            recovery.dc('--profile', 'smoke', '--profile', 'tools', '--profile', 'maintenance', 'down', '--volumes', '--remove-orphans')
             if recovery.data.exists():
                 shutil.rmtree(recovery.data)
             for resource in ('ps', 'volume', 'network'):
                 command = ['docker', 'ps', '-aq'] if resource == 'ps' else ['docker', resource, 'ls', '-q']
                 assert not original.run(command + ['--filter', 'label=com.docker.compose.project='+project+'-copy']).strip()
-        original.dc('--profile', 'smoke', '--profile', 'tools', 'down', '--volumes', '--remove-orphans')
+        original.dc('--profile', 'smoke', '--profile', 'tools', '--profile', 'maintenance', 'down', '--volumes', '--remove-orphans')
         if d.run(['docker', 'ps', '-aq', '--filter', 'label=com.docker.compose.project='+project]).strip():
             raise RuntimeError('container cleanup incomplete')
         if d.run(['docker', 'volume', 'ls', '-q', '--filter', 'label=com.docker.compose.project='+project]).strip():

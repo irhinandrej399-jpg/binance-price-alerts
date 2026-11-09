@@ -9,14 +9,16 @@
 
 ## Порядок работ
 
-В очереди 3 незавершённых практических задачи выпуска. OPS-079 завершён:
+В очереди 2 незавершённые практические задачи выпуска. OPS-077 завершён:
+[наблюдение, локальные предупреждения и safe maintenance](../../infra/deploy/OPERATIONS.md),
+33 inventory/CLI init, unknown refusal и малый Compose smoke проверены. OPS-079:
 [внутренний /metrics notifications](../../internal/notifications/metrics/README.md),
 SQL deadline и admission histogram проверены process/SQL/race. OPS-076:
 [согласованный cold backup/restore](../../infra/deploy/BACKUP.md) с восстановлением
 в отдельные volumes, сохранённым cleaner floor и двумя доставками без повторов.
 OPS-075: [публичный профиль](../../infra/deploy/PUBLIC.md), HTTPS ingress и trusted IP.
-Следующий — OPS-077 (наблюдение/диск/maintenance), затем малый restart smoke
-и реальный сценарий Binance → свой Telegram.
+Следующий — E2E-007 (малый restart smoke), затем реальный сценарий
+Binance → свой Telegram (E2E-006).
 Подробные критерии — в карточках.
 
 22 бывшие planned задачи сняты с плана как `cancelled`: kernel/inode/temp peak,
@@ -284,7 +286,7 @@ OPS-075: [публичный профиль](../../infra/deploy/PUBLIC.md), HTTP
 | [OPS-075](tickets/OPS-075.md) | Защитить публичный вход и секреты развёртывания | DEC-011, OPS-074, OPS-013, OPS-072 | done |
 | [OPS-076](tickets/OPS-076.md) | Подготовить резервную копию и восстановление стенда | DEC-011, OPS-074, OPS-014 | done |
 | [OPS-079](tickets/OPS-079.md) | Подключить метрики очереди к процессу notifications | OPS-003, OPS-057, OPS-074 | done |
-| [OPS-077](tickets/OPS-077.md) | Оформить наблюдение и обслуживание постоянного стенда | DEC-011, OPS-074, OPS-014, OPS-002, OPS-003, OPS-079 | planned |
+| [OPS-077](tickets/OPS-077.md) | Оформить наблюдение и обслуживание постоянного стенда | DEC-011, OPS-074, OPS-014, OPS-002, OPS-003, OPS-079 | done |
 | [E2E-007](tickets/E2E-007.md) | Проверить восстановление малого рабочего стенда | DEC-011, OPS-074, NTF-018, SUB-024, OPS-067 | planned |
 | [E2E-006](tickets/E2E-006.md) | Подтвердить реальный запуск и доставку перед выпуском | DEC-011, OPS-075, OPS-076, OPS-077, E2E-007, NTF-017, NTF-019 | planned |
 
