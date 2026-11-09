@@ -17,8 +17,10 @@ SQL deadline и admission histogram проверены process/SQL/race. OPS-076
 [согласованный cold backup/restore](../../infra/deploy/BACKUP.md) с восстановлением
 в отдельные volumes, сохранённым cleaner floor и двумя доставками без повторов.
 OPS-075: [публичный профиль](../../infra/deploy/PUBLIC.md), HTTPS ingress и trusted IP.
-Следующий — E2E-007 (малый restart smoke), затем реальный сценарий
-Binance → свой Telegram (E2E-006).
+E2E-007 завершён: [малый restart smoke](../measurements/E2E-007/restart.md)
+проверил Kafka offline/outbox, matcher SIGKILL, notifications job/report recovery,
+текущую цену и отмену. Полный matcher runner выявил отдельный source startup FAIL:
+следующий — OPS-080, затем реальный Binance → свой Telegram (E2E-006).
 Подробные критерии — в карточках.
 
 22 бывшие planned задачи сняты с плана как `cancelled`: kernel/inode/temp peak,
@@ -287,8 +289,9 @@ Binance → свой Telegram (E2E-006).
 | [OPS-076](tickets/OPS-076.md) | Подготовить резервную копию и восстановление стенда | DEC-011, OPS-074, OPS-014 | done |
 | [OPS-079](tickets/OPS-079.md) | Подключить метрики очереди к процессу notifications | OPS-003, OPS-057, OPS-074 | done |
 | [OPS-077](tickets/OPS-077.md) | Оформить наблюдение и обслуживание постоянного стенда | DEC-011, OPS-074, OPS-014, OPS-002, OPS-003, OPS-079 | done |
-| [E2E-007](tickets/E2E-007.md) | Проверить восстановление малого рабочего стенда | DEC-011, OPS-074, NTF-018, SUB-024, OPS-067 | planned |
-| [E2E-006](tickets/E2E-006.md) | Подтвердить реальный запуск и доставку перед выпуском | DEC-011, OPS-075, OPS-076, OPS-077, E2E-007, NTF-017, NTF-019 | planned |
+| [E2E-007](tickets/E2E-007.md) | Проверить восстановление малого рабочего стенда | DEC-011, OPS-074, NTF-018, SUB-024, OPS-067 | done |
+| [OPS-080](tickets/OPS-080.md) | Исследовать ранний выход matcher в source process fixture | OPS-062, OPS-067 | planned |
+| [E2E-006](tickets/E2E-006.md) | Подтвердить реальный запуск и доставку перед выпуском | DEC-011, OPS-075, OPS-076, OPS-077, E2E-007, OPS-080, NTF-017, NTF-019 | planned |
 
 ## Снято с плана — исторический архив
 

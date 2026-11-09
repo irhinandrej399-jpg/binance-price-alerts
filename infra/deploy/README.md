@@ -148,6 +148,13 @@ Cold backup/restore: [состав, downtime, команды, offsite/распи
 добавляет реальный cleaner floor и восстановление в два новых volumes; прежний
 набор остаётся offline, подтверждённая доставка не повторяется.
 
+Малый restart smoke E2E-007: `python3 infra/deploy/smoke.py --broker-restart`
+добавляет остановку Kafka, приём котировки в durable SQL outbox при offline
+broker и проверку публикации того же event после возврата. SIGKILL matcher с
+частично выполненной работой и notifications с pending job/report проверяются
+готовыми process fixtures. Команды, границы и фактический результат — в
+[отчёте E2E-007](../../docs/measurements/E2E-007/restart.md).
+
 Production ready и внешняя доставка этим smoke не подтверждаются: реальный домен/ACME,
 установка расписаний на целевом хосте и E2E с настоящими Binance/своим Telegram ещё впереди.
 

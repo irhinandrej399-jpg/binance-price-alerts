@@ -67,8 +67,9 @@ def main():
     parser.add_argument('--ingress', action='store_true')
     parser.add_argument('--restore', action='store_true', help='OPS-076 cold restore into independent volumes')
     parser.add_argument('--operations', action='store_true', help='OPS-077 local observations and cleaner refusal')
+    parser.add_argument('--broker-restart', action='store_true', help='E2E-007 accept a quote while Kafka is offline, then drain it')
     args = parser.parse_args()
-    if sum((args.ingress, args.restore, args.operations)) > 1:
+    if sum((args.ingress, args.restore, args.operations, args.broker_restart)) > 1:
         parser.error('choose one smoke profile')
     os.umask(0o077)
     folder = Path(tempfile.mkdtemp(prefix='binance-ops074-'))
@@ -105,9 +106,28 @@ def main():
                 raise RuntimeError('deadline waiting for ' + name)
             time.sleep(0.5)
 
+    def finish():
+        phase('done')
+        # Include fake Close and handler joins, not just the last assertion.
+        deadline = time.monotonic() + 15
+        while original.dc('ps', '--status', 'running', '--quiet', 'smoke').strip():
+            if time.monotonic() > deadline:
+                raise RuntimeError('smoke did not exit')
+            time.sleep(0.2)
+        cid = original.dc('ps', '--all', '--quiet', 'smoke').strip()
+        if d.run(['docker', 'inspect', '--format', '{{.State.ExitCode}}', cid]).strip() != '0':
+            raise RuntimeError('smoke failure')
+        print(original.dc('logs', '--no-log-prefix', 'smoke'), end='')
+        print('ClusterID/TopicIDs/transactional IDs/inventory and two volumes preserved PASS', flush=True)
+        return 0
+
     try:
         d.prepare()
         d.pki()
+        if args.broker_restart:
+            override = folder / 'restart-smoke.yaml'
+            private(override, 'services:\n  smoke:\n    environment: {DEPLOY_BROKER_RESTART: "1"}\n')
+            d.compose += ['-f', str(override)]
         if args.restore or args.operations:
             # A test-only cleaner client, issued by this disposable CA.
             (folder / 'cleaner').mkdir(mode=0o700)
@@ -151,6 +171,33 @@ def main():
         d.dc('up', '-d', 'smoke')
         phase('fixtures')
         d.start()
+        if args.broker_restart:
+            phase('broker_stop')
+            before_broker = (folder / 'inventory/sources.json').read_bytes()
+            d.dc('stop', '--timeout', '10', 'kafka', timeout=25)
+            private(folder / 'smoke/broker_stopped', 'ok')
+            phase('broker_queued', seconds=25)
+            queued = sql(d, 'market_data', "SELECT json_build_object('event_id',event_id,'position',position,'published',published) FROM app.price_outbox ORDER BY position DESC LIMIT 1;")
+            assert queued['published'] is False, 'offline quote was not durably pending'
+            print('Kafka offline: accepted outbox ' + json.dumps(queued, sort_keys=True), flush=True)
+            d.storage()
+            deadline = time.monotonic() + 70
+            while True:
+                # position is a database integer, never scenario-supplied SQL.
+                progress = sql(d, 'market_data', "SELECT json_build_object('published',published,'event_id',event_id) FROM app.price_outbox WHERE position="+str(int(queued['position']))+';')
+                if progress['published']:
+                    assert progress['event_id'] == queued['event_id']
+                    break
+                if time.monotonic() >= deadline:
+                    raise RuntimeError('Kafka recovery outbox drain deadline exceeded')
+                time.sleep(0.2)
+            d.provision('verify')
+            assert before_broker == (folder / 'inventory/sources.json').read_bytes()
+            print('Kafka returned: same event published; source inventory verified unchanged PASS', flush=True)
+            private(folder / 'smoke/broker_recovered', 'ok')
+            # This profile has one fault: Kafka. Full deployment stop/start is
+            # the separate default OPS-074 scenario, not another E2E-007 fault.
+            return finish()
         if args.restore or args.operations:
             private(folder / 'smoke/inventory.json', (folder / 'inventory/sources.json').read_text())
         if args.ingress:
@@ -308,19 +355,7 @@ def main():
         if before != (d.data / 'inventory/sources.json').read_bytes():
             raise RuntimeError('inventory changed on restart')
         private(folder / 'smoke/restarted', 'ok')
-        phase('done')
-        # Wait for the test to exit, so fake Close and handler joins are included.
-        deadline = time.monotonic() + 15
-        while original.dc('ps', '--status', 'running', '--quiet', 'smoke').strip():
-            if time.monotonic() > deadline:
-                raise RuntimeError('smoke did not exit')
-            time.sleep(0.2)
-        cid = original.dc('ps', '--all', '--quiet', 'smoke').strip()
-        if d.run(['docker', 'inspect', '--format', '{{.State.ExitCode}}', cid]).strip() != '0':
-            raise RuntimeError('smoke failure')
-        print(original.dc('logs', '--no-log-prefix', 'smoke'), end='')
-        print('ClusterID/TopicIDs/transactional IDs/inventory and two volumes preserved PASS', flush=True)
-        return 0
+        return finish()
     except BaseException:
         # Only this generated test dataset is eligible for diagnostics. Redact
         # even its random credentials before printing application/test logs.

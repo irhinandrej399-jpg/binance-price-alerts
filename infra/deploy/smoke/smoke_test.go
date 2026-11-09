@@ -224,6 +224,28 @@ func TestCompose(t *testing.T) {
 		return len(ids) == 1 && ids[0] == second && ids[0] != first
 	})
 	t.Log("registration/link/two subscriptions/real raw trade/confirmed delivery PASS")
+	if os.Getenv("DEPLOY_BROKER_RESTART") == "1" {
+		signal("broker_stop")
+		wait("Kafka stopped", func() bool { _, e := os.Stat("/state/broker_stopped"); return e == nil })
+		// Existing second subscription remains below its threshold. This quote
+		// must be accepted by market-data SQL while its publisher has no broker.
+		trade("102")
+		signal("broker_queued")
+		wait("Kafka recovered and outbox drained", func() bool { _, e := os.Stat("/state/broker_recovered"); return e == nil })
+		ids := list()
+		if len(ids) != 1 || ids[0] != second || len(tg.Requests()) != 1 {
+			t.Fatal("Kafka recovery lost subscription or resent confirmed success")
+		}
+		t.Logf("Kafka restart retained subscription=%s; delivered=%s not resent", second, first)
+		deliver("201", "200", 502)
+		wait("delivery after Kafka restart", func() bool { return len(list()) == 0 })
+		if len(tg.Requests()) != 2 {
+			t.Fatal("Kafka restart duplicated Telegram delivery")
+		}
+		t.Log("Kafka restart: accepted work resumed; two confirmed deliveries, no duplicates PASS")
+		signal("done")
+		return
+	}
 	if os.Getenv("DEPLOY_RESTORE") == "1" || os.Getenv("DEPLOY_OPERATIONS") == "1" {
 		wait("saved source inventory", func() bool { _, e := os.Stat("/state/inventory.json"); return e == nil })
 		data, e := os.ReadFile("/state/inventory.json")

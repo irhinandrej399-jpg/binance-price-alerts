@@ -4,8 +4,14 @@
 
 ## Активная работа
 
-- Активная реализация: нет. Осталось 2 planned; следующий — E2E-007.
-- Последний завершённый тикет: [OPS-077](backlog/tickets/OPS-077.md).
+- Активная реализация: нет. Осталось 2 planned; следующий — OPS-080.
+- Последний завершённый тикет: [E2E-007](backlog/tickets/E2E-007.md).
+  [Малый restart smoke](measurements/E2E-007/restart.md): Kafka offline/outbox/drain,
+  matcher SIGKILL с частичной работой и новой ценой, notifications pending job/report,
+  E2E цена/отмена/две доставки без дублей. Целевые сценарии и cleanup PASS;
+  общий race/vet/build/Protobuf PASS. Полный matcher runner exit 1 из-за отдельного
+  раннего source startup — [OPS-080](backlog/tickets/OPS-080.md), перед E2E-006.
+- Предыдущий завершённый тикет: [OPS-077](backlog/tickets/OPS-077.md).
   [Эксплуатационный runbook](../infra/deploy/OPERATIONS.md), внутренние probes,
   локальный WARNING, диск/логи и периодический safe cleaner. Compose smoke
   подтвердил 33 inventory/init, unknown refusal без удаления, floor=1,
@@ -220,11 +226,11 @@ p99 и дисковым резервам не являются условиям�
 
 ## Следующий рекомендуемый шаг
 
-`python3 scripts/backlog.py next` → [E2E-007](backlog/tickets/E2E-007.md), planned:
-малый restart smoke с временной недоступностью Kafka и остановками matcher /
-notifications при pending работе. OPS-077 завершён; обычный полный stop/start
-в его smoke не заменяет эти отдельные fault-сценарии. Использовать существующие
-fixtures, перед ready проверить нужные границы остановки.
+`python3 scripts/backlog.py next` → [OPS-080](backlog/tickets/OPS-080.md), planned:
+локализовать ранний exit 1 первого startup в TestMatcherSourceProcess после
+успешного recovery TestMatcherProcess. Полный matcher runner E2E-007 не прошёл;
+сам restart smoke и остальные целевые/CI проверки прошли. Получить безопасную
+причину child exit, проверить порядок fixture/окружение и сохранить source guards.
 
 Эксплуатация — [OPERATIONS.md](../infra/deploy/OPERATIONS.md), постоянный запуск —
 [README](../infra/deploy/README.md), public ingress — [PUBLIC.md](../infra/deploy/PUBLIC.md),

@@ -328,6 +328,7 @@ func TestNotificationsProcess(t *testing.T) {
 		})
 		proof(record.Partition, record.Offset+1)
 		crashEvidence = observe()
+		t.Logf("restart smoke pending: trigger=%s state=%s attempts=%d next=%d", trigger, crashEvidence.State, crashEvidence.Attempts, record.Offset+1)
 		kill(p)
 		return nil
 	}))
@@ -406,6 +407,7 @@ func TestNotificationsProcess(t *testing.T) {
 		}
 		scrape(p, 200, `delivery_pending_reports{kind="success"} 1`, "delivery_backlog 2")
 		crashEvidence = o
+		t.Logf("restart smoke success: trigger=%s attempts=%v successes=%d pending_reports=%d message_id=88; API=delivered", trigger, o.AttemptIDs, o.Successes, o.PendingReports)
 		kill(p)
 		return nil
 	}))
@@ -418,6 +420,7 @@ func TestNotificationsProcess(t *testing.T) {
 		}
 		noHTTP()
 		var n int
+		t.Logf("restart smoke report recovered: trigger=%s attempts=%v pending_reports=%d; no new HTTP", trigger, o.AttemptIDs, o.PendingReports)
 		must(reader.QueryRow(ctx, `SELECT count(*) FROM app.delivery_jobs WHERE trigger_id=$1`, trigger).Scan(&n))
 		if n != 1 {
 			t.Fatal("job duplicated")

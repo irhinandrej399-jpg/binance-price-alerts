@@ -1,0 +1,41 @@
+=== compose-first ===
+Kafka offline: accepted outbox {"event_id": "b9ae43679d3e22091d6349cfd9a1ee3f", "position": 5, "published": false}
+Kafka returned: same event published; source inventory verified unchanged PASS
+    smoke_test.go:239: Kafka restart retained subscription=c3054737-bf1f-49dc-a971-5783a1e8f5c2; delivered=9f560d93-9ced-42e5-bd74-9ebfae9e226f not resent
+    smoke_test.go:311: host restart deadline exceeded
+--- FAIL: TestCompose (216.81s)
+Disposable containers/volumes/network/private files cleanup PASS
+=== compose-final ===
+Kafka offline: accepted outbox {"event_id": "c51fb7ed008645b59c8df1521d71ff81", "position": 5, "published": false}
+Kafka returned: same event published; source inventory verified unchanged PASS
+    smoke_test.go:239: Kafka restart retained subscription=d628ba6e-35cb-404f-9cb7-d071da7866f3; delivered=f7eca770-abaf-4cf7-9062-3d9a2740c219 not resent
+    smoke_test.go:245: Kafka restart: accepted work resumed; two confirmed deliveries, no duplicates PASS
+--- PASS: TestCompose (93.14s)
+Disposable containers/volumes/network/private files cleanup PASS
+=== matcher ===
+    process_test.go:191: restart smoke: scope=partition:8c49153d05a8341220a751cc54b3841da91808b4163415c2fa772c2604ae0bb1 work=view:f8bd182f6cedf70fbb53f71419b2ec0d2020cf72fe0d1bea69e3668c12e99758 trigger=f62d1503-6095-4f80-8c7b-f3fbb33cdca5 completed=1/3 state=pending price_offset=0 change_next=6
+    process_test.go:246: restart smoke recovered: work=view:f8bd182f6cedf70fbb53f71419b2ec0d2020cf72fe0d1bea69e3668c12e99758 trigger=f62d1503-6095-4f80-8c7b-f3fbb33cdca5 state=superseded SQL/broker_next=1; Latest=99
+--- PASS: TestMatcherProcess (94.88s)
+    source_process_test.go:90: process harness: exited before readiness
+        exit status 1
+--- FAIL: TestMatcherSourceProcess (19.76s)
+Cleanup verified: PID registry and temporary credentials
+Cleanup verified: binance-process-kafka-1f665b3b34f648a2
+Cleanup verified: binance-process-pg-1f665b3b34f648a2
+=== notifications ===
+    process_test.go:331: restart smoke pending: trigger=b859759f-dc6a-4f43-94df-73549e6b1281 state=leased attempts=0 next=3
+    process_test.go:410: restart smoke success: trigger=b859759f-dc6a-4f43-94df-73549e6b1281 attempts=[1dad25e1-a08f-49db-9b72-32edf8f86019 c623bdc5-b008-4a65-9a90-6fedf5949ec2 f2ae3f8d-63fa-488a-a366-61394e84ffed] successes=1 pending_reports=1 message_id=88; API=delivered
+    process_test.go:423: restart smoke report recovered: trigger=b859759f-dc6a-4f43-94df-73549e6b1281 attempts=[1dad25e1-a08f-49db-9b72-32edf8f86019 c623bdc5-b008-4a65-9a90-6fedf5949ec2 f2ae3f8d-63fa-488a-a366-61394e84ffed] pending_reports=0; no new HTTP
+--- PASS: TestNotificationsProcess (161.09s)
+Cleanup verified: PID registry and temporary credentials
+Cleanup verified: binance-process-kafka-273faeeca1ef4fcb
+Cleanup verified: binance-process-pg-273faeeca1ef4fcb
+PASS notifications: selected process checks passed; resources removed
+=== journey ===
+    scenario_test.go:303: 101 -> 99: no HTTP, slot reserved, job parked; 102: same workflow, one confirmed send
+    scenario_test.go:366: cancel before admission: real intake/claim, zero attempts/HTTP; two total confirmed deliveries
+--- PASS: TestUserJourney (33.74s)
+Cleanup verified: PID registry and temporary credentials
+Cleanup verified: binance-process-kafka-bf2adc3d87bc4cf5
+Cleanup verified: binance-process-pg-bf2adc3d87bc4cf5
+PASS E2E environment: selected process checks passed; resources removed

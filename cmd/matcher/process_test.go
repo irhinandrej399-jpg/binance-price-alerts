@@ -188,6 +188,7 @@ func TestMatcherProcess(t *testing.T) {
 		}
 		changesOffset = *out.NextOffset
 		// No signal handler or graceful assertion: kill the actual executable.
+		t.Logf("restart smoke: scope=%s work=%s trigger=%s completed=%d/%d state=%s price_offset=%d change_next=%d", grant.Scope, key, trigger, partial.Completed, len(partial.Entries), partial.State, record.Offset, changesOffset)
 		must(syscall.Kill(-p.PID(), syscall.SIGKILL))
 		select {
 		case <-p.Done():
@@ -242,6 +243,7 @@ func TestMatcherProcess(t *testing.T) {
 		if len(keys) != 0 {
 			t.Fatal("pending remains")
 		}
+		t.Logf("restart smoke recovered: work=%s trigger=%s state=%s SQL/broker_next=%d; Latest=99", key, trigger, work.State, record.Offset+1)
 		for i, id := range d.IDs {
 			var n int
 			must(api.QueryRow(ctx, `SELECT count(*) FROM app.delivery_outbox WHERE subscription_id=$1`, id).Scan(&n))
