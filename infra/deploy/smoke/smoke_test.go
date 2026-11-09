@@ -14,10 +14,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/cleaner"
 	pb "github.com/irhinandrej399-jpg/binance-price-alerts/internal/gen/marketdata/v1"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/kafkasource"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/platform/serviceauth"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/binancefake"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/testutil/telegramfake"
+	"github.com/twmb/franz-go/pkg/kgo"
 	"google.golang.org/grpc"
 )
 
@@ -221,6 +224,52 @@ func TestCompose(t *testing.T) {
 		return len(ids) == 1 && ids[0] == second && ids[0] != first
 	})
 	t.Log("registration/link/two subscriptions/real raw trade/confirmed delivery PASS")
+	if os.Getenv("DEPLOY_RESTORE") == "1" {
+		wait("saved source inventory", func() bool { _, e := os.Stat("/state/inventory.json"); return e == nil })
+		data, e := os.ReadFile("/state/inventory.json")
+		must(e)
+		var inventory struct {
+			Sources map[string]kafkasource.Identity
+			Binding struct{ ConsumerID, Generation string }
+		}
+		must(json.Unmarshal(data, &inventory))
+		reader, e := cleaner.NewRPCReader(map[string]cleaner.Endpoint{"notifications": {
+			Address: "notifications:9080", ServerName: "services.internal", CAFile: "/run/pki/ca.pem",
+			CertFile: "/state/cleaner-client/client.pem", KeyFile: "/state/cleaner-client/client.key",
+		}})
+		must(e)
+		defer reader.Close()
+		broker, e := kgo.NewClient(kgo.SeedBrokers("kafka:9092"))
+		must(e)
+		defer broker.Close()
+		source := inventory.Sources["delivery-requests"]
+		consumer := cleaner.Consumer{Name: "notifications", Kind: "notifications", ID: inventory.Binding.ConsumerID,
+			Generation: inventory.Binding.Generation, Endpoint: "notifications"}
+		var partition int32
+		wait("source-bound SQL progress", func() bool {
+			for p := int32(0); p < 16; p++ {
+				c, done := context.WithTimeout(ctx, time.Second)
+				next, err := reader.Next(c, consumer, source, p)
+				done()
+				if err == nil && next > 0 {
+					partition = p
+					return true
+				}
+			}
+			return false
+		})
+		dir := fmt.Sprintf("/cleaner/delivery-p%d", partition)
+		must(os.MkdirAll(dir, 0700))
+		store := cleaner.NewStore(dir)
+		engine := cleaner.New(store, cleaner.KafkaBroker{Client: broker}, reader)
+		must(engine.Init(ctx, cleaner.Inventory{Source: source, Partition: partition, Consumers: []cleaner.Consumer{consumer}}))
+		result, e := engine.Clean(ctx, 1)
+		must(e)
+		if result.Floor <= 0 {
+			t.Fatal("cleaner did not persist nonzero deletion floor")
+		}
+		t.Log("real cleaner deleted a confirmed prefix with source-bound SQL proof; durable floor", result.Floor)
+	}
 	signal("restart")
 	wait("host restart", func() bool { _, e := os.Stat("/state/restarted"); return e == nil })
 	waitIngress()
@@ -230,6 +279,9 @@ func TestCompose(t *testing.T) {
 	if len(ids) != 1 || ids[0] != second {
 		t.Fatal("subscription/session lost after restart")
 	}
+	// Password login and the old session both survive the physical restore.
+	request("POST", "/v1/sessions", credentials, 200, &session)
+	token = session.Token
 	deliver("201", "200", 502)
 	wait("completion after restart", func() bool { return len(list()) == 0 })
 	if len(tg.Requests()) != 2 {

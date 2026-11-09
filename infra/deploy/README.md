@@ -143,5 +143,10 @@ notifications для health указывает на этот общий namespac
 сценарий. После него удаляются только disposable containers/volumes/network/private
 files и проверяется cleanup. Build cache/образы остаются в Docker.
 
+Cold backup/restore: [состав, downtime, команды, offsite/расписание и recovery](BACKUP.md).
+Отдельный `python3 infra/deploy/smoke.py --restore` использует тот же journey,
+добавляет реальный cleaner floor и восстановление в два новых volumes; прежний
+набор остаётся offline, подтверждённая доставка не повторяется.
+
 Production ready и внешняя доставка этим smoke не подтверждаются: реальный домен/ACME,
-backup/restore, maintenance и E2E с настоящими Binance/своим Telegram ещё впереди.
+maintenance и E2E с настоящими Binance/своим Telegram ещё впереди.

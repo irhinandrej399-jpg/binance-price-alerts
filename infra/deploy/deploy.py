@@ -12,11 +12,23 @@ import secrets
 import shlex
 import subprocess
 import sys
+import fcntl
+from contextlib import contextmanager
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 APPS = ('market-data', 'api', 'matcher', 'notifications')
 OWNERS = ('api', 'market_data', 'matcher', 'notifications')
+
+
+@contextmanager
+def maintenance(data):
+    """Serialize operator lifecycle and backup on this host; never unlink lock."""
+    data.mkdir(mode=0o700, parents=True, exist_ok=True)
+    fd = os.open(data / 'maintenance.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, 'w') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        yield
 
 
 def private(path, value):
@@ -286,33 +298,39 @@ def main():
     args = parser.parse_args()
     try:
         d = Deployment(args.env)
-        if args.command == 'prepare':
-            d.prepare()
-            print('Prepared private database credentials; supply secrets/bot_token, then dev-pki')
-        elif args.command == 'dev-pki':
-            d.pki()
-            print('Issued local development certificates (7 days); CA key remains outside service mounts')
-        elif args.command in ('start', 'update'):
-            d.start()
-        elif args.command == 'check':
-            d.base()
-            print('Configuration and required private files OK')
-        elif args.command == 'resume':
-            d.base()
-            d.stop_apps()
-            d.storage()
-            d.provision('resume')
-            print('Resumed provisioning; services remain stopped, run start')
-        elif args.command == 'stop':
-            d.stop()
-            print('Stopped; volumes and inventory preserved')
-        else:
-            # Compose interpolation still needs cluster ID for stop/status.
-            print(d.dc('ps', '--all'), end='')
-        return 0
+        # Hold through the complete operation, including stop/build/start.
+        with maintenance(d.data):
+            return operate(d, args.command)
     except (OSError, ValueError, KeyError, RuntimeError):
         print('Deployment refused: check configuration/private inputs, Docker, build and service startup; preserve inventory and volumes. No secret-bearing diagnostics printed.', file=sys.stderr)
         return 1
+
+
+def operate(d, command):
+    if command == 'prepare':
+        d.prepare()
+        print('Prepared private database credentials; supply secrets/bot_token, then dev-pki')
+    elif command == 'dev-pki':
+        d.pki()
+        print('Issued local development certificates (7 days); CA key remains outside service mounts')
+    elif command in ('start', 'update'):
+        d.start()
+    elif command == 'check':
+        d.base()
+        print('Configuration and required private files OK')
+    elif command == 'resume':
+        d.base()
+        d.stop_apps()
+        d.storage()
+        d.provision('resume')
+        print('Resumed provisioning; services remain stopped, run start')
+    elif command == 'stop':
+        d.stop()
+        print('Stopped; volumes and inventory preserved')
+    else:
+        # Compose interpolation still needs cluster ID for stop/status.
+        print(d.dc('ps', '--all'), end='')
+    return 0
 
 
 if __name__ == '__main__':

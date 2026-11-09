@@ -13,6 +13,7 @@ import tempfile
 import time
 
 from deploy import APPS, Deployment, private
+from backup import snapshot, restore, verify, volume_names
 
 
 def ingress_checks(d, folder):
@@ -62,7 +63,10 @@ def ingress_checks(d, folder):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--ingress', action='store_true')
+    parser.add_argument('--restore', action='store_true', help='OPS-076 cold restore into independent volumes')
     args = parser.parse_args()
+    if args.ingress and args.restore:
+        parser.error('choose one smoke profile')
     os.umask(0o077)
     folder = Path(tempfile.mkdtemp(prefix='binance-ops074-'))
     project = 'binance-ops074-' + secrets.token_hex(4)
@@ -75,6 +79,9 @@ def main():
         with config.open('a') as out:
             out.write('PUBLIC_DOMAIN=alerts.test\n')
     d = Deployment(config, smoke=True)
+    original = d
+    recovery = None
+    backup_folder = None
     if args.ingress:
         # Host test ports stay loopback-only and disposable. Production uses 80/443.
         d.env.update(INGRESS_BIND='127.0.0.1', HTTP_PORT=str(port))
@@ -98,6 +105,17 @@ def main():
     try:
         d.prepare()
         d.pki()
+        if args.restore:
+            # A test-only cleaner client, issued by this disposable CA.
+            (folder / 'cleaner').mkdir(mode=0o700)
+            certs = folder / 'smoke/cleaner-client'
+            certs.mkdir(mode=0o700)
+            private(certs / 'extensions', 'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=clientAuth\nsubjectAltName=URI:spiffe://deploy/cleaner\n')
+            d.run(['openssl', 'req', '-new', '-sha256', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:P-256', '-pkeyopt', 'ec_param_enc:named_curve', '-nodes', '-keyout', str(certs / 'client.key'), '-out', str(certs / 'request.csr'), '-subj', '/CN=cleaner'])
+            d.run(['openssl', 'x509', '-req', '-sha256', '-in', str(certs / 'request.csr'), '-CA', str(folder / 'pki/ca.pem'), '-CAkey', str(folder / 'pki/ca.key'), '-set_serial', '76', '-out', str(certs / 'client.pem'), '-days', '1', '-extfile', str(certs / 'extensions')])
+            override = folder / 'backup-smoke.yaml'
+            private(override, 'services:\n  smoke:\n    environment: {DEPLOY_RESTORE: "1"}\n    volumes:\n      - '+str(folder)+'/cleaner:/cleaner\n')
+            d.compose += ['-f', str(override)]
         if args.ingress:
             d.run(['openssl', 'req', '-x509', '-newkey', 'ec', '-pkeyopt', 'ec_paramgen_curve:P-256', '-pkeyopt', 'ec_param_enc:named_curve', '-sha256', '-nodes',
                    '-keyout', str(folder / 'ingress/tls.key'), '-out', str(folder / 'ingress/tls.pem'),
@@ -127,6 +145,8 @@ def main():
         d.dc('up', '-d', 'smoke')
         phase('fixtures')
         d.start()
+        if args.restore:
+            private(folder / 'smoke/inventory.json', (folder / 'inventory/sources.json').read_text())
         if args.ingress:
             ingress_checks(d, folder)
             private(folder / 'smoke/ingress_checked', 'ok')
@@ -135,13 +155,56 @@ def main():
         volumes = json.loads(d.run(['docker', 'volume', 'ls', '--filter', 'label=com.docker.compose.project='+project, '--format', 'json']).replace('}\n{', '},{').join(('[', ']')))
         if len(volumes) != 2:
             raise RuntimeError('expected two persistent volumes')
-        d.stop()
+        if args.restore:
+            # snapshot owns all cleaner locks and stops the entire source.
+            backup_folder = Path(tempfile.mkdtemp(prefix='binance-ops076-backup-'))
+            backup_folder.rmdir()
+            snapshot(d, backup_folder)
+            saved_cleaner = {p.relative_to(folder): p.read_bytes() for p in (folder / 'cleaner').rglob('registry.json')}
+            assert saved_cleaner and any(json.loads(v)['floor'] > 0 for v in saved_cleaner.values())
+            # Real mixed/corrupt component: refuse before creating target state.
+            private_tar = backup_folder / 'private.tar'
+            length = private_tar.stat().st_size
+            with private_tar.open('ab') as handle:
+                handle.write(b'wrong snapshot component')
+            target = Path(tempfile.mkdtemp(prefix='binance-ops076-restore-'))
+            target.rmdir()
+            restore_config = folder / 'restore.env'
+            private(restore_config, f'DATA_DIR={target}\nPROJECT={project}-copy\nPREFIX=smoke\nAPI_PORT={port}\nMODE=smoke\n')
+            recovery = Deployment(restore_config, smoke=True)
+            fixture = d.dc('ps', '--all', '--quiet', 'smoke').strip()
+            override = folder / 'recovery-smoke.yaml'
+            private(override, 'services:\n  notifications:\n    network_mode: "container:'+fixture+'"\n')
+            recovery.compose += ['-f', str(override)]
+            try:
+                restore(recovery, backup_folder)
+            except ValueError:
+                assert not target.exists()
+                assert not set(volume_names(recovery).values()).intersection(d.run(['docker', 'volume', 'ls', '-q']).split())
+                print('mixed/corrupt snapshot rejected before writes PASS', flush=True)
+            else:
+                raise RuntimeError('mixed snapshot accepted')
+            with private_tar.open('r+b') as handle:
+                handle.truncate(length)
+            verify(backup_folder)
+            restore(recovery, backup_folder)
+            assert before == (target / 'inventory/sources.json').read_bytes()
+            assert all((target / p).read_bytes() == v for p, v in saved_cleaner.items())
+            assert not set(volume_names(d).values()).intersection(volume_names(recovery).values())
+            # Keep the SAME fake and request history; only connect it to the
+            # restored isolated network. Original SQL/Kafka never restart.
+            d.run(['docker', 'network', 'disconnect', project+'_default', fixture])
+            d.run(['docker', 'network', 'connect', '--alias', 'smoke', '--alias', 'notifications', project+'-copy_default', fixture])
+            d = recovery
+            print('independent volumes + exact inventory/cleaner deletion floor preserved PASS', flush=True)
+        else:
+            d.stop()
         for name in APPS:
-            cid = d.dc('ps', '--all', '--quiet', name).strip()
+            cid = original.dc('ps', '--all', '--quiet', name).strip()
             if d.run(['docker', 'inspect', '--format', '{{.State.ExitCode}}', cid]).strip() != '0':
                 raise RuntimeError('non-graceful stop: ' + name)
         # Actual runtime startup failure, not just host-side file validation.
-        key = folder / 'pki/api/server.key'
+        key = d.data / 'pki/api/server.key'
         key.rename(key.with_suffix('.held'))
         try:
             d.dc('run', '--rm', '--no-deps', 'api')
@@ -152,26 +215,26 @@ def main():
         finally:
             key.with_suffix('.held').rename(key)
         d.start()
-        if before != (folder / 'inventory/sources.json').read_bytes():
+        if before != (d.data / 'inventory/sources.json').read_bytes():
             raise RuntimeError('inventory changed on restart')
         private(folder / 'smoke/restarted', 'ok')
         phase('done')
         # Wait for the test to exit, so fake Close and handler joins are included.
         deadline = time.monotonic() + 15
-        while d.dc('ps', '--status', 'running', '--quiet', 'smoke').strip():
+        while original.dc('ps', '--status', 'running', '--quiet', 'smoke').strip():
             if time.monotonic() > deadline:
                 raise RuntimeError('smoke did not exit')
             time.sleep(0.2)
-        cid = d.dc('ps', '--all', '--quiet', 'smoke').strip()
+        cid = original.dc('ps', '--all', '--quiet', 'smoke').strip()
         if d.run(['docker', 'inspect', '--format', '{{.State.ExitCode}}', cid]).strip() != '0':
             raise RuntimeError('smoke failure')
-        print(d.dc('logs', '--no-log-prefix', 'smoke'), end='')
+        print(original.dc('logs', '--no-log-prefix', 'smoke'), end='')
         print('ClusterID/TopicIDs/transactional IDs/inventory and two volumes preserved PASS', flush=True)
         return 0
     except BaseException:
         # Only this generated test dataset is eligible for diagnostics. Redact
         # even its random credentials before printing application/test logs.
-        output = d.dc('logs', '--no-log-prefix', *APPS, 'smoke')
+        output = d.dc('logs', '--no-log-prefix', *APPS) + original.dc('logs', '--no-log-prefix', 'smoke')
         for secret in (folder / 'secrets').glob('*'):
             output = output.replace(secret.read_text().strip(), '[redacted]')
         print(output, flush=True)
@@ -179,7 +242,14 @@ def main():
     finally:
         # The controller generated BOTH project and credentials. No permanent
         # profile can be supplied here. Deletion is confined to this dataset.
-        d.dc('--profile', 'smoke', '--profile', 'tools', 'down', '--volumes', '--remove-orphans')
+        if recovery:
+            recovery.dc('--profile', 'smoke', '--profile', 'tools', 'down', '--volumes', '--remove-orphans')
+            if recovery.data.exists():
+                shutil.rmtree(recovery.data)
+            for resource in ('ps', 'volume', 'network'):
+                command = ['docker', 'ps', '-aq'] if resource == 'ps' else ['docker', resource, 'ls', '-q']
+                assert not original.run(command + ['--filter', 'label=com.docker.compose.project='+project+'-copy']).strip()
+        original.dc('--profile', 'smoke', '--profile', 'tools', 'down', '--volumes', '--remove-orphans')
         if d.run(['docker', 'ps', '-aq', '--filter', 'label=com.docker.compose.project='+project]).strip():
             raise RuntimeError('container cleanup incomplete')
         if d.run(['docker', 'volume', 'ls', '-q', '--filter', 'label=com.docker.compose.project='+project]).strip():
@@ -187,6 +257,8 @@ def main():
         if d.run(['docker', 'network', 'ls', '-q', '--filter', 'label=com.docker.compose.project='+project]).strip():
             raise RuntimeError('network cleanup incomplete')
         shutil.rmtree(folder)
+        if backup_folder and backup_folder.exists():
+            shutil.rmtree(backup_folder)
         print('Disposable containers/volumes/network/private files cleanup PASS', flush=True)
 
 

@@ -4,8 +4,14 @@
 
 ## Активная работа
 
-- Активная реализация: нет. Осталось 4 planned; следующий — OPS-076.
-- Последний завершённый тикет: [OPS-075](backlog/tickets/OPS-075.md).
+- Активная реализация: нет. Осталось 3 planned; следующий — OPS-077.
+- Последний завершённый тикет: [OPS-076](backlog/tickets/OPS-076.md).
+  [Cold backup/restore](../infra/deploy/BACKUP.md): два offline volumes + private
+  inputs/inventory/cleaner floors, checksums, новый target и source binding verify.
+  Fake drill подтвердил login/pending/проекцию, две доставки без повторов,
+  сохранённый floor=1 и cleanup обоих наборов. Общий race/vet/build/Protobuf PASS.
+  Offsite mount/keys/cron на внешнем хосте ещё требуют ручной настройки по runbook.
+- Предыдущий завершённый тикет: [OPS-075](backlog/tickets/OPS-075.md).
   [Публичный профиль](../infra/deploy/PUBLIC.md): Caddy HTTPS/ACME, закрытые bindings
   и служебные routes, один trusted proxy и независимая quota двух IP, инструкции
   provisioning/ротации. Локальный TLS smoke с fake vendors подтвердил guards,
@@ -200,18 +206,20 @@ p99 и дисковым резервам не являются условиям�
 
 ## Следующий рекомендуемый шаг
 
-`python3 scripts/backlog.py next` → [OPS-076](backlog/tickets/OPS-076.md), planned:
-согласованный cold backup/restore. OPS-074/075 завершены; основа запуска —
-[infra/deploy](../infra/deploy/README.md), публичный профиль —
-[PUBLIC.md](../infra/deploy/PUBLIC.md). Private ACME state находится в DATA_DIR/caddy.
+`python3 scripts/backlog.py next` → [OPS-077](backlog/tickets/OPS-077.md), planned:
+наблюдение/диск/maintenance. Основа запуска — [infra/deploy](../infra/deploy/README.md),
+public ingress — [PUBLIC.md](../infra/deploy/PUBLIC.md), проверенный cold recovery —
+[BACKUP.md](../infra/deploy/BACKUP.md). Cleaner state-dir хранить под DATA_DIR/cleaner,
+private ACME state — DATA_DIR/caddy; snapshot включает оба.
 
-Дальше отдельно: OPS-077 (наблюдение/диск/maintenance),
-E2E-007 (малый restart smoke), E2E-006 (реальный Binance → свой Telegram).
-Хост/домен/credentials понадобятся при соответствующих задачах; эту ревизию
-не считать разрешением внешнего deployment или отправки сообщений.
+Дальше отдельно: E2E-007 (малый restart smoke), E2E-006 (реальный Binance → свой
+Telegram). Внешние backup storage/keys/расписание на целевом хосте настроить по
+runbook: disposable drill не создаёт действующей offsite копии. Хост/домен/
+credentials понадобятся при соответствующих задачах; эту ревизию не считать
+разрешением внешнего deployment или отправки сообщений.
 
 E2E-001 подтвердил только функциональный сценарий на fake. Реальные интеграции,
-реальный домен/ACME и проверенный restore ещё не выполнены. Текущий market-data
+реальный домен/ACME ещё не проверены; cold restore на fake выполнен в OPS-076. Текущий market-data
 принимает общий поддерживаемый каталог ASCII USDT-пар; raw feed unconfirmed/readyz=503 сохраняется
 с предупреждением. SQL live не подставляется ради успешной проверки.
 Production ready не заявлять до фактического E2E-006. Ограничения Telegram
