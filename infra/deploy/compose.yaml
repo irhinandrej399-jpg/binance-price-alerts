@@ -1,0 +1,159 @@
+# Operated by deploy.py; credentials are mounted files, never interpolation values.
+x-app: &app
+  user: "${RUN_UID:?}:${RUN_GID:?}"
+  restart: unless-stopped
+  stop_grace_period: 25s
+  read_only: true
+  tmpfs: [/tmp]
+  logging: &logs
+    driver: json-file
+    options: {max-size: 10m, max-file: "3"}
+services:
+  postgres:
+    image: postgres:18.6-bookworm@sha256:bbf83594798e144bff365a9c191c5d779f181fb3135902064ab8ff11918020fc
+    restart: unless-stopped
+    entrypoint: [/bin/bash, /deploy-entrypoint.sh]
+    command: [postgres, -c, fsync=on, -c, synchronous_commit=on, -c, full_page_writes=on, -c, password_encryption=scram-sha-256]
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ../postgres/init.sh:/docker-entrypoint-initdb.d/10-owners.sh:ro
+      - ./postgres-entrypoint.sh:/deploy-entrypoint.sh:ro
+      - ${DATA_DIR:?}/config/postgres.env:/run/config/postgres.env:ro
+    stop_grace_period: 60s
+    shm_size: 128m
+    mem_limit: 1g
+    logging: *logs
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U postgres -d postgres && test -f /var/lib/postgresql/18/docker/owners-ready']
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+  kafka:
+    image: apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+    environment:
+      CLUSTER_ID: ${CLUSTER_ID:?prepare configuration first}
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENERS: INTERNAL://:9092,CONTROLLER://:9093,HOST://:9094
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,HOST://127.0.0.1:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_LOG_DIRS: /var/lib/kafka/data/logs
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_NUM_PARTITIONS: 1
+      KAFKA_LOG_FLUSH_INTERVAL_MESSAGES: 1
+      KAFKA_LOG_CLEANUP_POLICY: delete
+      KAFKA_LOG_RETENTION_MS: -1
+      KAFKA_LOG_RETENTION_BYTES: -1
+      KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: 'false'
+      KAFKA_HEAP_OPTS: -Xms512m -Xmx1g
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    cpus: 2
+    mem_limit: 4g
+    stop_grace_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+    healthcheck:
+      test: [CMD-SHELL, '/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list >/dev/null 2>&1']
+      interval: 5s
+      timeout: 10s
+      retries: 24
+      start_period: 15s
+    restart: unless-stopped
+  market-data:
+    <<: *app
+    healthcheck: &app-health
+      test: [CMD, /bin/bash, -ec, 'exec 3<>/dev/tcp/127.0.0.1/8080; printf "GET /healthz HTTP/1.0\r\n\r\n" >&3; read -r line <&3; [[ $$line == *" 200 "* ]]']
+      interval: 2s
+      timeout: 3s
+      retries: 25
+      start_period: 5s
+    image: ${PROJECT:?}-market-data:local
+    build:
+      context: ../..
+      dockerfile: infra/deploy/Dockerfile
+      target: runtime
+      args: {SERVICE: market-data}
+    volumes:
+      - ${DATA_DIR:?}/config/market-data:/run/config:ro
+      - ${DATA_DIR:?}/pki/market-data:/run/pki:ro
+  api:
+    <<: *app
+    healthcheck: *app-health
+    image: ${PROJECT:?}-api:local
+    build:
+      context: ../..
+      dockerfile: infra/deploy/Dockerfile
+      target: runtime
+      args: {SERVICE: api}
+    volumes:
+      - ${DATA_DIR:?}/config/api:/run/config:ro
+      - ${DATA_DIR:?}/pki/api:/run/pki:ro
+    ports: ["127.0.0.1:${API_PORT:?}:8080"]
+  matcher:
+    <<: *app
+    healthcheck: *app-health
+    image: ${PROJECT:?}-matcher:local
+    build:
+      context: ../..
+      dockerfile: infra/deploy/Dockerfile
+      target: runtime
+      args: {SERVICE: matcher}
+    volumes:
+      - ${DATA_DIR:?}/config/matcher:/run/config:ro
+      - ${DATA_DIR:?}/pki/matcher:/run/pki:ro
+  notifications:
+    <<: *app
+    healthcheck: *app-health
+    image: ${PROJECT:?}-notifications:local
+    build:
+      context: ../..
+      dockerfile: infra/deploy/Dockerfile
+      target: runtime
+      args: {SERVICE: notifications}
+    volumes:
+      - ${DATA_DIR:?}/config/notifications:/run/config:ro
+      - ${DATA_DIR:?}/pki/notifications:/run/pki:ro
+  source-provision:
+    <<: *app
+    image: ${PROJECT:?}-source-provision:local
+    build:
+      context: ../..
+      dockerfile: infra/deploy/Dockerfile
+      target: runtime
+      args: {SERVICE: source-provision}
+    volumes:
+      - ${DATA_DIR:?}/config/source-provision:/run/config:ro
+      - ${DATA_DIR:?}/inventory:/state
+    profiles: [tools]
+    restart: "no"
+  smoke:
+    <<: *app
+    image: ${PROJECT:?}-smoke:local
+    build:
+      context: ../..
+      dockerfile: infra/deploy/Dockerfile
+      target: smoke
+      args: {SERVICE: source-provision}
+    profiles: [smoke]
+    restart: "no"
+    environment: {DEPLOY_SMOKE: "1"}
+    volumes:
+      - ${DATA_DIR:?}/smoke:/state
+      - ${DATA_DIR:?}/pki/api:/run/pki:ro
+volumes:
+  postgres-data:
+  kafka-data:

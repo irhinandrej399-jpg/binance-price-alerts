@@ -1,0 +1,15 @@
+**
+!go.mod
+!go.sum
+!cmd/
+!cmd/**
+!internal/
+!internal/**
+!infra/
+!infra/deploy/
+!infra/deploy/smoke/
+!infra/deploy/smoke/**
+!infra/deploy/entrypoint.sh
+**/*.pem
+**/*.key
+**/.env*

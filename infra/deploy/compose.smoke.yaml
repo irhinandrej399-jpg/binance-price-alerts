@@ -1,0 +1,9 @@
+# Test-only: the existing Telegram client permits plaintext HTTP only to a
+# literal loopback IP. Share the fixture namespace instead of weakening that guard.
+services:
+  notifications:
+    network_mode: service:smoke
+  smoke:
+    networks:
+      default:
+        aliases: [notifications]
