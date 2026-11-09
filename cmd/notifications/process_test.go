@@ -6,12 +6,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -242,6 +244,43 @@ func TestNotificationsProcess(t *testing.T) {
 		assertBinding()
 	}
 
+	// Controlled durable jobs cannot be scheduled; exercise runtime-role SQL
+	// gauges without introducing another delivery or changing the fixture protocol.
+	controlProducer, err := kgo.NewClient(kgo.SeedBrokers(f.Broker), kgo.RecordPartitioner(kgo.ManualPartitioner()))
+	must(err)
+	defer controlProducer.Close()
+	for _, state := range []string{"pending", "blocked"} {
+		control, err := f.Seed(ctx)
+		must(err)
+		r := &kgo.Record{Topic: record.Topic, Partition: (record.Partition + 1) % 16, Key: control.Key, Value: control.Body}
+		must(controlProducer.ProduceSync(ctx, r).FirstErr())
+		prefix, err := f.Progress(ctx, reader, r.Partition)
+		must(err)
+		must(intake.NewStore(reader).AcceptBound(ctx, f.Binding, r.Partition, prefix.Next, r.Offset, r.Key, r.Value))
+		_, err = reader.Exec(ctx, `UPDATE app.delivery_jobs SET state=$2,next_attempt_at='infinity',
+ blocked_reason=CASE WHEN $2='blocked' THEN 'permanent_failure' ELSE NULL END,
+ blocked_binding_version=CASE WHEN $2='blocked' THEN 1 ELSE NULL END WHERE trigger_id=$1`, control.Record.Workflow.TriggerID, state)
+		must(err)
+	}
+	scrape := func(p *apiprocess.Process, code int, wants ...string) string {
+		t.Helper()
+		req, err := http.NewRequestWithContext(ctx, "GET", p.URL+"/metrics", nil)
+		must(err)
+		resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
+		must(err)
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		must(err)
+		if resp.StatusCode != code {
+			t.Fatalf("metrics HTTP=%d want=%d: %s", resp.StatusCode, code, body)
+		}
+		for _, want := range wants {
+			if !slices.Contains(strings.Split(string(body), "\n"), want) {
+				t.Fatalf("missing metric %q in %s", want, body)
+			}
+		}
+		return string(body)
+	}
 	var crashEvidence np.Observation
 	f.SetPrice("99", 1)
 	// False Latest gates HTTP despite a canonical historical candidate.
@@ -251,6 +290,33 @@ func TestNotificationsProcess(t *testing.T) {
 		if !bytes.Equal(o.Body, d.Body) || o.Attempts != 0 || o.LeaseID != nil {
 			t.Fatal("durable job mismatch")
 		}
+		body := scrape(p, 200, "delivery_backlog 3", `delivery_jobs{state="pending"} 1`,
+			`delivery_jobs{state="blocked"} 1`, `delivery_blocks{reason="permanent_failure"} 1`,
+			`delivery_pending_reports{kind="success"} 0`)
+		var admissions float64
+		for _, line := range strings.Split(body, "\n") {
+			if v, ok := strings.CutPrefix(line, `delivery_admission_rpc_seconds_count{result="response"} `); ok {
+				admissions, e = strconv.ParseFloat(v, 64)
+				must(e)
+			}
+		}
+		if admissions < 1 {
+			t.Fatal("runtime admission histogram empty")
+		}
+		// Force real SQL collection to wait beyond its own deadline, then prove
+		// neither a cached snapshot nor SQL/credentials escape in the response.
+		tx, err := reader.Begin(ctx)
+		must(err)
+		defer tx.Rollback(context.Background())
+		_, err = tx.Exec(ctx, "LOCK TABLE app.delivery_jobs IN ACCESS EXCLUSIVE MODE")
+		must(err)
+		started := time.Now()
+		body = scrape(p, 503)
+		if time.Since(started) > 4*time.Second || body != "delivery metrics unavailable\n" {
+			t.Fatal("unbounded or unsafe failed collection", body)
+		}
+		must(tx.Rollback(ctx))
+		scrape(p, 200, "delivery_backlog 3")
 		noHTTP()
 		wait("SQL prefix", func() bool {
 			p, e := f.Progress(ctx, reader, record.Partition)
@@ -338,6 +404,7 @@ func TestNotificationsProcess(t *testing.T) {
 		if canonical.State != domain.Delivered || canonical.Workflow.TriggerID != trigger {
 			t.Fatal("canonical API success missing")
 		}
+		scrape(p, 200, `delivery_pending_reports{kind="success"} 1`, "delivery_backlog 2")
 		crashEvidence = o
 		kill(p)
 		return nil

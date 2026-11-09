@@ -150,3 +150,35 @@ Cold backup/restore: [состав, downtime, команды, offsite/распи
 
 Production ready и внешняя доставка этим smoke не подтверждаются: реальный домен/ACME,
 maintenance и E2E с настоящими Binance/своим Telegram ещё впереди.
+
+## Внутренние метрики notifications — OPS-079
+
+GET `http://notifications:8080/metrics` доступен только в Compose bridge на
+существующем HTTP listener. Новый published port не нужен; Caddy пропускает
+только разрешённые `/v1/...` пути, `/metrics` снаружи отвечает 404.
+Для разового scrape из контейнера notifications (без curl/нового образа),
+из корня checkout с собственным путём к deploy.env:
+
+```sh
+python3 - /srv/binance/deploy.env <<'PYCODE'
+from pathlib import Path
+import sys
+from infra.deploy.deploy import Deployment
+
+d = Deployment(Path(sys.argv[1]))
+print(d.dc('exec', '-T', 'notifications', '/bin/bash', '-ec',
+           'exec 3<>/dev/tcp/127.0.0.1/8080; '
+           'printf "GET /metrics HTTP/1.0\r\n\r\n" >&3; cat <&3'), end='')
+PYCODE
+```
+
+Сначала проверить HTTP status: успешный scrape — 200, SQL failure/отмена/
+истечение 2 с — 503 с фиксированным сообщением без SQL/секретов и без кеша.
+Не интерпретировать неуспешный scrape как нулевую очередь. `delivery_jobs`,
+`delivery_pending_reports`, `delivery_blocks` и остальные SQL gauges относятся
+ко всей notifications DB: брать один target на БД или дедуплицировать реплики,
+не складывать копии. `delivery_admission_rpc_seconds` — локальный histogram
+каждого процесса; его bucket/sum/count rates можно агрегировать по процессам.
+Полный контракт, bounded labels и ограничения drain rate — в
+[metrics README](../../internal/notifications/metrics/README.md).
+Мониторинг/alerts и обслуживание оформляются отдельно в OPS-077.

@@ -56,7 +56,7 @@ func TestSupervisorWithdrawsReadinessAndJoins(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
 			done := make(chan error, 1)
-			go func() { done <- supervise(ctx, listener, probe, component(0), component(1)) }()
+			go func() { done <- supervise(ctx, listener, probe, probe, component(0), component(1)) }()
 			for i := 0; i < 2; i++ {
 				select {
 				case <-started:
@@ -119,7 +119,7 @@ func TestSupervisorCancellationResult(t *testing.T) {
 			started := make(chan struct{})
 			done := make(chan error, 1)
 			go func() {
-				done <- supervise(ctx, listener, probe, func(ctx context.Context) error {
+				done <- supervise(ctx, listener, probe, probe, func(ctx context.Context) error {
 					close(started)
 					<-ctx.Done()
 					if fail {

@@ -23,6 +23,7 @@ import (
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/health"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/intake"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/jobs"
+	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/metrics"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/progressrpc"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/report"
 	"github.com/irhinandrej399-jpg/binance-price-alerts/internal/notifications/retry"
@@ -109,7 +110,8 @@ func run(parent context.Context, c config) error {
 	if e != nil {
 		return errConfig
 	}
-	h, e := handler.New(handler.Config{Store: store, Admission: admissionrpc.NewClient(api), Bot: bot, Chat: chat, Sender: sender, Reporter: reporter, Policy: policy, RecoveryInterval: c.recoveryInterval, ReportLimit: c.reportLimit})
+	observability := metrics.New(store)
+	h, e := handler.New(handler.Config{Store: store, Admission: observability.Admission(admissionrpc.NewClient(api)), Bot: bot, Chat: chat, Sender: sender, Reporter: reporter, Policy: policy, RecoveryInterval: c.recoveryInterval, ReportLimit: c.reportLimit})
 	if e != nil {
 		return errConfig
 	}
@@ -162,7 +164,7 @@ func run(parent context.Context, c config) error {
 		return err
 	}
 	probe := health.New(pool.Ping, w.Running, time.Second)
-	return supervise(parent, listener, probe, consumer.Run, w.Run, serveRPC)
+	return supervise(parent, listener, probe, notificationsHTTP(probe, observability), consumer.Run, w.Run, serveRPC)
 }
 
 // Validate every persisted partition before exposing HTTP or starting workers.
@@ -194,12 +196,27 @@ func validateIntake(ctx context.Context, c config, store *intake.Store) error {
 	return nil
 }
 
+// notificationsHTTP shares the internal health listener. The SQL collection
+// deadline is independent of socket write timeouts and inherits request/shutdown
+// cancellation. The exporter buffers the complete snapshot and sanitizes errors.
+func notificationsHTTP(probe *health.Handler, observability *metrics.Metrics) http.Handler {
+	mux := http.NewServeMux()
+	mux.Handle("GET /healthz", probe)
+	mux.Handle("GET /readyz", probe)
+	mux.HandleFunc("GET /metrics", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		observability.ServeHTTP(w, r.WithContext(ctx))
+	})
+	return mux
+}
+
 // supervise owns component cancellation and joins. Resources remain owned by
 // run until all callbacks and active HTTP requests have returned.
-func supervise(parent context.Context, listener net.Listener, probe *health.Handler, components ...func(context.Context) error) error {
+func supervise(parent context.Context, listener net.Listener, probe *health.Handler, httpHandler http.Handler, components ...func(context.Context) error) error {
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
-	server := &http.Server{Handler: probe, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
+	server := &http.Server{Handler: httpHandler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second, BaseContext: func(net.Listener) context.Context { return ctx }}
 	defer server.Close()
 	// Each component withdraws readiness before reporting completion. All results
 	// are joined before the deferred Kafka, SQL and RPC resources are closed.

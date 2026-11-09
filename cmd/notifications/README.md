@@ -62,6 +62,16 @@ TLS 1.3, явные CA/server authority, certificate/key и точный URI SAN
 обязательны: их выход снимает readiness, отменяет siblings и присоединяет их
 перед Close Kafka/SQL/RPC. Terminal failure завершает executable с кодом 1.
 
+GET `/metrics` на том же внутреннем HTTP listener экспортирует
+[метрики очереди](../../internal/notifications/metrics/README.md) от runtime SQL
+роли и histogram настоящего admission RPC. Каждый scrape имеет SQL context
+с deadline 2 с, наследует отмену запроса/процесса; при ошибке/timeout — 503
+`delivery metrics unavailable`, без частичных/старых значений или текста SQL.
+SQL collection не вызывает API/Telegram и не изменяет очередь. DB-wide gauges
+не суммировать по репликам; admission histogram локален процессу.
+В Compose listener не публикуется на хост и `/metrics` не открыт через Caddy.
+Внутренний scrape — в [deployment README](../../infra/deploy/README.md).
+
 Claim/CAS, оба лимитера, свежий admission, одна HTTP-попытка и PendingWrite
 исполняются готовыми пакетами. После потери ответа Result reporter повторяет
 сохранённый исход без нового HTTP. Потеря процесса до durable записи внешнего

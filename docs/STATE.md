@@ -5,7 +5,14 @@
 ## Активная работа
 
 - Активная реализация: нет. Осталось 3 planned; следующий — OPS-077.
-- Последний завершённый тикет: [OPS-076](backlog/tickets/OPS-076.md).
+- Последний завершённый тикет: [OPS-079](backlog/tickets/OPS-079.md).
+  Внутренний GET /metrics notifications, один exporter и реальный admission
+  histogram; SQL context deadline 2 с, безопасный 503, request/shutdown cancellation.
+  Process/SQL/race подтвердил pending/blocked/reports, histogram, timeout/recovery
+  и прежние restart/shutdown guards; общий race/vet/build/Protobuf PASS, cleanup PASS.
+  [Внутренний scrape](../infra/deploy/README.md) не требует published port;
+  DB-wide gauges не суммировать по репликам. OPS-077 требует своей проверки.
+- Предыдущий завершённый тикет: [OPS-076](backlog/tickets/OPS-076.md).
   [Cold backup/restore](../infra/deploy/BACKUP.md): два offline volumes + private
   inputs/inventory/cleaner floors, checksums, новый target и source binding verify.
   Fake drill подтвердил login/pending/проекцию, две доставки без повторов,
@@ -207,7 +214,10 @@ p99 и дисковым резервам не являются условиям�
 ## Следующий рекомендуемый шаг
 
 `python3 scripts/backlog.py next` → [OPS-077](backlog/tickets/OPS-077.md), planned:
-наблюдение/диск/maintenance. Основа запуска — [infra/deploy](../infra/deploy/README.md),
+наблюдение/диск/maintenance. Предпосылка [OPS-079](backlog/tickets/OPS-079.md)
+завершена: внутренние queue metrics и admission histogram доступны в notifications,
+SQL collection ограничена 2 с. Перед реализацией проверить оставшиеся критерии
+OPS-077 по фактическим инструментам и данным. Основа запуска — [infra/deploy](../infra/deploy/README.md),
 public ingress — [PUBLIC.md](../infra/deploy/PUBLIC.md), проверенный cold recovery —
 [BACKUP.md](../infra/deploy/BACKUP.md). Cleaner state-dir хранить под DATA_DIR/cleaner,
 private ACME state — DATA_DIR/caddy; snapshot включает оба.

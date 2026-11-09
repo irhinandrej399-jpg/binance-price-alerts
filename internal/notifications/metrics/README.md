@@ -46,12 +46,16 @@ API-таблицы: поздний success отменённой подписки
 исключив окна retention/reset. Уменьшение backlog не заменяет throughput:
 на него одновременно влияют новые jobs и отмены.
 
-В runtime обернуть admission client перед передачей в handler.Config:
+В `cmd/notifications` один exporter оборачивает admission client перед передачей
+в handler.Config и обслуживается на внутреннем listener рядом с health/readiness.
+Каждый GET /metrics получает context с deadline 2 с и отменой от HTTP request
+или shutdown. Публичный ingress этот путь не обслуживает. Схема подключения:
 
 ```go
 observability := metrics.New(store)
 cfg.Admission = observability.Admission(admissionClient)
-mux.Handle("/metrics", observability)
+// Pass a request context with a SQL deadline (runtime uses 2 seconds).
+mux.Handle("GET /metrics", observability)
 ```
 
 Decorator передаёт исходные context, аргументы, response и error. Он измеряет
@@ -76,6 +80,8 @@ GOCACHE=/tmp/binance-go-build python3 scripts/check_postgres.py
 
 Проверяются контрольные SQL jobs, waits/429/replay/restart, поздние block/success,
 ack и сохраняемая uncertainty, фиксированные labels, HTTP 503, конкурентные
-наблюдения, точные buckets/sum/count и скорость дренирования. Production runtime,
-Prometheus deployment, реальный Telegram и производительность SQL scan этим
-тикетом не проверяются; сборка cmd/runtime ещё предстоит.
+наблюдения, точные buckets/sum/count и скорость дренирования. Runtime wiring
+и реальный process/SQL scrape проверены в OPS-079 через
+`python3 scripts/check_notifications_process.py --package ./cmd/notifications`.
+Prometheus deployment, реальный Telegram и производительность SQL scan
+этими проверками не подтверждаются.
